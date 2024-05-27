@@ -1,6 +1,7 @@
 #ifndef oled_display
     #define oled_display
-    
+    #include <Arduino.h>
+    #include <support_method.h>
     //OLED SSD1306 dependent libraries.
     #include <SPI.h>
     #include <Wire.h>
@@ -12,11 +13,9 @@
 
     #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
     #define SCREEN_ADDRESS 0x3D ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+    #define SCL OSCL
+    #define SDA OSDA
 #endif
-
-#ifndef arduino_framework
-    #include<Arduino.h>
-#endif
-
 extern Adafruit_SSD1306 display;
 void init_oled();
+void show_splash();

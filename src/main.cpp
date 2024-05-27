@@ -5,6 +5,7 @@
 // put function declarations here:
 
 void setup() {
+  Serial.begin(BAUD);
   // put your setup code here, to run once:
   init_oled();
   pinMode(builtin_led, OUTPUT);
