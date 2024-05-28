@@ -6,6 +6,7 @@ bool btn_2_pressed = false;
 
 void led_nortifier(void* pvArgs)
 {
+    serial_print("LED Nortifier");
     while (true)
     {
         if(notify)
@@ -24,7 +25,7 @@ void led_nortifier(void* pvArgs)
     }
 }
 
-void btn_1_intrupt(void* pvArgs)
+void btn_intrupt(void* pvArgs)
 {
     serial_print("BTN intrupt started");
     while(true)

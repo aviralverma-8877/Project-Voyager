@@ -12,17 +12,20 @@ void init_oled()
         for(;;); // Don't proceed, loop forever
     }
     display.clearDisplay();
-    delay(1000);
     show_splash();
+}
+
+void display_text_oled(String msg, int x, int y)
+{
+    display.setTextSize(1);      // Normal 1:1 pixel scale
+    display.setTextColor(SSD1306_WHITE); // Draw white text
+    display.setCursor(x, y);     // Start at top-left corner
+    display.cp437(true); 
+    display.write(msg.c_str());
+    display.display();
 }
 
 void show_splash()
 {
-    serial_print("Showing splash screen.");
-    display.setTextSize(1);      // Normal 1:1 pixel scale
-    display.setTextColor(SSD1306_WHITE); // Draw white text
-    display.setCursor(0, 0);     // Start at top-left corner
-    display.cp437(true); 
-    display.write("Hello World.");
-    display.display();
+    display_text_oled("ESP32 LORA", 0, 0);
 }
