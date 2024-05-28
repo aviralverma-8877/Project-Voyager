@@ -14,7 +14,6 @@ void setup() {
   digitalWrite(LED, HIGH);
   xTaskCreatePinnedToCore(led_nortifier, "LED_Nortifier", 4096, NULL, 3, NULL, ARDUINO_RUNNING_CORE);
   xTaskCreatePinnedToCore(btn_1_intrupt, "BTN_1_Nortifier", 4096, NULL, 3, NULL, ARDUINO_RUNNING_CORE);
-  xTaskCreatePinnedToCore(btn_2_intrupt, "BTN_2_Nortifier", 4096, NULL, 3, NULL, ARDUINO_RUNNING_CORE);
 }
 
 void loop() {
