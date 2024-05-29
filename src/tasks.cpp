@@ -10,70 +10,56 @@ void config_gpios()
     pinMode(BTN1, INPUT_PULLDOWN);
     pinMode(BTN2, INPUT_PULLDOWN);
     digitalWrite(LED, HIGH);
-
-    xTaskCreatePinnedToCore(btn_intrupt, "button_input", 2048, NULL, 1, NULL, ARDUINO_EVENT_RUNNING_CORE);
+    setupTickers();
+    nortify_led();
 }
 
-void led_nortifier(void* pvArgs)
+void led_nortifier()
 {
-    while (true)
+    if(digitalRead(LED))
     {
-        if(notify)
-        {
-            digitalWrite(LED, LOW);
-            vTaskDelay(500/portTICK_PERIOD_MS);
-            digitalWrite(LED, HIGH);
-            vTaskDelay(500/portTICK_PERIOD_MS);
-        }
-        else{
-            if(digitalRead(LED))
-            {
-                digitalWrite(LED, LOW);
-            }
-        }
+        digitalWrite(LED, LOW);
+    }
+    else
+    {
+        digitalWrite(LED, HIGH);
     }
 }
 
-void btn_intrupt(void* arg)
+void btn_intrupt()
 {
-    while(true)
+    if(digitalRead(BTN1) == STATE)
     {
-        if(digitalRead(BTN1) == STATE)
+        if(!btn_1_pressed)
         {
-            if(!btn_1_pressed)
-            {
-                btn_1_pressed = true;
-                serial_print("BUTTON 1 Pressed");
-                notify = false;
-            }
+            btn_1_pressed = true;
+            serial_print("BUTTON 1 Pressed");
+            stop_nortify_led();
         }
-        else
+    }
+    else
+    {
+        if(btn_1_pressed)
         {
-            if(btn_1_pressed)
-            {
-                serial_print("BUTTON 1 Released");
-                btn_1_pressed = false;
-                vTaskDelay(100/portTICK_PERIOD_MS);
-            }
+            serial_print("BUTTON 1 Released");
+            btn_1_pressed = false;
         }
-        if(digitalRead(BTN2) == STATE)
+    }
+    if(digitalRead(BTN2) == STATE)
+    {
+        if(!btn_2_pressed)
         {
-            if(!btn_2_pressed)
-            {
-                btn_2_pressed = true;
-                serial_print("BUTTON 2 Pressed");
-            }
+            btn_2_pressed = true;
+            serial_print("BUTTON 2 Pressed");
         }
-        else
+    }
+    else
+    {
+        if(btn_2_pressed)
         {
-            if(btn_2_pressed)
-            {
-                serial_print("BUTTON 2 Released");
-                btn_2_pressed = false;
-                vTaskDelay(100/portTICK_PERIOD_MS);
-            }
+            serial_print("BUTTON 2 Released");
+            btn_2_pressed = false;
         }
-
     }
 }
 

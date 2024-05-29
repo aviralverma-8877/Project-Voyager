@@ -20,8 +20,6 @@ void setup() {
   config_ap();
   config_lora();
   LoRa_sendMessage("Test MSG");
-
-  xTaskCreatePinnedToCore(led_nortifier, "LED_Nortifier", 6000, NULL, 0, NULL, 0);
   serial_print("config done");
 }
 
