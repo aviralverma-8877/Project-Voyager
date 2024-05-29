@@ -1,19 +1,20 @@
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "driver/gpio.h"
-
 #include <Arduino.h>
 #include <oled_display.h>
 #include <tasks.h>
 #include <wifi_support.h>
 #include <lora_support.h>
 #include <support_method.h>
-
+#include "FS.h"
+#include "SPIFFS.h"
 // put function declarations here:
 
 void setup() {
   Serial.begin(BAUD);
-  // put your setup code here, to run once:
+  if (!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED))
+  {
+    serial_print("SPIFFS Mount Failed");
+    return;
+  }
   config_gpios();
   init_oled();
 

@@ -8,7 +8,6 @@
 #define BUTTON1 BTN1
 #define BUTTON2 BTN2
 
-void config_gpios();
 void init_isr(int btn);
 void led_nortifier();
 void btn_intrupt();

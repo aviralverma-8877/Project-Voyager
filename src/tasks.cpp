@@ -4,16 +4,6 @@ bool notify = true;
 bool btn_1_pressed = false;
 bool btn_2_pressed = false;
 
-void config_gpios()
-{
-    pinMode(LED, OUTPUT);
-    pinMode(BTN1, INPUT_PULLDOWN);
-    pinMode(BTN2, INPUT_PULLDOWN);
-    digitalWrite(LED, HIGH);
-    setupTickers();
-    nortify_led();
-}
-
 void led_nortifier()
 {
     if(digitalRead(LED))

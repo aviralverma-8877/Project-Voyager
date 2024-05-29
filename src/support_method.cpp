@@ -3,6 +3,15 @@
 Ticker TickerForBtnPresses;
 Ticker TickerForLedNotification;
 
+void config_gpios()
+{
+    pinMode(LED, OUTPUT);
+    pinMode(BTN1, INPUT_PULLDOWN);
+    pinMode(BTN2, INPUT_PULLDOWN);
+    digitalWrite(LED, LOW);
+    setupTickers();
+}
+
 void serial_print(String msg)
 {
     if(DEBUGGING)

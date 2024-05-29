@@ -10,6 +10,7 @@
 
 extern Ticker TickerForLedNotification;
 
+void config_gpios();
 void serial_print(String msg);
 void setupTickers();
 void stop_nortify_led();
