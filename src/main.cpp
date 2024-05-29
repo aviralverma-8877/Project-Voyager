@@ -1,3 +1,7 @@
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+
 #include <Arduino.h>
 #include <oled_display.h>
 #include <tasks.h>
@@ -10,19 +14,14 @@
 void setup() {
   Serial.begin(BAUD);
   // put your setup code here, to run once:
-  pinMode(LED, OUTPUT);
-  pinMode(BTN1, INPUT_PULLDOWN);
-  pinMode(BTN2, INPUT_PULLDOWN);
-  digitalWrite(LED, HIGH);
-
+  config_gpios();
   init_oled();
 
   config_ap();
   config_lora();
   LoRa_sendMessage("Test MSG");
 
-  xTaskCreate(led_nortifier, "LED_Nortifier", 6000, NULL, 0, NULL);
-  xTaskCreate(btn_intrupt, "BTN_Nortifier", 6000, NULL, 0, NULL);
+  xTaskCreatePinnedToCore(led_nortifier, "LED_Nortifier", 6000, NULL, 0, NULL, 0);
   serial_print("config done");
 }
 

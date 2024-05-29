@@ -4,9 +4,18 @@ bool notify = true;
 bool btn_1_pressed = false;
 bool btn_2_pressed = false;
 
+void config_gpios()
+{
+    pinMode(LED, OUTPUT);
+    pinMode(BTN1, INPUT_PULLDOWN);
+    pinMode(BTN2, INPUT_PULLDOWN);
+    digitalWrite(LED, HIGH);
+
+    xTaskCreatePinnedToCore(btn_intrupt, "button_input", 2048, NULL, 1, NULL, ARDUINO_EVENT_RUNNING_CORE);
+}
+
 void led_nortifier(void* pvArgs)
 {
-    serial_print("LED Nortifier");
     while (true)
     {
         if(notify)
@@ -25,9 +34,8 @@ void led_nortifier(void* pvArgs)
     }
 }
 
-void btn_intrupt(void* pvArgs)
+void btn_intrupt(void* arg)
 {
-    serial_print("BTN intrupt started");
     while(true)
     {
         if(digitalRead(BTN1) == STATE)
@@ -36,15 +44,16 @@ void btn_intrupt(void* pvArgs)
             {
                 btn_1_pressed = true;
                 serial_print("BUTTON 1 Pressed");
+                notify = false;
             }
         }
         else
         {
             if(btn_1_pressed)
             {
-                btn_1_pressed = false;
                 serial_print("BUTTON 1 Released");
-                vTaskDelay(10/portTICK_PERIOD_MS);
+                btn_1_pressed = false;
+                vTaskDelay(100/portTICK_PERIOD_MS);
             }
         }
         if(digitalRead(BTN2) == STATE)
@@ -53,18 +62,18 @@ void btn_intrupt(void* pvArgs)
             {
                 btn_2_pressed = true;
                 serial_print("BUTTON 2 Pressed");
-                notify = false;
             }
         }
         else
         {
             if(btn_2_pressed)
             {
-                btn_2_pressed = false;
                 serial_print("BUTTON 2 Released");
-                vTaskDelay(10/portTICK_PERIOD_MS);
+                btn_2_pressed = false;
+                vTaskDelay(100/portTICK_PERIOD_MS);
             }
         }
+
     }
 }
 
