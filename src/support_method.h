@@ -8,6 +8,8 @@
     #include <ESPmDNS.h>
     #include <DNSServer.h>
     #include <WiFi.h>
+    #include <ArduinoJson.h>
+    #include <wifi_support.h>
     extern DNSServer dnsServer;
     extern Ticker TickerForLedNotification;
 
@@ -18,6 +20,7 @@
     void setupTickers();
     void stop_nortify_led();
     void nortify_led();
+    void handle_operations(JsonDocument doc);
     #define DEBUGGING DEBUG
 #endif
 

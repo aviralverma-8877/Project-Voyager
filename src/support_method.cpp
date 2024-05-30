@@ -5,6 +5,17 @@ Ticker TickerForBtnPresses;
 Ticker TickerForLedNotification;
 Ticker TickerForDNSRequest;
 
+void handle_operations(JsonDocument doc)
+{
+    const char* request_type = doc["request-type"];
+    serial_print(request_type);
+    if(strcmp(request_type, "wifi_ssid_scan") == 0)
+    {
+        String json_string;
+        xTaskCreate(scan_ssid, "scan_wifi", 6000, NULL, 2, NULL);
+    }
+}
+
 void setup_dns()
 {
     serial_print("DNS service started.");

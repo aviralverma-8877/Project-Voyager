@@ -10,6 +10,22 @@ void initWebSocket() {
 
 void handle_ws_request(void *arg, uint8_t *data, size_t len)
 {
+  String json = "";
+  for(int i=0; i<len; i++)
+  {
+    char r = (char)data[i];
+    json += r;
+  }
+  serial_print(json);
+  JsonDocument doc;
+  deserializeJson(doc, json);
+  handle_operations(doc);
+}
+
+void send_to_ws(String return_value)
+{
+  serial_print(return_value);
+  webSocket.textAll(return_value);
 }
 
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
