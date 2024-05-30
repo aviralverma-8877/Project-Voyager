@@ -4,6 +4,7 @@
 #include <wifi_support.h>
 #include <lora_support.h>
 #include <support_method.h>
+#include <web_server.h>
 #include "FS.h"
 #include "SPIFFS.h"
 // put function declarations here:
@@ -19,6 +20,9 @@ void setup() {
   init_oled();
 
   config_ap();
+  setup_dns();
+  define_api();
+
   config_lora();
   LoRa_sendMessage("Test MSG");
   serial_print("config done");

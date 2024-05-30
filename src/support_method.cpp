@@ -1,7 +1,25 @@
 #include <support_method.h>
 
+DNSServer dnsServer;
 Ticker TickerForBtnPresses;
 Ticker TickerForLedNotification;
+Ticker TickerForDNSRequest;
+
+void setup_dns()
+{
+    serial_print("DNS service started.");
+    serial_print("Soft AP IP.");
+    serial_print(WiFi.softAPIP().toString());
+    dnsServer.setTTL(300);
+    dnsServer.setErrorReplyCode(DNSReplyCode::ServerFailure);
+    dnsServer.start(53, "*", WiFi.softAPIP());
+    TickerForDNSRequest.attach_ms(10, dns_request_process);
+}
+
+void dns_request_process()
+{
+    dnsServer.processNextRequest();
+}
 
 void config_gpios()
 {

@@ -7,8 +7,6 @@
     #include <Wire.h>
     #include <Adafruit_GFX.h>
     #include <Adafruit_SSD1306.h>
-#endif
-
     #define SCREEN_WIDTH 128 // OLED display width, in pixels
     #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 
@@ -20,3 +18,4 @@
     void init_oled();
     void show_splash();
     void display_text_oled(String msg, int x, int y);
+#endif
