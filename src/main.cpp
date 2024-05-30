@@ -5,6 +5,7 @@
 #include <lora_support.h>
 #include <support_method.h>
 #include <web_server.h>
+#include <web_sockets.h>
 #include "FS.h"
 #include "SPIFFS.h"
 // put function declarations here:
@@ -22,7 +23,8 @@ void setup() {
   config_ap();
   setup_dns();
   define_api();
-
+  initWebSocket();
+  
   config_lora();
   LoRa_sendMessage("Test MSG");
   serial_print("config done");
