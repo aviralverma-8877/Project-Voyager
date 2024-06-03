@@ -19,6 +19,12 @@ function wifi() {
   });
 }
 
+function update() {
+  $.get("update", function (data) {
+    $("#main_content").html(data);
+  });
+}
+
 function scan_ssid() {
   $("#wifi_ssid_list").html("");
   $("#wifi_scan_btn").html("Scanning...");
