@@ -5,8 +5,6 @@
     #include <support_method.h>
     #include <ArduinoJson.h>
     #include <web_sockets.h>
+    void config_wifi();
+    void scan_ssid(void* args);
 #endif
-
-#define WiFI_SSID "ESP32_LORA"
-void config_ap();
-void scan_ssid(void* args);

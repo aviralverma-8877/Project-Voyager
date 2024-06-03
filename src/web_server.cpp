@@ -45,5 +45,9 @@ void define_api()
         serial_print("wifi.html");
         request->send(SPIFFS, "/wifi.html", "text/html");
     });
+    server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request){
+        serial_print("/config/wifi_config.json");
+        request->send(SPIFFS, "/config/wifi_config.json", "text/json");
+    });
     server.begin();
 }

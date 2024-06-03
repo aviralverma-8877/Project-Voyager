@@ -14,6 +14,44 @@ void handle_operations(JsonDocument doc)
         String json_string;
         xTaskCreate(scan_ssid, "scan_wifi", 6000, NULL, 2, NULL);
     }
+    if(strcmp(request_type, "connect_wifi") == 0)
+    {
+        const char * wifi_ssid = doc["wifi_ssid"];
+        serial_print(wifi_ssid);
+        const char * psk = doc["wifi_pass"];
+        serial_print(psk);
+        // Reading wifi config
+        File file = SPIFFS.open("/config/wifi_config.json");
+        if(!file){
+            Serial.println("No wifi config file present");
+            return;
+        }
+        String wifi_config;
+        while(file.available()){
+            wifi_config += file.readString();
+        }
+        file.close();
+        // modifying wifi config
+        serial_print(wifi_config);
+        JsonDocument wifi_conf;
+        deserializeJson(wifi_conf, wifi_config);
+        wifi_conf["wifi_function"] = "STA";
+        wifi_conf["wifi_ssid"] = wifi_ssid;
+        wifi_conf["wifi_pass"] = psk;
+        serializeJsonPretty(wifi_conf, wifi_config);
+        serial_print(wifi_config);
+        // writing wifi config
+        File file2 = SPIFFS.open("/config/wifi_config.json", FILE_WRITE);
+        if(!file2){
+            Serial.println("No wifi config file present");
+            return;
+        }
+        if(file2.print(wifi_config)){
+            serial_print("WiFi Config saved");
+        }
+        file2.close();
+        ESP.restart();
+    }
 }
 
 void setup_dns()

@@ -20,8 +20,7 @@ void setup() {
   config_gpios();
   init_oled();
 
-  config_ap();
-  setup_dns();
+  config_wifi();
   define_api();
   initWebSocket();
   
