@@ -6,5 +6,7 @@
     #include <ArduinoJson.h>
     #include <web_sockets.h>
     void config_wifi();
+    void setup_sta(const char* wifi_ssid, const char* wifi_pass);
+    void setup_ap(const char* wifi_ssid);
     void scan_ssid(void* args);
 #endif
