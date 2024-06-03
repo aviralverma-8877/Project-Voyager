@@ -84,10 +84,18 @@ void firmware_web_updater()
     }\
     </script>\
     <form method='POST' action='/update_flash' enctype='multipart/form-data'>\
-      <input type='file' placeholder='firmware.bin' name='update'><input type='submit' value='Update'> firmware.bin\
-    </form></ br>\
+      <div class='form-group mx-sm-3 mb-2'>\
+        <label class='sr-only' for='firmare_file'><h5>firmware.bin</h5></label>\
+        <input id='firmare_file' type='file' class='form-control row' placeholder='firmware.bin' name='update'>\
+      </div>\
+      <input class='btn btn-primary mb-2' type='submit' value='Update'>\
+    </form><hr />\
     <form method='POST' action='/update_spiffs' enctype='multipart/form-data'>\
-      <input type='file' placeholder='spiffs.bin' name='update'><input type='submit' value='Update'> spiffs.bin\
+      <div class='form-group mx-sm-3 mb-2'>\
+        <label class='sr-only' for='spiff_file'><h5>spiffs.bin</h5></label>\
+        <input id='spiff_file' type='file' class='form-control row' placeholder='spiffs.bin' name='update'>\
+      </div>\
+      <input class='btn btn-primary mb-2' type='submit' value='Update'>\
     </form>");
   });
 
