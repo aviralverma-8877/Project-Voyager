@@ -57,6 +57,7 @@ void handle_operations(JsonDocument doc)
 void setup_mdns()
 {
     String hostname = "project-voyager";
+    WiFi.hostname(hostname);
     serial_print("Device hostname: "+hostname);
     if (MDNS.begin(hostname.c_str())) {
         MDNS.addService("http", "tcp", 80); 
