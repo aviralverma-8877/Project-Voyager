@@ -54,6 +54,16 @@ void handle_operations(JsonDocument doc)
     }
 }
 
+void setup_mdns()
+{
+    String hostname = "project-voyager";
+    serial_print("Device hostname: "+hostname);
+    if (MDNS.begin(hostname.c_str())) {
+        MDNS.addService("http", "tcp", 80); 
+        serial_print("Started mDNS service");
+    }
+}
+
 void setup_dns()
 {
     serial_print("DNS service started.");

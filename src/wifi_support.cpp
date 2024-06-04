@@ -48,6 +48,7 @@ void setup_sta(const char* wifi_ssid, const char* wifi_pass)
     display_text_oled("WiFi Type : STA", 0, 10);
     display_text_oled(wifi_ssid, 0, 20);
     display_text_oled(IP.toString(), 0, 30);
+    setup_mdns();
 }
 
 void setup_ap(const char* wifi_ssid)
@@ -60,6 +61,7 @@ void setup_ap(const char* wifi_ssid)
     display_text_oled(wifi_ssid, 0, 20);
     display_text_oled(IP.toString(), 0, 30);
     setup_dns();
+    setup_mdns();
 }
 
 void scan_ssid(void* args)

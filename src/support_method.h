@@ -14,6 +14,7 @@
     extern Ticker TickerForLedNotification;
 
     void dns_request_process();
+    void setup_mdns();
     void setup_dns();
     void config_gpios();
     void serial_print(String msg);

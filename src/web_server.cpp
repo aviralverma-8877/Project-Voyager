@@ -64,6 +64,7 @@ void define_api()
 void firmware_web_updater()
 {
   server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request){
+    String hostname = "project-voyager";
     request->send(200, "text/html", "<script>\
     function httpGet(action, options = {})\
     {\
@@ -83,6 +84,8 @@ void firmware_web_updater()
         }\
     }\
     </script>\
+    <a href='http://"+hostname+".local/'>"+hostname+"</a>\
+    <hr />\
     <form method='POST' action='/update_flash' enctype='multipart/form-data'>\
       <div class='form-group mx-sm-3 mb-2'>\
         <label class='sr-only' for='firmare_file'><h5>firmware.bin</h5></label>\
