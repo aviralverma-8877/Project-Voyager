@@ -21,16 +21,7 @@ void handle_operations(JsonDocument doc)
         const char * psk = doc["wifi_pass"];
         serial_print(psk);
         // Reading wifi config
-        File file = SPIFFS.open("/config/wifi_config.json");
-        if(!file){
-            Serial.println("No wifi config file present");
-            return;
-        }
-        String wifi_config;
-        while(file.available()){
-            wifi_config += file.readString();
-        }
-        file.close();
+        String wifi_config = get_wifi_setting();
         // modifying wifi config
         serial_print(wifi_config);
         JsonDocument wifi_conf;
@@ -41,15 +32,7 @@ void handle_operations(JsonDocument doc)
         serializeJsonPretty(wifi_conf, wifi_config);
         serial_print(wifi_config);
         // writing wifi config
-        File file2 = SPIFFS.open("/config/wifi_config.json", FILE_WRITE);
-        if(!file2){
-            Serial.println("No wifi config file present");
-            return;
-        }
-        if(file2.print(wifi_config)){
-            serial_print("WiFi Config saved");
-        }
-        file2.close();
+        save_wifi_settings(wifi_config);
         ESP.restart();
     }
 }

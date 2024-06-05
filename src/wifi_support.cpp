@@ -4,17 +4,9 @@ void config_wifi()
 {
     if (SPIFFS.exists("/config/wifi_config.json"))
     {
-        File file = SPIFFS.open("/config/wifi_config.json");
-        if(!file){
-            setup_ap("Voyager");
-        }
         String wifi_config;
-        while(file.available()){
-            wifi_config += file.readString();
-        }
-        file.close();
+        wifi_config = get_wifi_setting();
         serial_print(wifi_config);
-        wifi_backup = wifi_config;
         JsonDocument doc;
         deserializeJson(doc, wifi_config);
         const char* mode = doc["wifi_function"];
@@ -33,6 +25,38 @@ void config_wifi()
     {
         setup_ap("Voyager");
     }
+}
+
+String get_wifi_setting()
+{
+    File file = SPIFFS.open("/config/wifi_config.json");
+    if(!file){
+        setup_ap("Voyager");
+    }
+    String wifi_config;
+    while(file.available()){
+        wifi_config += file.readString();
+    }
+    file.close();
+    wifi_backup = wifi_config;
+    return wifi_config;
+}
+
+void save_wifi_settings(String config)
+{
+    wifi_backup = config;
+    File file = SPIFFS.open("/config/wifi_config.json", FILE_WRITE);
+    if(!file){
+        Serial.println("No wifi config file present");
+        return;
+    }
+    if(file.print(config)){
+        serial_print("WiFi Config saved");
+    }
+    file.close();
+    TickerForTimeOut.once(1,[](){
+        ESP.restart();
+    });
 }
 
 void setup_sta(const char* wifi_ssid, const char* wifi_pass)

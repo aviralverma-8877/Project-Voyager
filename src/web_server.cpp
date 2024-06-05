@@ -134,6 +134,7 @@ void firmware_web_updater()
       if(Update.end(true)){
         if(DEBUG)
           Serial.printf("Update Success: %uB\n", index+len);
+        save_wifi_settings(wifi_backup);
         TickerForTimeOut.once(1,[](){
           ESP.restart();
         });
@@ -175,18 +176,7 @@ void firmware_web_updater()
       if(Update.end(true)){
         if(DEBUG)
           Serial.printf("Update Success: %uB\n", index+len);
-        File file2 = SPIFFS.open("/config/wifi_config.json", FILE_WRITE);
-        if(!file2){
-            Serial.println("No wifi config file present");
-            return;
-        }
-        if(file2.print(wifi_backup)){
-            serial_print("WiFi Config saved");
-        }
-        file2.close();
-        TickerForTimeOut.once(1,[](){
-          ESP.restart();
-        });
+        
       } else {
         if(DEBUG)
           Update.printError(Serial);
