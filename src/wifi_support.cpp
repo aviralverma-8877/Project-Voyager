@@ -1,5 +1,5 @@
 #include<wifi_support.h>
-String wifi_backup;
+String wifi_backup = "";
 void config_wifi()
 {
     if (SPIFFS.exists("/config/wifi_config.json"))
@@ -39,11 +39,15 @@ String get_wifi_setting()
     }
     file.close();
     wifi_backup = wifi_config;
+    serial_print("Reading WiFi settings");
+    serial_print(wifi_config);
     return wifi_config;
 }
 
 void save_wifi_settings(String config)
 {
+    serial_print("Saving WiFi settings");
+    serial_print(config);
     wifi_backup = config;
     File file = SPIFFS.open("/config/wifi_config.json", FILE_WRITE);
     if(!file){

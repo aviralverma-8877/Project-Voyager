@@ -60,6 +60,10 @@ void define_api()
             {
         serial_print("/config/wifi_config.json");
         request->send(SPIFFS, "/config/wifi_config.json", "text/json"); });
+  server.on("/wifi_backup", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+              request->send(200, "text/json", wifi_backup);
+            });
   firmware_web_updater();
   server.begin();
 }
@@ -134,7 +138,6 @@ void firmware_web_updater()
       if(Update.end(true)){
         if(DEBUG)
           Serial.printf("Update Success: %uB\n", index+len);
-        save_wifi_settings(wifi_backup);
         TickerForTimeOut.once(1,[](){
           ESP.restart();
         });
@@ -176,7 +179,7 @@ void firmware_web_updater()
       if(Update.end(true)){
         if(DEBUG)
           Serial.printf("Update Success: %uB\n", index+len);
-        
+        save_wifi_settings(wifi_backup);
       } else {
         if(DEBUG)
           Update.printError(Serial);
