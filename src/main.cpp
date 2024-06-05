@@ -21,6 +21,9 @@ void setup() {
   init_oled();
 
   config_wifi();
+  WiFi.onEvent(onWifiConnect, SYSTEM_EVENT_STA_GOT_IP);
+  WiFi.onEvent(onWifiDisconnect, SYSTEM_EVENT_STA_DISCONNECTED);
+
   define_api();
   initWebSocket();
   

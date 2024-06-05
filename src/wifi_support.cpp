@@ -27,6 +27,17 @@ void config_wifi()
     }
 }
 
+void onWifiConnect(WiFiEvent_t event, WiFiEventInfo_t info)
+{
+    serial_print("WiFi Connected.");
+}
+
+void onWifiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info)
+{
+    serial_print("WiFi Disconnected.");
+    config_wifi();
+}
+
 String get_wifi_setting()
 {
     File file = SPIFFS.open("/config/wifi_config.json");

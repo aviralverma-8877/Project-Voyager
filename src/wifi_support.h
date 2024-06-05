@@ -9,6 +9,8 @@
     void config_wifi();
     String get_wifi_setting();
     void save_wifi_settings(String config);
+    void onWifiConnect(WiFiEvent_t event, WiFiEventInfo_t info);
+    void onWifiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info);
     void setup_sta(const char* wifi_ssid, const char* wifi_pass);
     void setup_ap(const char* wifi_ssid);
     void scan_ssid(void* args);
