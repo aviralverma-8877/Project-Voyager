@@ -24,7 +24,10 @@ void define_api()
         request->redirect("/update");
       }
     });
-      
+  server.onNotFound([](AsyncWebServerRequest *request){
+    serial_print("Not Found");
+    request->redirect("/");
+  });
   server.on("/bootstrap.min.css", HTTP_GET, [](AsyncWebServerRequest *request)
             {
         serial_print("bootstrap.min.css");
@@ -64,7 +67,6 @@ void define_api()
 void firmware_web_updater()
 {
   server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request){
-    String hostname = "project-voyager";
     request->send(200, "text/html", "<script>\
     function httpGet(action, options = {})\
     {\
@@ -84,7 +86,6 @@ void firmware_web_updater()
         }\
     }\
     </script>\
-    <a href='http://"+hostname+".local/'>"+hostname+"</a>\
     <hr />\
     <form method='POST' action='/update_flash' enctype='multipart/form-data'>\
       <div class='form-group mx-sm-3 mb-2'>\

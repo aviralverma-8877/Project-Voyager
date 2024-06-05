@@ -58,7 +58,9 @@ function update_wifi_ssid(ssid) {
 }
 function init_socket() {
   console.log("Initilizing web sockets.");
-  Socket = new WebSocket("ws://" + window.location.hostname + "/ws");
+  Socket = new WebSocket(
+    "ws://" + window.location.hostname + ":" + window.location.port + "/ws"
+  );
   Socket.onmessage = function (event) {
     var data = JSON.parse(event.data);
     var response_type = data.response_type;
