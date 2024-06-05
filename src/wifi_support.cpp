@@ -1,5 +1,5 @@
 #include<wifi_support.h>
-
+String wifi_backup;
 void config_wifi()
 {
     if (SPIFFS.exists("/config/wifi_config.json"))
@@ -14,6 +14,7 @@ void config_wifi()
         }
         file.close();
         serial_print(wifi_config);
+        wifi_backup = wifi_config;
         JsonDocument doc;
         deserializeJson(doc, wifi_config);
         const char* mode = doc["wifi_function"];
