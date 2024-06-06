@@ -37,20 +37,42 @@ void handle_operations(JsonDocument doc)
     }
     if(strcmp(request_type, "reset_device") == 0)
     {
-        serial_print("Formatting SPIFFS");
-        SPIFFS.format();
+        TickerForTimeOut.once_ms(100, reset_device);
+    }
+}
+
+void reset_device()
+{
+    serial_print("Stopping WiFi and tickers");
+    if (WiFi.status() == WL_CONNECTED)
+    {
+        WiFi.disconnect();
+    }
+    TickerForBtnPresses.detach();
+    TickerForDNSRequest.detach();
+    TickerForLedNotification.detach();
+    serial_print("Formatting SPIFFS");
+    bool formatted = SPIFFS.format();
+    if (formatted)
+    {
+        serial_print("Success formatting");
         JsonDocument doc;
         doc["response_type"] = "alert";
         doc["alert_msg"] = "Device reset successfully,\nPlease reconfigure the device by connecting to the AP.\nRebooting Now.";
         String return_response;
         serializeJsonPretty(doc, return_response);
         send_to_ws(return_response);
-        TickerForTimeOut.once_ms(100, restart);
+        restart();
+    }
+    else
+    {
+        serial_print("Error formatting");
     }
 }
 
 void restart()
 {
+    serial_print("Restarting esp.");
     ESP.restart();
 }
 

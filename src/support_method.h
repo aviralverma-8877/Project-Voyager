@@ -10,6 +10,7 @@
     #include <WiFi.h>
     #include <ArduinoJson.h>
     #include <wifi_support.h>
+    #include "SPIFFS.h"
     extern DNSServer dnsServer;
     extern Ticker TickerForLedNotification;
 
@@ -23,6 +24,7 @@
     void stop_nortify_led();
     void nortify_led();
     void handle_operations(JsonDocument doc);
+    void reset_device();
     #define DEBUGGING DEBUG
 #endif
 
