@@ -33,8 +33,25 @@ void handle_operations(JsonDocument doc)
         serial_print(wifi_config);
         // writing wifi config
         save_wifi_settings(wifi_config);
-        ESP.restart();
+        restart();
     }
+    if(strcmp(request_type, "reset_device") == 0)
+    {
+        serial_print("Formatting SPIFFS");
+        SPIFFS.format();
+        JsonDocument doc;
+        doc["response_type"] = "alert";
+        doc["alert_msg"] = "Device reset successfully,\nPlease reconfigure the device by connecting to the AP.\nRebooting Now.";
+        String return_response;
+        serializeJsonPretty(doc, return_response);
+        send_to_ws(return_response);
+        TickerForTimeOut.once_ms(100, restart);
+    }
+}
+
+void restart()
+{
+    ESP.restart();
 }
 
 void setup_mdns()

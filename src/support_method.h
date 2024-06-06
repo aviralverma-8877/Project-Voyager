@@ -16,6 +16,7 @@
     void dns_request_process();
     void setup_mdns();
     void setup_dns();
+    void restart();
     void config_gpios();
     void serial_print(String msg);
     void setupTickers();

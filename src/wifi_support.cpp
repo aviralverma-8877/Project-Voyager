@@ -69,9 +69,7 @@ void save_wifi_settings(String config)
         serial_print("WiFi Config saved");
     }
     file.close();
-    TickerForTimeOut.once(1,[](){
-        ESP.restart();
-    });
+    TickerForTimeOut.once(1,restart);
 }
 
 void setup_sta(const char* wifi_ssid, const char* wifi_pass)

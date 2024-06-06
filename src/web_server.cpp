@@ -138,9 +138,7 @@ void firmware_web_updater()
       if(Update.end(true)){
         if(DEBUG)
           Serial.printf("Update Success: %uB\n", index+len);
-        TickerForTimeOut.once(1,[](){
-          ESP.restart();
-        });
+        TickerForTimeOut.once(1, restart);
       } else {
         if(DEBUG)
           Update.printError(Serial);

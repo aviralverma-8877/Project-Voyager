@@ -25,6 +25,17 @@ function update() {
   });
 }
 
+function reset(){
+  $("#promptModalLabel").html("Device Reset");
+  $("#prompt_body").html("Are you sure you want to reset the device");
+  var alertModal = new bootstrap.Modal($('#promptModal'), {})
+  alertModal.show();
+  $("#promptModelProceed").click(function(){
+    alertModal.hide();
+    Socket.send(JSON.stringify({ "request-type": "reset_device" }));
+  });
+}
+
 function scan_ssid() {
   $("#wifi_ssid_list").html("");
   $("#wifi_scan_btn").html("Scanning...");
