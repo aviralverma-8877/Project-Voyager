@@ -11,6 +11,7 @@
     #include <ArduinoJson.h>
     #include <wifi_support.h>
     #include "SPIFFS.h"
+    extern String hostname;
     extern DNSServer dnsServer;
     extern Ticker TickerForLedNotification;
 

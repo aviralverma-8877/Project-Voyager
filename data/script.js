@@ -1,11 +1,20 @@
+var hostname_url;
 $(document).ready(function () {
   init_socket();
+  get_hostname();
   dashboard();
 });
 
 $("#myModal").on("shown.bs.modal", function () {
   $("#myInput").trigger("focus");
 });
+
+function get_hostname() {
+  $.get("hostname", function (data) {
+    hostname_url = data;
+    $("#project_title").attr("href", "http://" + data + ".local/");
+  });
+}
 
 function dashboard() {
   $.get("dashboard.html", function (data) {
@@ -61,6 +70,9 @@ function wifi_connect() {
       wifi_pass: psk,
     })
   );
+  setTimeout(function () {
+    window.location.href = hostname_url;
+  }, 10000);
 }
 
 function update_wifi_ssid(ssid) {
@@ -94,6 +106,10 @@ function init_socket() {
           "</span></li>";
       }
       $("#wifi_ssid_list").html(output);
+    }
+    if (response_type == "alert") {
+      var msg = data.alert_msg;
+      alert(msg);
     }
   };
   Socket.onopen = function (event) {

@@ -56,14 +56,22 @@ void define_api()
             {
         serial_print("wifi.html");
         request->send(SPIFFS, "/wifi.html", "text/html"); });
-  server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request)
+  server.on("/hostname", HTTP_GET, [](AsyncWebServerRequest *request)
             {
-        serial_print("/config/wifi_config.json");
-        request->send(SPIFFS, "/config/wifi_config.json", "text/json"); });
-  server.on("/wifi_backup", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-              request->send(200, "text/json", wifi_backup.backup_config);
-            });
+        serial_print("hostname");
+        request->send(200, "text/plain", hostname); });
+
+  if(DEBUG)
+  {
+    server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request)
+              {
+          serial_print("/config/wifi_config.json");
+          request->send(SPIFFS, "/config/wifi_config.json", "text/json"); });
+    server.on("/wifi_backup", HTTP_GET, [](AsyncWebServerRequest *request)
+              {
+                request->send(200, "text/json", wifi_backup.backup_config);
+              });
+  }
   firmware_web_updater();
   server.begin();
 }

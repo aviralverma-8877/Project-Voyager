@@ -1,5 +1,6 @@
 #include <support_method.h>
 
+String hostname;
 DNSServer dnsServer;
 Ticker TickerForBtnPresses;
 Ticker TickerForLedNotification;
@@ -43,7 +44,12 @@ void handle_operations(JsonDocument doc)
 
 void reset_device()
 {
-    
+    JsonDocument doc;
+    doc["response_type"] = "alert";
+    doc["alert_msg"] = "Device reset successfully,\nPlease reconfigure the device by connecting to the AP.\nRebooting Now.";
+    String return_response;
+    serializeJsonPretty(doc, return_response);
+    send_to_ws(return_response);
     clear_oled_display();
     display_text_oled("Resetting", 0, 10);
     serial_print("Stopping WiFi and tickers");
@@ -59,12 +65,6 @@ void reset_device()
     if (formatted)
     {
         serial_print("Success formatting");
-        JsonDocument doc;
-        doc["response_type"] = "alert";
-        doc["alert_msg"] = "Device reset successfully,\nPlease reconfigure the device by connecting to the AP.\nRebooting Now.";
-        String return_response;
-        serializeJsonPretty(doc, return_response);
-        send_to_ws(return_response);
         restart();
     }
     else
@@ -81,7 +81,9 @@ void restart()
 
 void setup_mdns()
 {
-    String hostname = "project-voyager";
+    String mac = WiFi.macAddress();
+    mac.replace(":","_");
+    hostname = "project-voyager-"+mac;
     WiFi.hostname(hostname);
     serial_print("Device hostname: "+hostname);
     if (MDNS.begin(hostname.c_str())) {
