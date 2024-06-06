@@ -11,8 +11,8 @@ $("#myModal").on("shown.bs.modal", function () {
 
 function get_hostname() {
   $.get("hostname", function (data) {
-    hostname_url = data;
-    $("#project_title").attr("href", "http://" + data + ".local/");
+    hostname_url = "http://" + data + ".local/";
+    $("#project_title").attr("href", hostname_url);
   });
 }
 
@@ -71,7 +71,7 @@ function wifi_connect() {
     })
   );
   setTimeout(function () {
-    window.location.href = hostname_url;
+    window.location.replace(hostname_url);
   }, 10000);
 }
 
