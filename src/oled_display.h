@@ -17,5 +17,6 @@
     
     void init_oled();
     void show_splash();
+    void clear_oled_display();
     void display_text_oled(String msg, int x, int y);
 #endif

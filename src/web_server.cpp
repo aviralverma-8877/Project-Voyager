@@ -62,7 +62,7 @@ void define_api()
         request->send(SPIFFS, "/config/wifi_config.json", "text/json"); });
   server.on("/wifi_backup", HTTP_GET, [](AsyncWebServerRequest *request)
             {
-              request->send(200, "text/json", wifi_backup);
+              request->send(200, "text/json", wifi_backup.backup_config);
             });
   firmware_web_updater();
   server.begin();
@@ -177,7 +177,11 @@ void firmware_web_updater()
       if(Update.end(true)){
         if(DEBUG)
           Serial.printf("Update Success: %uB\n", index+len);
-        save_wifi_settings(wifi_backup);
+        if(wifi_backup.backup_done)
+        {
+          serial_print("WiFi Setting backed up.");
+          save_wifi_settings(wifi_backup.backup_config);
+        }
       } else {
         if(DEBUG)
           Update.printError(Serial);

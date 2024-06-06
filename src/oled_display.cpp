@@ -15,6 +15,11 @@ void init_oled()
     show_splash();
 }
 
+void clear_oled_display()
+{
+    display.clearDisplay();
+}
+
 void display_text_oled(String msg, int x, int y)
 {
     display.setTextSize(1);      // Normal 1:1 pixel scale

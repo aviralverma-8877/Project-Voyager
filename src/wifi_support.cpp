@@ -1,5 +1,7 @@
 #include<wifi_support.h>
-String wifi_backup = "";
+
+WiFiBackup wifi_backup;
+
 void config_wifi()
 {
     if (SPIFFS.exists("/config/wifi_config.json"))
@@ -49,7 +51,8 @@ String get_wifi_setting()
         wifi_config += file.readString();
     }
     file.close();
-    wifi_backup = wifi_config;
+    wifi_backup.backup_config = wifi_config;
+    wifi_backup.backup_done = true;
     serial_print("Reading WiFi settings");
     serial_print(wifi_config);
     return wifi_config;
@@ -59,7 +62,8 @@ void save_wifi_settings(String config)
 {
     serial_print("Saving WiFi settings");
     serial_print(config);
-    wifi_backup = config;
+    wifi_backup.backup_config = config;
+    wifi_backup.backup_done = true;
     File file = SPIFFS.open("/config/wifi_config.json", FILE_WRITE);
     if(!file){
         Serial.println("No wifi config file present");
@@ -76,9 +80,16 @@ void setup_sta(const char* wifi_ssid, const char* wifi_pass)
 {
     serial_print("Connecting WiFi.");
     WiFi.begin(wifi_ssid, wifi_pass);
+    int count = 0;
     while (WiFi.status() != WL_CONNECTED) {
+        if(count > 120)
+        {
+            setup_ap("Voyager");
+            return;
+        }
         vTaskDelay(500/portTICK_PERIOD_MS);
         serial_print(".");
+        count++;
     }
     serial_print("WiFi connected.");
     IPAddress IP = WiFi.localIP();

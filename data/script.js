@@ -25,12 +25,12 @@ function update() {
   });
 }
 
-function reset(){
+function reset() {
   $("#promptModalLabel").html("Device Reset");
   $("#prompt_body").html("Are you sure you want to reset the device");
-  var alertModal = new bootstrap.Modal($('#promptModal'), {})
+  var alertModal = new bootstrap.Modal($("#promptModal"), {});
   alertModal.show();
-  $("#promptModelProceed").click(function(){
+  $("#promptModelProceed").click(function () {
     alertModal.hide();
     Socket.send(JSON.stringify({ "request-type": "reset_device" }));
   });
@@ -44,7 +44,6 @@ function scan_ssid() {
 }
 
 function wifi_connect() {
-  debugger;
   ssid = $("#wifi_ssid").val();
   psk = $("#wifi_password").val();
   if (ssid == "" || ssid == undefined) {

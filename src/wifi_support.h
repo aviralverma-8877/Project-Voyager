@@ -5,7 +5,11 @@
     #include <support_method.h>
     #include <ArduinoJson.h>
     #include <web_sockets.h>
-    extern String wifi_backup;
+    struct WiFiBackup{
+        String backup_config = "";
+        bool backup_done = false;
+    };
+    extern WiFiBackup wifi_backup;
     void config_wifi();
     String get_wifi_setting();
     void save_wifi_settings(String config);

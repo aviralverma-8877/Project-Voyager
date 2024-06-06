@@ -43,6 +43,9 @@ void handle_operations(JsonDocument doc)
 
 void reset_device()
 {
+    
+    clear_oled_display();
+    display_text_oled("Resetting", 0, 10);
     serial_print("Stopping WiFi and tickers");
     if (WiFi.status() == WL_CONNECTED)
     {
