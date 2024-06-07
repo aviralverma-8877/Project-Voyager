@@ -28,7 +28,6 @@ void setup() {
   initWebSocket();
   
   config_lora();
-  LoRa_sendMessage("Test MSG");
   serial_print("config done");
 }
 

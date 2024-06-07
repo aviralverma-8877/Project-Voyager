@@ -40,16 +40,19 @@ void handle_operations(JsonDocument doc)
     {
         TickerForTimeOut.once_ms(100, reset_device);
     }
+    if(strcmp(request_type, "lora_transmit") == 0)
+    {
+        String msg = doc["data"];
+        bool get_response = doc["get_response"];
+        LoRa_sendMessage(msg);
+        if(get_response)
+            show_alert("LoRa msg transmitted successfully");
+    }
 }
 
 void reset_device()
 {
-    JsonDocument doc;
-    doc["response_type"] = "alert";
-    doc["alert_msg"] = "Device reset successfully,\nPlease reconfigure the device by connecting to the AP.\nRebooting Now.";
-    String return_response;
-    serializeJsonPretty(doc, return_response);
-    send_to_ws(return_response);
+    show_alert("Device reset successfully,\nPlease reconfigure the device by connecting to the AP.\nRebooting Now.");
     clear_oled_display();
     display_text_oled("Resetting", 0, 10);
     serial_print("Stopping WiFi and tickers");
@@ -71,6 +74,16 @@ void reset_device()
     {
         serial_print("Error formatting");
     }
+}
+
+void show_alert(String msg)
+{
+    JsonDocument doc;
+    doc["response_type"] = "alert";
+    doc["alert_msg"] = msg;
+    String return_response;
+    serializeJsonPretty(doc, return_response);
+    send_to_ws(return_response);
 }
 
 void restart()

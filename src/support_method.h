@@ -9,6 +9,7 @@
     #include <DNSServer.h>
     #include <WiFi.h>
     #include <ArduinoJson.h>
+    #include <lora_support.h>
     #include <wifi_support.h>
     #include "SPIFFS.h"
     extern String hostname;
@@ -24,6 +25,7 @@
     void setupTickers();
     void stop_nortify_led();
     void nortify_led();
+    void show_alert(String msg);
     void handle_operations(JsonDocument doc);
     void reset_device();
     #define DEBUGGING DEBUG

@@ -9,6 +9,11 @@ $("#myModal").on("shown.bs.modal", function () {
   $("#myInput").trigger("focus");
 });
 
+function send_lora(msg)
+{
+  Socket.send(JSON.stringify({ "request-type": "lora_transmit", "data":msg, "get_response":true }));
+}
+
 function get_hostname() {
   $.get("hostname", function (data) {
     hostname_url = "http://" + data + ".local/";
