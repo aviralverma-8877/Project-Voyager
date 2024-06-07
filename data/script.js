@@ -9,9 +9,14 @@ $("#myModal").on("shown.bs.modal", function () {
   $("#myInput").trigger("focus");
 });
 
-function send_lora(msg)
-{
-  Socket.send(JSON.stringify({ "request-type": "lora_transmit", "data":msg, "get_response":true }));
+function send_lora(msg) {
+  Socket.send(
+    JSON.stringify({
+      "request-type": "lora_transmit",
+      data: msg,
+      get_response: false,
+    })
+  );
 }
 
 function get_hostname() {
@@ -115,6 +120,10 @@ function init_socket() {
     if (response_type == "alert") {
       var msg = data.alert_msg;
       alert(msg);
+    }
+    if (response_type == "lora_rx") {
+      var msg = data.lora_msg;
+      $("#lora_rx_msg").append("<li class='list-group-item'>" + msg + "</li>");
     }
   };
   Socket.onopen = function (event) {

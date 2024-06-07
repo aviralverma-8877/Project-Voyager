@@ -13,6 +13,7 @@
         "utility": "cpp",
         "cstdlib": "cpp",
         "chrono": "cpp",
-        "string_view": "cpp"
+        "string_view": "cpp",
+        "random": "cpp"
     }
 }

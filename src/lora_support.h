@@ -18,5 +18,5 @@
     void LoRa_sendMessage(String message);
     void onReceive(int packetSize);
     void onTxDone();
-
+    void send_msg_to_ws( void * parameter );
 #endif
