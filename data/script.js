@@ -17,6 +17,7 @@ function send_lora(msg) {
       get_response: false,
     })
   );
+  $("#lora_msg").val("");
 }
 
 function get_hostname() {
