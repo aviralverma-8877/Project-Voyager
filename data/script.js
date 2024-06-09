@@ -10,14 +10,17 @@ $("#myModal").on("shown.bs.modal", function () {
 });
 
 function send_lora(msg) {
-  Socket.send(
-    JSON.stringify({
-      "request-type": "lora_transmit",
-      data: msg,
-      get_response: false,
-    })
-  );
-  $("#lora_msg").val("");
+  if(msg != "")
+  {
+    Socket.send(
+      JSON.stringify({
+        "request-type": "lora_transmit",
+        data: msg,
+        get_response: false,
+      })
+    );
+    $("#lora_msg").val("");
+  }
 }
 
 function get_hostname() {
