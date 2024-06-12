@@ -9,12 +9,11 @@ $("#myModal").on("shown.bs.modal", function () {
   $("#myInput").trigger("focus");
 });
 
-function file_broadcast()
-{
-  const file = $('#broadcastFile').prop('files')[0];
+function file_broadcast() {
+  const file = $("#broadcastFile").prop("files")[0];
   const chunkSize = 200;
   let start = 0;
-
+  let i = 0;
   while (start < file.size) {
     uploadChunk(file.slice(start, start + chunkSize));
     start += chunkSize;
@@ -22,30 +21,20 @@ function file_broadcast()
 }
 
 function uploadChunk(chunk) {
-  var file_data = [];
-	const reader = new FileReader();
-	 reader.onload = function(e){
-		const dataURL = reader.result;
-    const base64 = dataURL.slice(dataURL.indexOf(',')+1);
-    file_data.push(base64);
-	};
-  reader.onloadend = function(e){
-    file_data.forEach((data, i) =>
-    {
-      setTimeout(() => {
-        console.log(data);
-      }, i * 1000);
-    });
-  }
-	reader.onerror = function(e) {
-		console.log('Error : ' + e.type);
-	};
-	reader.readAsDataURL(chunk)
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const dataURL = reader.result;
+    const base64 = dataURL.slice(dataURL.indexOf(",") + 1);
+    console.log(base64);
+  };
+  reader.onerror = function (e) {
+    console.log("Error : " + e.type);
+  };
+  reader.readAsDataURL(chunk);
 }
 
 function send_lora(msg) {
-  if(msg != "")
-  {
+  if (msg != "") {
     Socket.send(
       JSON.stringify({
         "request-type": "lora_transmit",
