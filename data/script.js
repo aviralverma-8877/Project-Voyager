@@ -45,8 +45,7 @@ function send_lora(msg) {
   }
 }
 
-function restart()
-{
+function restart() {
   $("#promptModalLabel").html("Device Restart");
   $("#prompt_body").html("Are you sure you want to restart the device");
   var alertModal = new bootstrap.Modal($("#promptModal"), {});
@@ -161,7 +160,7 @@ function init_socket() {
     }
     if (response_type == "lora_rx") {
       var msg = data.lora_msg;
-      $("#lora_rx_msg").append("<li class='list-group-item'>" + msg + "</li>");
+      $("#lora_rx_msg").prepend("<li class='list-group-item'>" + msg + "</li>");
     }
   };
   Socket.onopen = function (event) {
