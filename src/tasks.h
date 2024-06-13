@@ -10,5 +10,5 @@
     void init_isr(int btn);
     void led_nortifier();
     void btn_intrupt();
-
+    void transmit_beacon();
 #endif

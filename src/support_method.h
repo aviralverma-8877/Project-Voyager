@@ -15,6 +15,7 @@
     extern String hostname;
     extern DNSServer dnsServer;
     extern Ticker TickerForLedNotification;
+    extern Ticker TickerForLoraBeacon;
 
     void dns_request_process();
     void setup_mdns();
@@ -28,6 +29,7 @@
     void show_alert(String msg);
     void handle_operations(JsonDocument doc);
     void reset_device();
+    String device_becon();
     #define DEBUGGING DEBUG
 #endif
 

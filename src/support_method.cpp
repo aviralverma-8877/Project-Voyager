@@ -3,6 +3,7 @@
 String hostname;
 DNSServer dnsServer;
 Ticker TickerForBtnPresses;
+Ticker TickerForLoraBeacon;
 Ticker TickerForLedNotification;
 Ticker TickerForDNSRequest;
 
@@ -146,6 +147,7 @@ void serial_print(String msg)
 void setupTickers()
 {
     TickerForBtnPresses.attach_ms(10, btn_intrupt);
+    TickerForLoraBeacon.attach_ms(10, transmit_beacon);
 }
 
 void stop_nortify_led()
@@ -158,4 +160,18 @@ void nortify_led()
 {
     serial_print("Nortify");
     TickerForLedNotification.attach_ms(500, led_nortifier);
+}
+
+String device_becon()
+{
+    String wifi_mac = WiFi.macAddress();
+    String project = "Voyager";
+    String packet_type = "beacon";
+    JsonDocument doc;
+    doc["mac"] = wifi_mac;
+    doc["project"] = "Voyager";
+    doc["pack_type"] = packet_type;
+    String return_string;
+    serializeJson(doc, return_string);
+    return return_string;
 }

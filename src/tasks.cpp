@@ -4,6 +4,12 @@ bool notify = true;
 bool btn_1_pressed = false;
 bool btn_2_pressed = false;
 
+void transmit_beacon()
+{
+    String beacon = device_becon();
+    LoRa_sendMessage(beacon);
+}
+
 void led_nortifier()
 {
     if(digitalRead(LED))
