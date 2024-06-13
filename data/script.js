@@ -24,8 +24,7 @@ function uploadChunk(chunk) {
   const reader = new FileReader();
   reader.onload = function (e) {
     const dataURL = reader.result;
-    const base64 = dataURL.slice(dataURL.indexOf(",") + 1);
-    console.log(base64);
+    console.log(dataURL);
   };
   reader.onerror = function (e) {
     console.log("Error : " + e.type);
@@ -44,6 +43,18 @@ function send_lora(msg) {
     );
     $("#lora_msg").val("");
   }
+}
+
+function restart()
+{
+  $("#promptModalLabel").html("Device Restart");
+  $("#prompt_body").html("Are you sure you want to restart the device");
+  var alertModal = new bootstrap.Modal($("#promptModal"), {});
+  alertModal.show();
+  $("#promptModelProceed").click(function () {
+    alertModal.hide();
+    Socket.send(JSON.stringify({ "request-type": "restart_device" }));
+  });
 }
 
 function get_hostname() {

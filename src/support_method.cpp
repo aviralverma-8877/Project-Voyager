@@ -40,6 +40,10 @@ void handle_operations(JsonDocument doc)
     {
         TickerForTimeOut.once_ms(100, reset_device);
     }
+    if(strcmp(request_type, "restart_device") == 0)
+    {
+        TickerForTimeOut.once_ms(100, restart);
+    }
     if(strcmp(request_type, "lora_transmit") == 0)
     {
         String msg = doc["data"];
