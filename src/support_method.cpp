@@ -147,7 +147,8 @@ void serial_print(String msg)
 void setupTickers()
 {
     TickerForBtnPresses.attach_ms(10, btn_intrupt);
-    TickerForLoraBeacon.attach_ms(10, transmit_beacon);
+    transmit_beacon();
+    TickerForLoraBeacon.attach(10, transmit_beacon);
 }
 
 void stop_nortify_led()

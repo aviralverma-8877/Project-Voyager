@@ -6,6 +6,7 @@ bool btn_2_pressed = false;
 
 void transmit_beacon()
 {
+    serial_print("Beacon Transmitted");
     String beacon = device_becon();
     LoRa_sendMessage(beacon);
 }
