@@ -12,6 +12,18 @@
     LoRa.
 </h3>
 <hr>
+<h5 for="username">Name:</h5>
+</h5>
+<input
+    class="form-control form-control-sm"
+    id="username"
+    onchange="set_username(this.value)"
+    value=""
+    type="text"
+    placeholder="Name"
+>
+<div class="mb-3" id="online_nodes"></div>
+<hr>
 <div class="mb-3">
     <h5 for="lora_msg">Transmit message:</h5>
     <textarea class="form-control" id="lora_msg" rows="3"></textarea>

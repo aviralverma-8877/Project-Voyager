@@ -32,12 +32,21 @@ function uploadChunk(chunk) {
   reader.readAsDataURL(chunk);
 }
 
+function get_username() {
+  Socket.send(
+    JSON.stringify({
+      "request-type": "get_username",
+    })
+  );
+}
+
 function send_lora(msg) {
   if (msg != "") {
+    tx_msg = { pack_type: "msg", data: msg };
     Socket.send(
       JSON.stringify({
         "request-type": "lora_transmit",
-        data: msg,
+        data: JSON.stringify(tx_msg),
         get_response: false,
       })
     );
@@ -122,6 +131,17 @@ function wifi_connect() {
   }, 10000);
 }
 
+function set_username(val) {
+  if (val != "") {
+    Socket.send(
+      JSON.stringify({
+        "request-type": "set_username",
+        val: val,
+      })
+    );
+  }
+}
+
 function update_wifi_ssid(ssid) {
   $("#wifi_ssid").attr("value", ssid);
 }
@@ -159,12 +179,25 @@ function init_socket() {
       alert(msg);
     }
     if (response_type == "lora_rx") {
-      var msg = data.lora_msg;
-      $("#lora_rx_msg").prepend("<li class='list-group-item'>" + msg + "</li>");
+      var data = JSON.parse(data.lora_msg);
+      var pack_type = data["pack_type"];
+      if (pack_type == "beacon") {
+        console.log("beacon from " + data["mac"]);
+      }
+      if (pack_type == "msg") {
+        msg = data["data"];
+        $("#lora_rx_msg").prepend(
+          "<li class='list-group-item'>" + msg + "</li>"
+        );
+      }
+    }
+    if (response_type == "set_uname") {
+      $("#username").val(data.uname);
     }
   };
   Socket.onopen = function (event) {
     console.log("Connected to web sockets...");
+    get_username();
   };
   Socket.onclose = function (event) {
     console.log("Connection to websockets closed....");

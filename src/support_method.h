@@ -12,6 +12,7 @@
     #include <lora_support.h>
     #include <wifi_support.h>
     #include "SPIFFS.h"
+    extern String username;
     extern String hostname;
     extern DNSServer dnsServer;
     extern Ticker TickerForLedNotification;

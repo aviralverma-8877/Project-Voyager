@@ -27,9 +27,14 @@ void LoRa_txMode(){
 }
 
 void LoRa_sendMessage(String message) {
+    JsonDocument doc;
+    doc["mac"] = WiFi.macAddress();
+    doc["data"] = message;
+    String lora_payload;
+    serializeJson(doc, lora_payload);
     LoRa_txMode();                        // set tx mode
     LoRa.beginPacket();                   // start packet
-    LoRa.print(message);                  // add payload
+    LoRa.print(lora_payload);                  // add payload
     LoRa.endPacket(true);                 // finish packet and send it
     LoRa_rxMode();
 }

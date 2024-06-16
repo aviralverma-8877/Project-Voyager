@@ -1,5 +1,6 @@
 #include <support_method.h>
 
+String username="new_user";
 String hostname;
 DNSServer dnsServer;
 Ticker TickerForBtnPresses;
@@ -52,6 +53,24 @@ void handle_operations(JsonDocument doc)
         LoRa_sendMessage(msg);
         if(get_response)
             show_alert("LoRa msg transmitted successfully");
+    }
+    if(strcmp(request_type, "set_username") == 0)
+    {
+        String val = doc["val"];
+        serial_print("changing username");
+        serial_print(val);
+        username = val;
+    }
+    if(strcmp(request_type, "get_username") == 0)
+    {
+        TickerForTimeOut.once_ms(100, [](){
+            JsonDocument doc;
+            doc["response_type"] = "set_uname";
+            doc["uname"] = username;
+            String return_value;
+            serializeJson(doc, return_value);
+            send_to_ws(return_value);
+        });
     }
 }
 
@@ -165,12 +184,9 @@ void nortify_led()
 
 String device_becon()
 {
-    String wifi_mac = WiFi.macAddress();
-    String project = "Voyager";
     String packet_type = "beacon";
     JsonDocument doc;
-    doc["mac"] = wifi_mac;
-    doc["project"] = "Voyager";
+    doc["project"] = username;
     doc["pack_type"] = packet_type;
     String return_string;
     serializeJson(doc, return_string);

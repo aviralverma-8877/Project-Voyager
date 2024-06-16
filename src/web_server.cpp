@@ -128,7 +128,7 @@ void firmware_web_updater()
       </script>");
     }
   },[](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
-    LoRa.idle();
+    LoRa_txMode();
     if(!index){
       if(DEBUG)
         Serial.printf("Update Start: %s\n", filename.c_str());
@@ -168,7 +168,7 @@ void firmware_web_updater()
       </script>");
     }
   },[](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
-    LoRa.idle();
+    LoRa_txMode();
     if(!index){
       if(DEBUG)
         Serial.printf("Update Start: %s\n", filename.c_str());
