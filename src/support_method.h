@@ -18,6 +18,8 @@
     extern Ticker TickerForLedNotification;
     extern Ticker TickerForLoraBeacon;
 
+    String get_username();
+    void save_username(String uname);
     void dns_request_process();
     void setup_mdns();
     void setup_dns();

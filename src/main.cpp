@@ -17,6 +17,7 @@ void setup() {
     serial_print("SPIFFS Mount Failed");
     return;
   }
+  get_username();
   config_gpios();
   init_oled();
 

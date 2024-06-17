@@ -1,6 +1,6 @@
 #include <support_method.h>
 
-String username=WiFi.macAddress();
+String username;
 String hostname;
 DNSServer dnsServer;
 Ticker TickerForBtnPresses;
@@ -59,10 +59,11 @@ void handle_operations(JsonDocument doc)
         String val = doc["val"];
         serial_print("changing username");
         serial_print(val);
-        username = val;
+        save_username(val);
     }
     if(strcmp(request_type, "get_username") == 0)
     {
+
         TickerForTimeOut.once_ms(100, [](){
             JsonDocument doc;
             doc["response_type"] = "set_uname";
@@ -72,6 +73,54 @@ void handle_operations(JsonDocument doc)
             send_to_ws(return_value);
         });
     }
+}
+
+String get_username()
+{
+    File file = SPIFFS.open("/config/user_data.json");
+    if(!file){
+        username = WiFi.macAddress();
+        return WiFi.macAddress();
+    }
+    String username_config;
+    while(file.available()){
+        username_config += file.readString();
+    }
+    file.close();
+    serial_print("Reading username");
+    JsonDocument doc;
+    deserializeJson(doc, username_config);
+    const char* uname = doc["username"];
+    if(strcmp(uname, "")==0)
+    {
+        username = WiFi.macAddress();
+        return WiFi.macAddress();
+    }
+    else
+    {
+        username = uname;
+        return uname;
+    }
+}
+
+void save_username(String uname)
+{
+    serial_print("Saving username");
+    serial_print(uname);
+    JsonDocument doc;
+    doc["username"] = uname;
+    String username_config;
+    serializeJson(doc, username_config);
+    File file = SPIFFS.open("/config/user_data.json", FILE_WRITE);
+    if(!file){
+        Serial.println("No username file present.");
+        return;
+    }
+    if(file.print(username_config)){
+        serial_print("Username saved");
+    }
+    file.close();
+    username = uname;
 }
 
 void reset_device()
