@@ -180,14 +180,18 @@ function init_socket() {
     }
     if (response_type == "lora_rx") {
       var data = JSON.parse(data.lora_msg);
+      var mac = data.mac;
+      var data = JSON.parse(data.data);
       var pack_type = data["pack_type"];
       if (pack_type == "beacon") {
-        console.log("beacon from " + data["mac"]);
+        console.log("beacon from " + mac);
       }
       if (pack_type == "msg") {
+        // {response_type: 'lora_rx', lora_msg: '{"mac":"A4:CF:12:83:F2:28","data":"{\\"pack_type\\":\\"msg\\",\\"data\\":\\"hdcfhbdf\\"}"}'}
+        // "{"mac":"A4:CF:12:83:F2:28","data":"{\"pack_type\":\"msg\",\"data\":\"hdcfhbdf\"}"}"
         msg = data["data"];
         $("#lora_rx_msg").prepend(
-          "<li class='list-group-item'>" + msg + "</li>"
+          "<li class='list-group-item'>" + mac + " : " + msg + "</li>"
         );
       }
     }

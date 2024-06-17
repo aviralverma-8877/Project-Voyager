@@ -1,6 +1,6 @@
 #include <support_method.h>
 
-String username="new_user";
+String username=WiFi.macAddress();
 String hostname;
 DNSServer dnsServer;
 Ticker TickerForBtnPresses;
