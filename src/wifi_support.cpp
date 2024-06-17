@@ -1,5 +1,6 @@
 #include<wifi_support.h>
 
+Ticker TickerForWiFiTimeout;
 WiFiBackup wifi_backup;
 
 void config_wifi()
@@ -99,6 +100,7 @@ void setup_sta(const char* wifi_ssid, const char* wifi_pass)
     display_text_oled(wifi_ssid, 0, 20);
     display_text_oled(IP.toString(), 0, 30);
     setup_mdns();
+    TickerForWiFiTimeout.once(1, wifi_connection_check);
 }
 
 void setup_ap(const char* wifi_ssid)

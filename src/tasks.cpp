@@ -4,6 +4,14 @@ bool notify = true;
 bool btn_1_pressed = false;
 bool btn_2_pressed = false;
 
+void wifi_connection_check()
+{
+    if(!WiFi.isConnected())
+    {
+        config_wifi();
+    }
+}
+
 void transmit_beacon()
 {
     serial_print("Beacon Transmitted");

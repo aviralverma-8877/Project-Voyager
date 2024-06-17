@@ -7,6 +7,7 @@
     #define BUTTON1 BTN1
     #define BUTTON2 BTN2
 
+    void wifi_connection_check();
     void init_isr(int btn);
     void led_nortifier();
     void btn_intrupt();
