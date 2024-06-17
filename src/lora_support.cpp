@@ -28,6 +28,7 @@ void LoRa_txMode(){
 
 void LoRa_sendMessage(String message) {
     JsonDocument doc;
+    doc["name"] = username;
     doc["mac"] = WiFi.macAddress();
     doc["data"] = message;
     String lora_payload;

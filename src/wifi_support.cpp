@@ -14,6 +14,7 @@ void config_wifi()
         const char* mode = doc["wifi_function"];
         const char* wifi_ssid = doc["wifi_ssid"];
         const char* wifi_pass = doc["wifi_pass"];
+        WiFi.disconnect();
         if(strcmp(mode, "AP") == 0)
         {
             setup_ap(wifi_ssid);
