@@ -16,6 +16,33 @@ void config_lora()
     LoRa_rxMode();
 }
 
+void set_lora_parameters()
+{
+    if (SPIFFS.exists("/config/lora_config.json"))
+    {
+        File file = SPIFFS.open("/config/wifi_config.json");
+        if(!file){
+            return;
+        }
+        String lora_config;
+        while(file.available()){
+            lora_config += file.readString();
+        }
+        JsonDocument doc;
+        deserializeJson(doc, lora_config);
+        int TxPower = doc["TxPower"];
+        int SpreadingFactor = doc["SpreadingFactor"];
+        int SignalBandwidth = doc["SignalBandwidth"];
+        int CodingRate = doc["CodingRate4"];
+        int SyncWord = doc["SyncWord"];
+        LoRa.setTxPower(TxPower);
+        LoRa.setSpreadingFactor(SpreadingFactor);
+        LoRa.setSignalBandwidth(SignalBandwidth);
+        LoRa.setCodingRate4(CodingRate);
+        LoRa.setSyncWord(SyncWord);
+    }
+}
+
 void LoRa_rxMode(){
     LoRa.enableInvertIQ();                // active invert I and Q signals
     LoRa.receive();                       // set receive mode

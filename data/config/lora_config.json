@@ -1,0 +1,7 @@
+{
+    "TxPower" : 17,
+    "SpreadingFactor" : 10,
+    "SignalBandwidth" : 62.5E3,
+    "CodingRate4" : 7,
+    "SyncWord" : 0
+}
