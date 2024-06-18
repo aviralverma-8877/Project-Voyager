@@ -11,25 +11,24 @@ $("#myModal").on("shown.bs.modal", function () {
 
 function file_broadcast() {
   const file = $("#broadcastFile").prop("files")[0];
-  const chunkSize = 200;
-  let start = 0;
-  let i = 0;
-  while (start < file.size) {
-    uploadChunk(file.slice(start, start + chunkSize));
-    start += chunkSize;
-  }
-}
-
-function uploadChunk(chunk) {
   const reader = new FileReader();
+  reader.readAsDataURL(file);
   reader.onload = function (e) {
     const dataURL = reader.result;
-    console.log(dataURL);
+    const chunkSize = 200;
+    let start = 0;
+    while (start < dataURL.length) {
+      uploadChunk(dataURL.slice(start, start + chunkSize));
+      start += chunkSize;
+    }
   };
   reader.onerror = function (e) {
     console.log("Error : " + e.type);
   };
-  reader.readAsDataURL(chunk);
+}
+
+function uploadChunk(chunk) {
+  console.log(chunk)
 }
 
 function get_username() {

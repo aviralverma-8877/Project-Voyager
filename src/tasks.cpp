@@ -6,7 +6,7 @@ bool btn_2_pressed = false;
 
 void wifi_connection_check()
 {
-    if(!WiFi.isConnected())
+    if(WiFi.status() != WL_CONNECTED)
     {
         config_wifi();
     }
