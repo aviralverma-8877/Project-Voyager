@@ -9,8 +9,6 @@ $("#myModal").on("shown.bs.modal", function () {
   $("#myInput").trigger("focus");
 });
 
-var broadcast_file_chunks = [];
-
 function file_broadcast() {
   const file = $("#broadcastFile").prop("files")[0];
   const reader = new FileReader();
@@ -30,7 +28,7 @@ function file_broadcast() {
 }
 
 function uploadChunk(chunk) {
-  broadcast_file_chunks.append(chunk)
+  console.log(chunk)
 }
 
 function get_username() {
