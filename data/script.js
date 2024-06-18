@@ -23,7 +23,7 @@ function file_broadcast() {
       uploadChunk(dataURL.slice(start, start + chunkSize));
       start += chunkSize;
       var percent = Math.abs((start/dataURL.length)*100);
-      $("#file_upload_progress_bar").attr("aria-valuenow", percent);
+      $("#file_upload_progress_bar").css("width", percent+"%");
     }
   };
   reader.onerror = function (e) {
