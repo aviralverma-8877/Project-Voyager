@@ -10,6 +10,7 @@ $("#myModal").on("shown.bs.modal", function () {
 });
 
 function file_broadcast() {
+  $("#file_upload_progress_bar").css("width", "0%");
   const file = $("#broadcastFile").prop("files")[0];
   const reader = new FileReader();
   reader.readAsDataURL(file);
