@@ -17,9 +17,13 @@ function file_broadcast() {
     const dataURL = reader.result;
     const chunkSize = 200;
     let start = 0;
+    const total_chunk =  Math.floor(dataURL.length/chunkSize)
+    $("#chunk_ratio").html("Total "+total_chunk+" file chunks will be transmitted");
     while (start < dataURL.length) {
       uploadChunk(dataURL.slice(start, start + chunkSize));
       start += chunkSize;
+      var percent = Math.abs((start/dataURL.length)*100);
+      $("#file_upload_progress_bar").attr("aria-valuenow", percent);
     }
   };
   reader.onerror = function (e) {
