@@ -1,4 +1,7 @@
 #include<lora_support.h>
+
+int SyncWord = 0x34;
+
 struct TaskParameters {
   String data;
 };
@@ -11,16 +14,62 @@ void config_lora()
         serial_print("LoRa init failed. Check your connections.");
         while (true);
     }
+    set_lora_parameters();
     LoRa.onReceive(onReceive);
     LoRa.onTxDone(onTxDone);
     LoRa_rxMode();
+}
+
+void save_lora_config(int param, int value)
+{
+    File file = SPIFFS.open("/config/lora_config.json");
+    if(!file){
+        return;
+    }
+    String lora_config;
+    while(file.available()){
+        lora_config += file.readString();
+    }
+    JsonDocument doc;
+    deserializeJson(doc, lora_config);
+    switch (param)
+    {
+        case 1:
+            doc["TxPower"] = value;
+            break;
+        case 2:
+            doc["SpreadingFactor"] = value;
+            break;
+        case 3:
+            doc["SignalBandwidth"] = value;
+            break;
+        case 4:
+            doc["CodingRate4"] = value;
+            break;
+        case 5:
+            doc["SyncWord"] = value;
+            SyncWord = value;
+            LoRa.setSyncWord(SyncWord);
+        default:
+            break;
+    }
+    deserializeJson(doc, lora_config);
+    File file2 = SPIFFS.open("/config/lora_config.json", FILE_WRITE);
+    if(!file2){
+        Serial.println("No username file present.");
+        return;
+    }
+    if(file2.print(lora_config)){
+        serial_print("LoRa config saved");
+    }
+    file2.close();
 }
 
 void set_lora_parameters()
 {
     if (SPIFFS.exists("/config/lora_config.json"))
     {
-        File file = SPIFFS.open("/config/wifi_config.json");
+        File file = SPIFFS.open("/config/lora_config.json");
         if(!file){
             return;
         }
@@ -28,17 +77,19 @@ void set_lora_parameters()
         while(file.available()){
             lora_config += file.readString();
         }
+        file.close();
+        serial_print(lora_config);
         JsonDocument doc;
         deserializeJson(doc, lora_config);
         int TxPower = doc["TxPower"];
         int SpreadingFactor = doc["SpreadingFactor"];
         int SignalBandwidth = doc["SignalBandwidth"];
         int CodingRate = doc["CodingRate4"];
-        int SyncWord = doc["SyncWord"];
+        SyncWord = doc["SyncWord"];
         LoRa.setTxPower(TxPower);
-        LoRa.setSpreadingFactor(SpreadingFactor);
-        LoRa.setSignalBandwidth(SignalBandwidth);
-        LoRa.setCodingRate4(CodingRate);
+        // LoRa.setSpreadingFactor(SpreadingFactor);
+        // LoRa.setSignalBandwidth(SignalBandwidth);
+        // LoRa.setCodingRate4(CodingRate);
         LoRa.setSyncWord(SyncWord);
     }
 }

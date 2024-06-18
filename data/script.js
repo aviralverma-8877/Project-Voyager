@@ -2,12 +2,38 @@ var hostname_url;
 $(document).ready(function () {
   init_socket();
   get_hostname();
-  dashboard();
 });
 
 $("#myModal").on("shown.bs.modal", function () {
   $("#myInput").trigger("focus");
 });
+
+function change_sync_word(val) {
+  if (val != "") {
+    Socket.send(
+      JSON.stringify({
+        "request-type": "set_sync_word",
+        val: val,
+      })
+    );
+  }
+}
+
+function get_sync_word() {
+  Socket.send(
+    JSON.stringify({
+      "request-type": "get_sync_word",
+    })
+  );
+}
+
+function set_sync_word(val) {
+  $("#sync_word").val(val);
+}
+
+function generate_sync_word() {
+  for (var i = 1; i < 256; i++) $("#sync_word").append(new Option(i, i));
+}
 
 function file_broadcast() {
   $("#file_upload_progress_bar").css("width", "0%");
@@ -18,13 +44,15 @@ function file_broadcast() {
     const dataURL = reader.result;
     const chunkSize = 200;
     let start = 0;
-    const total_chunk =  Math.floor(dataURL.length/chunkSize)
-    $("#chunk_ratio").html("Total "+total_chunk+" file chunks will be transmitted");
+    const total_chunk = Math.floor(dataURL.length / chunkSize);
+    $("#chunk_ratio").html(
+      "Total " + total_chunk + " file chunks will be transmitted"
+    );
     while (start < dataURL.length) {
       uploadChunk(dataURL.slice(start, start + chunkSize));
       start += chunkSize;
-      var percent = Math.abs((start/dataURL.length)*100);
-      $("#file_upload_progress_bar").css("width", percent+"%");
+      var percent = Math.abs((start / dataURL.length) * 100);
+      $("#file_upload_progress_bar").css("width", percent + "%");
     }
   };
   reader.onerror = function (e) {
@@ -33,7 +61,7 @@ function file_broadcast() {
 }
 
 function uploadChunk(chunk) {
-  console.log(chunk)
+  console.log(chunk);
 }
 
 function get_username() {
@@ -55,6 +83,10 @@ function send_lora(msg) {
       })
     );
     $("#lora_msg").val("");
+    $("#lora_msg").attr("readonly", true);
+    setTimeout(function () {
+      $("#lora_msg").attr("readonly", false);
+    }, 1000);
   }
 }
 
@@ -79,6 +111,11 @@ function get_hostname() {
 function dashboard() {
   $.get("dashboard.html", function (data) {
     $("#main_content").html(data);
+    generate_sync_word();
+    setTimeout(function () {
+      get_username();
+      get_sync_word();
+    }, 10);
   });
 }
 
@@ -201,10 +238,13 @@ function init_socket() {
     if (response_type == "set_uname") {
       $("#username").val(data.uname);
     }
+    if (response_type == "set_sync_word") {
+      set_sync_word(data.value);
+    }
   };
   Socket.onopen = function (event) {
     console.log("Connected to web sockets...");
-    get_username();
+    dashboard();
   };
   Socket.onclose = function (event) {
     console.log("Connection to websockets closed....");

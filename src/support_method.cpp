@@ -11,7 +11,6 @@ Ticker TickerForDNSRequest;
 void handle_operations(JsonDocument doc)
 {
     const char* request_type = doc["request-type"];
-    serial_print(request_type);
     if(strcmp(request_type, "wifi_ssid_scan") == 0)
     {
         String json_string;
@@ -63,11 +62,29 @@ void handle_operations(JsonDocument doc)
     }
     if(strcmp(request_type, "get_username") == 0)
     {
-
-        TickerForTimeOut.once_ms(100, [](){
+        serial_print("get_username");
+        TickerForTimeOut_2.once_ms(100, [](){
             JsonDocument doc;
             doc["response_type"] = "set_uname";
             doc["uname"] = username;
+            String return_value;
+            serializeJson(doc, return_value);
+            send_to_ws(return_value);
+        });
+    }
+    if(strcmp(request_type, "set_sync_word") == 0)
+    {
+        int val = doc["val"];
+        serial_print("changing sync word");
+        serial_print((String)val);
+        save_lora_config(5,val);
+    }
+    if(strcmp(request_type, "get_sync_word") == 0)
+    {
+        TickerForTimeOut.once_ms(100, [](){
+            JsonDocument doc;
+            doc["response_type"] = "set_sync_word";
+            doc["value"] = SyncWord;
             String return_value;
             serializeJson(doc, return_value);
             send_to_ws(return_value);
@@ -200,7 +217,6 @@ void config_gpios()
     pinMode(BTN1, INPUT_PULLDOWN);
     pinMode(BTN2, INPUT_PULLDOWN);
     digitalWrite(LED, LOW);
-    setupTickers();
 }
 
 void serial_print(String msg)

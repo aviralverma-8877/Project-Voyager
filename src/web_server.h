@@ -13,6 +13,7 @@
     #define UPDATE_SIZE_UNKNOWN 0xFFFFFFFF
 
     extern Ticker TickerForTimeOut;
+    extern Ticker TickerForTimeOut_2;
     extern AsyncWebServer server;
     void firmware_web_updater();
     void define_api();

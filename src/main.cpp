@@ -31,6 +31,7 @@ void setup() {
   initWebSocket();
   
   config_lora();
+  setupTickers();
   serial_print("config done");
 }
 

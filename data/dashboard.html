@@ -12,16 +12,21 @@
     LoRa.
 </h3>
 <hr>
-<h5 for="username">Name:</h5>
-</h5>
-<input
-    class="form-control form-control-sm"
-    id="username"
-    onchange="set_username(this.value)"
-    value=""
-    type="text"
-    placeholder="Name"
->
+<div class="mb-3">
+    <h5 for="username">Name:</h5>
+    <input
+        class="form-control form-control-sm"
+        id="username"
+        onchange="set_username(this.value)"
+        value=""
+        type="text"
+        placeholder="Name"
+    >
+</div>
+<div class="mb-3">
+    <h5 for="sync_word">Sync Word:</h5>
+    <select class="form-control" id="sync_word" onchange="change_sync_word(this.value)"></select>
+</div>
 <div class="mb-3" id="online_nodes"></div>
 <hr>
 <div class="mb-3">
@@ -60,7 +65,15 @@
 </div>
 <label id="chunk_ratio"></label>
 <div class="progress">
-    <div id="file_upload_progress_bar" class="progress-bar progress-bar-striped" role="progressbar" style="width: 0%" aria-valuenow="10" aria-valuemin="0" aria-valuemax="100"></div>
+    <div
+        id="file_upload_progress_bar"
+        class="progress-bar progress-bar-striped"
+        role="progressbar"
+        style="width: 0%"
+        aria-valuenow="10"
+        aria-valuemin="0"
+        aria-valuemax="100"
+    ></div>
 </div>
 <hr>
 <div class="mb-3 mw-10">

@@ -11,7 +11,9 @@
     #define RST             LRST
     #define FREQ            433E6
     #define IRQ             DIO0
-
+    extern int SyncWord;
+    void save_lora_config(int param, int value);
+    void set_lora_parameters();
     void config_lora();
     void LoRa_rxMode();
     void LoRa_txMode();

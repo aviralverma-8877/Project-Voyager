@@ -3,5 +3,5 @@
     "SpreadingFactor" : 10,
     "SignalBandwidth" : 62.5E3,
     "CodingRate4" : 7,
-    "SyncWord" : 0
+    "SyncWord" : 52
 }

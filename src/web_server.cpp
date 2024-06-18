@@ -1,6 +1,7 @@
 #include <web_server.h>
 
 Ticker TickerForTimeOut;
+Ticker TickerForTimeOut_2;
 AsyncWebServer server(80);
 
 void define_api()
