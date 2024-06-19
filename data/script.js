@@ -35,8 +35,7 @@ function generate_sync_word() {
   for (var i = 1; i < 256; i++) $("#sync_word").append(new Option(i, i));
 }
 
-function reset_progress_bar()
-{
+function reset_progress_bar() {
   $("#file_upload_progress_bar").css("width", "0%");
   $("#chunk_ratio").html("");
 }
@@ -47,22 +46,35 @@ function file_broadcast() {
   reader.readAsDataURL(file);
   reader.onload = function (e) {
     const dataURL = reader.result;
-    const chunkSize = 200;
+    const chunkSize = 100;
     let start = 0;
+    const waitTime = 1000;
     const total_chunk = Math.floor(dataURL.length / chunkSize);
-    const time_estimate = total_chunk/2;
+    const time_estimate = total_chunk;
     var h = Math.floor(time_estimate / 3600);
-    var m = Math.floor(time_estimate % 3600 / 60);
-    var s = Math.floor(time_estimate % 3600 % 60);
+    var m = Math.floor((time_estimate % 3600) / 60);
+    var s = Math.floor((time_estimate % 3600) % 60);
     $("#chunk_ratio").html(
-      "Total " + total_chunk + " file chunks will be transmitted. Estimated time "+h+":"+m+":"+s+"."
+      "Total " +
+        total_chunk +
+        " file chunks will be transmitted. Estimated time " +
+        h +
+        ":" +
+        m +
+        ":" +
+        s +
+        "."
     );
-    while (start < dataURL.length) {
-      uploadChunk(dataURL.slice(start, start + chunkSize));
-      start += chunkSize;
-      var percent = Math.abs((start / dataURL.length) * 100);
-      $("#file_upload_progress_bar").css("width", percent + "%");
+    function loop() {
+      if (start < dataURL.length) {
+        uploadChunk(dataURL.slice(start, start + chunkSize));
+        start += chunkSize;
+        var percent = Math.abs((start / dataURL.length) * 100);
+        $("#file_upload_progress_bar").css("width", percent + "%");
+      }
+      setTimeout(loop, waitTime);
     }
+    loop();
   };
   reader.onerror = function (e) {
     console.log("Error : " + e.type);
@@ -71,6 +83,14 @@ function file_broadcast() {
 
 function uploadChunk(chunk) {
   console.log(chunk);
+  tx_msg = { pack_type: "msg", data: chunk };
+  Socket.send(
+    JSON.stringify({
+      "request-type": "lora_transmit",
+      data: JSON.stringify(tx_msg),
+      get_response: false,
+    })
+  );
 }
 
 function get_username() {
