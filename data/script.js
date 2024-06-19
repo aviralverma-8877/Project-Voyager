@@ -35,8 +35,13 @@ function generate_sync_word() {
   for (var i = 1; i < 256; i++) $("#sync_word").append(new Option(i, i));
 }
 
-function file_broadcast() {
+function reset_progress_bar()
+{
   $("#file_upload_progress_bar").css("width", "0%");
+  $("#chunk_ratio").html("");
+}
+
+function file_broadcast() {
   const file = $("#broadcastFile").prop("files")[0];
   const reader = new FileReader();
   reader.readAsDataURL(file);
@@ -113,6 +118,8 @@ function get_hostname() {
 }
 
 function dashboard() {
+  $(".nav-item").removeClass("active");
+  $("#navbar-dashboard").addClass("active");
   $.get("dashboard.html", function (data) {
     $("#main_content").html(data);
     generate_sync_word();
@@ -124,12 +131,16 @@ function dashboard() {
 }
 
 function wifi() {
+  $(".nav-item").removeClass("active");
+  $("#navbar-wifi").addClass("active");
   $.get("wifi.html", function (data) {
     $("#main_content").html(data);
   });
 }
 
 function update() {
+  $(".nav-item").removeClass("active");
+  $("#navbar-update").addClass("active");
   $.get("update", function (data) {
     $("#main_content").html(data);
   });
