@@ -45,8 +45,12 @@ function file_broadcast() {
     const chunkSize = 200;
     let start = 0;
     const total_chunk = Math.floor(dataURL.length / chunkSize);
+    const time_estimate = total_chunk/2;
+    var h = Math.floor(time_estimate / 3600);
+    var m = Math.floor(time_estimate % 3600 / 60);
+    var s = Math.floor(time_estimate % 3600 % 60);
     $("#chunk_ratio").html(
-      "Total " + total_chunk + " file chunks will be transmitted"
+      "Total " + total_chunk + " file chunks will be transmitted. Estimated time "+h+":"+m+":"+s+"."
     );
     while (start < dataURL.length) {
       uploadChunk(dataURL.slice(start, start + chunkSize));
