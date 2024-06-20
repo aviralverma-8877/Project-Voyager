@@ -90,6 +90,27 @@ void handle_operations(JsonDocument doc)
             send_to_ws(return_value);
         });
     }
+    if(strcmp(request_type, "send_raw") == 0)
+    {
+        String val = doc["val"];
+        LoRa_sendRaw(val);
+    }
+    if(strcmp(request_type, "enable_LoRa_file_tx_mode") == 0)
+    {
+        enable_LoRa_file_tx_mode();
+    }
+    if(strcmp(request_type, "disable_LoRa_file_tx_mode") == 0)
+    {
+        disable_LoRa_file_tx_mode();
+    }
+    if(strcmp(request_type, "enable_LoRa_file_rx_mode") == 0)
+    {
+        enable_LoRa_file_rx_mode();
+    }
+    if(strcmp(request_type, "disable_LoRa_file_rx_mode") == 0)
+    {
+        disable_LoRa_file_rx_mode();
+    }
 }
 
 String get_username()

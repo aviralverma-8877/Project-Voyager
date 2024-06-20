@@ -13,6 +13,11 @@
     #define IRQ             DIO0
     extern int SyncWord;
     void save_lora_config(int param, int value);
+    void enable_LoRa_file_tx_mode();
+    void disable_LoRa_file_tx_mode();
+    void enable_LoRa_file_rx_mode();
+    void disable_LoRa_file_rx_mode();
+    void LoRa_sendRaw(String data);
     void set_lora_parameters();
     void config_lora();
     void LoRa_rxMode();

@@ -74,7 +74,12 @@ function file_broadcast() {
       }
       setTimeout(loop, waitTime);
     }
-    loop();
+    Socket.send(
+      JSON.stringify({
+        "request-type": "enable_LoRa_file_tx_mode",
+      })
+    );
+    setTimeout(loop, 500);
   };
   reader.onerror = function (e) {
     console.log("Error : " + e.type);
