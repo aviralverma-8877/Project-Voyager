@@ -87,9 +87,9 @@ void set_lora_parameters()
         int CodingRate = doc["CodingRate4"];
         SyncWord = doc["SyncWord"];
         LoRa.setTxPower(TxPower);
-        // LoRa.setSpreadingFactor(SpreadingFactor);
-        // LoRa.setSignalBandwidth(SignalBandwidth);
-        // LoRa.setCodingRate4(CodingRate);
+        LoRa.setSpreadingFactor(SpreadingFactor);
+        LoRa.setSignalBandwidth(SignalBandwidth);
+        LoRa.setCodingRate4(CodingRate);
         LoRa.setSyncWord(SyncWord);
     }
 }
@@ -97,12 +97,10 @@ void set_lora_parameters()
 void enable_LoRa_file_tx_mode()
 {
     TickerForLoraBeacon.detach();
-    LoRa_txMode();
 }
 
 void disable_LoRa_file_tx_mode()
 {
-    LoRa_rxMode();
     TickerForLoraBeacon.attach(10, transmit_beacon);
 }
 
@@ -128,9 +126,12 @@ void LoRa_txMode(){
 }
 
 void LoRa_sendRaw(String data) {
+    LoRa_txMode();
     LoRa.beginPacket();
     LoRa.print(data);
     LoRa.endPacket(true);
+    LoRa_rxMode();
+    LoRa.flush();
 }
 
 void LoRa_sendMessage(String message) {
@@ -145,6 +146,7 @@ void LoRa_sendMessage(String message) {
     LoRa.print(lora_payload);                  // add payload
     LoRa.endPacket(true);                 // finish packet and send it
     LoRa_rxMode();
+    LoRa.flush();
 }
 
 void onReceive(int packetSize)

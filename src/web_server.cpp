@@ -49,6 +49,10 @@ void define_api()
             {
         serial_print("favicon.ico");
         request->send(SPIFFS, "/favicon.ico", "image/vnd"); });
+  server.on("/Voyager_spacecraft.jpg", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+        serial_print("Voyager_spacecraft.jpg");
+        request->send(SPIFFS, "/Voyager_spacecraft.jpg", "image/jpeg"); });
   server.on("/dashboard.html", HTTP_GET, [](AsyncWebServerRequest *request)
             {
         serial_print("dashboard.html");

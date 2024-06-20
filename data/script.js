@@ -46,11 +46,11 @@ function file_broadcast() {
   reader.readAsDataURL(file);
   reader.onload = function (e) {
     const dataURL = reader.result;
-    const chunkSize = 200;
+    const chunkSize = 128;
     let start = 0;
-    const waitTime = 1000;
+    const waitTime = 500;
     const total_chunk = Math.floor(dataURL.length / chunkSize);
-    const time_estimate = total_chunk;
+    const time_estimate = Math.abs(total_chunk * (waitTime / 1000));
     var h = Math.floor(time_estimate / 3600);
     var m = Math.floor((time_estimate % 3600) / 60);
     var s = Math.floor((time_estimate % 3600) % 60);
@@ -72,21 +72,39 @@ function file_broadcast() {
         var percent = Math.abs((start / dataURL.length) * 100);
         $("#file_upload_progress_bar").css("width", percent + "%");
         setTimeout(loop, waitTime);
-      }
-      else{
+      } else {
         Socket.send(
           JSON.stringify({
             "request-type": "disable_LoRa_file_tx_mode",
           })
         );
+        tx_msg = { pack_type: "action", data: "disable_file_tx_mode" };
+        Socket.send(
+          JSON.stringify({
+            "request-type": "lora_transmit",
+            data: JSON.stringify(tx_msg),
+            get_response: false,
+          })
+        );
       }
     }
+    start_file_transfer_mode();
     Socket.send(
       JSON.stringify({
         "request-type": "enable_LoRa_file_tx_mode",
       })
     );
-    setTimeout(loop, 500);
+    setTimeout(() => {
+      tx_msg = { pack_type: "action", data: "enable_file_tx_mode" };
+      Socket.send(
+        JSON.stringify({
+          "request-type": "lora_transmit",
+          data: JSON.stringify(tx_msg),
+          get_response: false,
+        })
+      );
+      setTimeout(loop, 2000);
+    }, 2000);
   };
   reader.onerror = function (e) {
     console.log("Error : " + e.type);
@@ -102,7 +120,13 @@ function uploadChunk(chunk) {
     })
   );
 }
-
+var file_transfer_mode = false;
+function start_file_transfer_mode() {
+  file_transfer_mode = true;
+}
+function stop_file_transfer_mode() {
+  file_transfer_mode = false;
+}
 function get_username() {
   Socket.send(
     JSON.stringify({
@@ -267,6 +291,11 @@ function init_socket() {
     if (response_type == "lora_rx") {
       var data = JSON.parse(data.lora_msg);
       console.log(data);
+      if (file_transfer_mode) {
+        var _href = $("#file_download").attr("src");
+        $("#file_download").attr("src", _href + data);
+        return;
+      }
       var mac = data.mac;
       var uname = data.name;
       var data = JSON.parse(data.data);
@@ -279,6 +308,25 @@ function init_socket() {
         $("#lora_rx_msg").prepend(
           "<li class='list-group-item'>" + uname + " : " + msg + "</li>"
         );
+      }
+      if (pack_type == "action") {
+        action = data["data"];
+        if (action == "enable_file_tx_mode") {
+          $("#file_download").attr("src", "");
+          Socket.send(
+            JSON.stringify({
+              "request-type": "enable_LoRa_file_rx_mode",
+            })
+          );
+          start_file_transfer_mode();
+        } else if (action == "disable_file_tx_mode") {
+          Socket.send(
+            JSON.stringify({
+              "request-type": "disable_LoRa_file_rx_mode",
+            })
+          );
+          stop_file_transfer_mode();
+        }
       }
     }
     if (response_type == "set_uname") {

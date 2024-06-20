@@ -93,6 +93,7 @@ void handle_operations(JsonDocument doc)
     if(strcmp(request_type, "send_raw") == 0)
     {
         String val = doc["val"];
+        serial_print(val);
         LoRa_sendRaw(val);
     }
     if(strcmp(request_type, "enable_LoRa_file_tx_mode") == 0)

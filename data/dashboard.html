@@ -53,7 +53,13 @@
     <h5>File Broadcast.</h5>
 </div>
 <div class="mb-3">
-    <input type="file" class="form-control" onchange="reset_progress_bar()" id="broadcastFile">
+    <input
+        type="file"
+        accept="image/png, image/jpeg"
+        class="form-control"
+        onchange="reset_progress_bar()"
+        id="broadcastFile"
+    >
 </div>
 <div class="mb-3">
     <button
@@ -75,6 +81,8 @@
         aria-valuemax="100"
     ></div>
 </div>
+<br>
+<img id="file_download" style="width:100%" src="Voyager_spacecraft.jpg">
 <hr>
 <div class="mb-3 mw-10">
     <h5>LoRa recieved messages:</h5>
