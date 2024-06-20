@@ -94,6 +94,18 @@ void set_lora_parameters()
     }
 }
 
+void enable_LoRa_file_tx_mode()
+{
+    TickerForLoraBeacon.detach();
+    LoRa_txMode();
+}
+
+void disable_LoRa_file_tx_mode()
+{
+    LoRa_rxMode();
+    TickerForLoraBeacon.attach(10, transmit_beacon);
+}
+
 void LoRa_rxMode(){
     LoRa.enableInvertIQ();                // active invert I and Q signals
     LoRa.receive();                       // set receive mode
@@ -102,6 +114,14 @@ void LoRa_rxMode(){
 void LoRa_txMode(){
     LoRa.idle();                          // set standby mode
     LoRa.disableInvertIQ();               // normal mode
+}
+
+void LoRa_sendRaw(String data) {
+    LoRa_txMode();
+    LoRa.beginPacket();
+    LoRa.print(data);
+    LoRa.endPacket(true);
+    LoRa_rxMode();
 }
 
 void LoRa_sendMessage(String message) {
