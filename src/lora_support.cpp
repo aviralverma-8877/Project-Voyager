@@ -98,12 +98,10 @@ void enable_LoRa_file_tx_mode()
 {
     TickerForLoraBeacon.detach();
     LoRa_txMode();
-    LoRa.beginPacket();
 }
 
 void disable_LoRa_file_tx_mode()
 {
-    LoRa.endPacket(true);
     LoRa_rxMode();
     TickerForLoraBeacon.attach(10, transmit_beacon);
 }
@@ -130,7 +128,9 @@ void LoRa_txMode(){
 }
 
 void LoRa_sendRaw(String data) {
+    LoRa.beginPacket();
     LoRa.print(data);
+    LoRa.endPacket(true);
 }
 
 void LoRa_sendMessage(String message) {

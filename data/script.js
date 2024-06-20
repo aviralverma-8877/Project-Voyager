@@ -46,7 +46,7 @@ function file_broadcast() {
   reader.readAsDataURL(file);
   reader.onload = function (e) {
     const dataURL = reader.result;
-    const chunkSize = 100;
+    const chunkSize = 200;
     let start = 0;
     const waitTime = 1000;
     const total_chunk = Math.floor(dataURL.length / chunkSize);
@@ -71,8 +71,15 @@ function file_broadcast() {
         start += chunkSize;
         var percent = Math.abs((start / dataURL.length) * 100);
         $("#file_upload_progress_bar").css("width", percent + "%");
+        setTimeout(loop, waitTime);
       }
-      setTimeout(loop, waitTime);
+      else{
+        Socket.send(
+          JSON.stringify({
+            "request-type": "disable_LoRa_file_tx_mode",
+          })
+        );
+      }
     }
     Socket.send(
       JSON.stringify({
@@ -88,12 +95,10 @@ function file_broadcast() {
 
 function uploadChunk(chunk) {
   console.log(chunk);
-  tx_msg = { pack_type: "msg", data: chunk };
   Socket.send(
     JSON.stringify({
-      "request-type": "lora_transmit",
-      data: JSON.stringify(tx_msg),
-      get_response: false,
+      "request-type": "send_raw",
+      val: JSON.stringify(chunk),
     })
   );
 }
@@ -261,6 +266,7 @@ function init_socket() {
     }
     if (response_type == "lora_rx") {
       var data = JSON.parse(data.lora_msg);
+      console.log(data);
       var mac = data.mac;
       var uname = data.name;
       var data = JSON.parse(data.data);
