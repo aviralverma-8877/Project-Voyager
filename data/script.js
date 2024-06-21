@@ -111,7 +111,7 @@ function file_broadcast() {
 }
 
 function uploadChunk(chunk) {
-  //console.log(chunk);
+  console.log(chunk);
   Socket.send(
     JSON.stringify({
       "request-type": "send_raw",
@@ -289,7 +289,7 @@ function init_socket() {
     }
     if (response_type == "lora_rx") {
       var data = JSON.parse(data.lora_msg);
-      //console.log(data);
+      console.log(data);
       if (file_transfer_mode) {
         var _href = $("#file_download").attr("src");
         $("#file_download").attr("src", _href + data);
