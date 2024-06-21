@@ -46,9 +46,9 @@ function file_broadcast() {
   reader.readAsDataURL(file);
   reader.onload = function (e) {
     const dataURL = reader.result;
-    const chunkSize = 128;
+    const chunkSize = 250;
     let start = 0;
-    const waitTime = 500;
+    const waitTime = 1000;
     const total_chunk = Math.floor(dataURL.length / chunkSize);
     const time_estimate = Math.abs(total_chunk * (waitTime / 1000));
     var h = Math.floor(time_estimate / 3600);
@@ -88,7 +88,6 @@ function file_broadcast() {
         );
       }
     }
-    start_file_transfer_mode();
     Socket.send(
       JSON.stringify({
         "request-type": "enable_LoRa_file_tx_mode",
@@ -107,12 +106,12 @@ function file_broadcast() {
     }, 2000);
   };
   reader.onerror = function (e) {
-    console.log("Error : " + e.type);
+    //console.log("Error : " + e.type);
   };
 }
 
 function uploadChunk(chunk) {
-  console.log(chunk);
+  //console.log(chunk);
   Socket.send(
     JSON.stringify({
       "request-type": "send_raw",
@@ -256,15 +255,15 @@ function update_wifi_ssid(ssid) {
   $("#wifi_ssid").attr("value", ssid);
 }
 function init_socket() {
-  console.log("Initilizing web sockets.");
+  //console.log("Initilizing web sockets.");
   Socket = new WebSocket(
     "ws://" + window.location.hostname + ":" + window.location.port + "/ws"
   );
   Socket.onmessage = function (event) {
     var data = JSON.parse(event.data);
     var response_type = data.response_type;
-    console.log("Web socket message recieved...");
-    console.log(data);
+    //console.log("Web socket message recieved...");
+    //console.log(data);
     if (response_type == "wifi_scan") {
       $("#wifi_scan_btn").html("Scan SSID");
       $("#wifi_scan_btn").attr("onclick", "scan_ssid()");
@@ -290,7 +289,7 @@ function init_socket() {
     }
     if (response_type == "lora_rx") {
       var data = JSON.parse(data.lora_msg);
-      console.log(data);
+      //console.log(data);
       if (file_transfer_mode) {
         var _href = $("#file_download").attr("src");
         $("#file_download").attr("src", _href + data);
@@ -301,7 +300,7 @@ function init_socket() {
       var data = JSON.parse(data.data);
       var pack_type = data["pack_type"];
       if (pack_type == "beacon") {
-        console.log("beacon from " + mac);
+        //console.log("beacon from " + mac);
       }
       if (pack_type == "msg") {
         msg = data["data"];
@@ -337,17 +336,18 @@ function init_socket() {
     }
   };
   Socket.onopen = function (event) {
-    console.log("Connected to web sockets...");
+    //console.log("Connected to web sockets...");
+    stop_file_transfer_mode();
     dashboard();
   };
   Socket.onclose = function (event) {
-    console.log("Connection to websockets closed....");
+    //console.log("Connection to websockets closed....");
     setTimeout(function () {
-      console.log("Retrying websocket connection....");
+      //console.log("Retrying websocket connection....");
       init_socket();
     }, 1000);
   };
   Socket.onerror = function (event) {
-    console.log("Error in websockets");
+    //console.log("Error in websockets");
   };
 }

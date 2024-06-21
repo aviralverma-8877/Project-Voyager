@@ -97,11 +97,13 @@ void set_lora_parameters()
 void enable_LoRa_file_tx_mode()
 {
     TickerForLoraBeacon.detach();
+    LoRa_txMode();
 }
 
 void disable_LoRa_file_tx_mode()
 {
     TickerForLoraBeacon.attach(10, transmit_beacon);
+    LoRa_rxMode();
 }
 
 void enable_LoRa_file_rx_mode()
@@ -126,12 +128,9 @@ void LoRa_txMode(){
 }
 
 void LoRa_sendRaw(String data) {
-    LoRa_txMode();
     LoRa.beginPacket();
     LoRa.print(data);
     LoRa.endPacket(true);
-    LoRa_rxMode();
-    LoRa.flush();
 }
 
 void LoRa_sendMessage(String message) {
@@ -152,12 +151,7 @@ void LoRa_sendMessage(String message) {
 void onReceive(int packetSize)
 {
     String message;
-    message = "";
-    for (int i = 0; i < packetSize; i++) {
-        message += (char)LoRa.read();
-    }
-    serial_print("LoRa message received: ");
-    serial_print(message);
+    message = LoRa.readString();
     TaskParameters* taskParams = new TaskParameters();
     taskParams->data=message;
     xTaskCreate(send_msg_to_ws, "lora message to ws", 6000, (void*)taskParams, 0, NULL);
