@@ -162,7 +162,7 @@ void send_msg_to_ws( void * parameters )
     TaskParameters* params = (TaskParameters*)parameters;
     JsonDocument doc;
     doc["response_type"] = "lora_rx";
-    doc["lora_msg"] = params->data;
+    doc["lora_msg"] = (String)params->data;
     String data;
     serializeJson(doc, data);
     send_to_ws(data);
