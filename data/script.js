@@ -46,9 +46,17 @@ function file_broadcast() {
   reader.readAsDataURL(file);
   reader.onload = function (e) {
     const dataURL = reader.result;
-    const chunkSize = 250;
+    const chunkSize = parseInt($("#chunk_size").val());
+    const waitTime = parseInt($("#wait_time").val());
+    if (chunkSize > 250 || chunkSize < 0) {
+      alert("packet size should be between 1-250");
+      return;
+    }
+    if (waitTime < 500) {
+      alert("Wait time should be greater than 500ms");
+      return;
+    }
     let start = 0;
-    const waitTime = 1000;
     const total_chunk = Math.floor(dataURL.length / chunkSize);
     const time_estimate = Math.abs(total_chunk * (waitTime / 1000));
     var h = Math.floor(time_estimate / 3600);
@@ -94,7 +102,10 @@ function file_broadcast() {
       })
     );
     setTimeout(() => {
-      tx_msg = { pack_type: "action", data: "enable_file_tx_mode" };
+      tx_msg = {
+        pack_type: "action",
+        data: "enable_file_tx_mode",
+      };
       Socket.send(
         JSON.stringify({
           "request-type": "lora_transmit",
@@ -111,7 +122,7 @@ function file_broadcast() {
 }
 
 function uploadChunk(chunk) {
-  console.log(chunk);
+  //console.log(chunk);
   Socket.send(
     JSON.stringify({
       "request-type": "send_raw",
@@ -252,9 +263,9 @@ function set_username(val) {
 }
 function isJSON(str) {
   try {
-      return JSON.parse(str) && !!str;
+    return JSON.parse(str) && !!str;
   } catch (e) {
-      return false;
+    return false;
   }
 }
 function update_wifi_ssid(ssid) {
@@ -294,17 +305,15 @@ function init_socket() {
       alert(msg);
     }
     if (response_type == "lora_rx") {
-      data = JSON.parse(data.lora_msg)
-      console.log(data);
-      if(typeof(data) == "string"){
+      data = JSON.parse(data.lora_msg);
+      //console.log(data);
+      if (typeof data == "string") {
         if (file_transfer_mode) {
           var _href = $("#file_download").attr("src");
           $("#file_download").attr("src", _href + data);
           return;
         }
-      }
-      else
-      {
+      } else {
         var mac = data.mac;
         var uname = data.name;
         var data = JSON.parse(data.data);

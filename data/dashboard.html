@@ -60,6 +60,20 @@
         onchange="reset_progress_bar()"
         id="broadcastFile"
     >
+    <input
+        class="form-control form-control-sm"
+        id="wait_time"
+        value="1000"
+        type="number"
+        placeholder="Time delay between packets in mili secs (>500)"
+    >
+    <input
+        class="form-control form-control-sm"
+        id="chunk_size"
+        value="250"
+        type="number"
+        placeholder="Packet Size (1-250)"
+    >
 </div>
 <div class="mb-3">
     <button
