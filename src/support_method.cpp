@@ -14,7 +14,7 @@ void handle_operations(JsonDocument doc)
     if(strcmp(request_type, "wifi_ssid_scan") == 0)
     {
         String json_string;
-        xTaskCreate(scan_ssid, "scan_wifi", 6000, NULL, 2, NULL);
+        xTaskCreatePinnedToCore(scan_ssid, "scan_wifi", 6000, NULL, 2, NULL, 0);
     }
     if(strcmp(request_type, "connect_wifi") == 0)
     {
@@ -254,7 +254,7 @@ void setupTickers()
 {
     TickerForBtnPresses.attach_ms(10, btn_intrupt);
     transmit_beacon();
-    TickerForLoraBeacon.attach(10, transmit_beacon);
+    // TickerForLoraBeacon.attach(10, transmit_beacon);
 }
 
 void stop_nortify_led()
