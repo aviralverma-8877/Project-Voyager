@@ -22,47 +22,50 @@ void config_lora()
 
 void save_lora_config(int param, int value)
 {
-    File file = SPIFFS.open("/config/lora_config.json");
-    if(!file){
-        return;
-    }
-    String lora_config;
-    while(file.available()){
-        lora_config += file.readString();
-    }
-    JsonDocument doc;
-    deserializeJson(doc, lora_config);
-    switch (param)
+    if (SPIFFS.exists("/config/lora_config.json"))
     {
-        case 1:
-            doc["TxPower"] = value;
-            break;
-        case 2:
-            doc["SpreadingFactor"] = value;
-            break;
-        case 3:
-            doc["SignalBandwidth"] = value;
-            break;
-        case 4:
-            doc["CodingRate4"] = value;
-            break;
-        case 5:
-            doc["SyncWord"] = value;
-            SyncWord = value;
-            LoRa.setSyncWord(SyncWord);
-        default:
-            break;
+        File file = SPIFFS.open("/config/lora_config.json");
+        if(!file){
+            return;
+        }
+        String lora_config;
+        while(file.available()){
+            lora_config += file.readString();
+        }
+        JsonDocument doc;
+        deserializeJson(doc, lora_config);
+        switch (param)
+        {
+            case 1:
+                doc["TxPower"] = value;
+                break;
+            case 2:
+                doc["SpreadingFactor"] = value;
+                break;
+            case 3:
+                doc["SignalBandwidth"] = value;
+                break;
+            case 4:
+                doc["CodingRate4"] = value;
+                break;
+            case 5:
+                doc["SyncWord"] = value;
+                SyncWord = value;
+                LoRa.setSyncWord(SyncWord);
+            default:
+                break;
+        }
+        deserializeJson(doc, lora_config);
+        File file2 = SPIFFS.open("/config/lora_config.json", FILE_WRITE);
+        if(!file2){
+            Serial.println("No username file present.");
+            return;
+        }
+        if(file2.print(lora_config)){
+            serial_print("LoRa config saved");
+        }
+        file2.close();
     }
-    deserializeJson(doc, lora_config);
-    File file2 = SPIFFS.open("/config/lora_config.json", FILE_WRITE);
-    if(!file2){
-        Serial.println("No username file present.");
-        return;
-    }
-    if(file2.print(lora_config)){
-        serial_print("LoRa config saved");
-    }
-    file2.close();
 }
 
 void set_lora_parameters()
@@ -155,6 +158,19 @@ void onReceive(int packetSize)
     TaskParameters* taskParams = new TaskParameters();
     taskParams->data=message;
     xTaskCreate(send_msg_to_ws, "lora message to ws", 6000, (void*)taskParams, 0, NULL);
+    xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 6000, (void*)taskParams, 0, NULL);
+}
+
+void send_msg_to_mqtt( void * parameters )
+{
+    TaskParameters* params = (TaskParameters*)parameters;
+    JsonDocument doc;
+    doc["response_type"] = "lora_rx";
+    doc["lora_msg"] = (String)params->data;
+    String data;
+    serializeJson(doc, data);
+    send_to_mqtt(data);
+    vTaskDelete(NULL);
 }
 
 void send_msg_to_ws( void * parameters )

@@ -23,6 +23,7 @@ void config_wifi()
         if(strcmp(mode, "STA") == 0)
         {
             setup_sta(wifi_ssid, wifi_pass);
+            setup_mqtt();
         }
     }
     else
@@ -44,20 +45,28 @@ void onWifiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info)
 
 String get_wifi_setting()
 {
-    File file = SPIFFS.open("/config/wifi_config.json");
-    if(!file){
+    if (SPIFFS.exists("/config/wifi_config.json"))
+    {
+        File file = SPIFFS.open("/config/wifi_config.json");
+        if(!file){
+            setup_ap("Voyager");
+            return "";
+        }
+        String wifi_config;
+        while(file.available()){
+            wifi_config += file.readString();
+        }
+        file.close();
+        wifi_backup.backup_config = wifi_config;
+        wifi_backup.backup_done = true;
+        serial_print("Reading WiFi settings");
+        serial_print(wifi_config);
+        return wifi_config;
+    }
+    else{
         setup_ap("Voyager");
+        return "";
     }
-    String wifi_config;
-    while(file.available()){
-        wifi_config += file.readString();
-    }
-    file.close();
-    wifi_backup.backup_config = wifi_config;
-    wifi_backup.backup_done = true;
-    serial_print("Reading WiFi settings");
-    serial_print(wifi_config);
-    return wifi_config;
 }
 
 void save_wifi_settings(String config)
