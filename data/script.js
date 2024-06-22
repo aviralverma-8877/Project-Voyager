@@ -111,7 +111,7 @@ function file_broadcast() {
 }
 
 function uploadChunk(chunk) {
-  //console.log(chunk);
+  console.log(chunk);
   Socket.send(
     JSON.stringify({
       "request-type": "send_raw",
@@ -250,7 +250,13 @@ function set_username(val) {
     );
   }
 }
-
+function isJSON(str) {
+  try {
+      return JSON.parse(str) && !!str;
+  } catch (e) {
+      return false;
+  }
+}
 function update_wifi_ssid(ssid) {
   $("#wifi_ssid").attr("value", ssid);
 }
@@ -288,43 +294,48 @@ function init_socket() {
       alert(msg);
     }
     if (response_type == "lora_rx") {
-      var data = JSON.parse(data.lora_msg);
-      //console.log(data);
-      if (file_transfer_mode) {
-        var _href = $("#file_download").attr("src");
-        $("#file_download").attr("src", _href + data);
-        return;
+      data = JSON.parse(data.lora_msg)
+      console.log(data);
+      if(typeof(data) == "string"){
+        if (file_transfer_mode) {
+          var _href = $("#file_download").attr("src");
+          $("#file_download").attr("src", _href + data);
+          return;
+        }
       }
-      var mac = data.mac;
-      var uname = data.name;
-      var data = JSON.parse(data.data);
-      var pack_type = data["pack_type"];
-      if (pack_type == "beacon") {
-        //console.log("beacon from " + mac);
-      }
-      if (pack_type == "msg") {
-        msg = data["data"];
-        $("#lora_rx_msg").prepend(
-          "<li class='list-group-item'>" + uname + " : " + msg + "</li>"
-        );
-      }
-      if (pack_type == "action") {
-        action = data["data"];
-        if (action == "enable_file_tx_mode") {
-          $("#file_download").attr("src", "");
-          Socket.send(
-            JSON.stringify({
-              "request-type": "enable_LoRa_file_rx_mode",
-            })
+      else
+      {
+        var mac = data.mac;
+        var uname = data.name;
+        var data = JSON.parse(data.data);
+        var pack_type = data["pack_type"];
+        if (pack_type == "beacon") {
+          //console.log("beacon from " + mac);
+        }
+        if (pack_type == "msg") {
+          msg = data["data"];
+          $("#lora_rx_msg").prepend(
+            "<li class='list-group-item'>" + uname + " : " + msg + "</li>"
           );
-          start_file_transfer_mode();
-        } else if (action == "disable_file_tx_mode") {
-          Socket.send(
-            JSON.stringify({
-              "request-type": "disable_LoRa_file_rx_mode",
-            })
-          );
-          stop_file_transfer_mode();
+        }
+        if (pack_type == "action") {
+          action = data["data"];
+          if (action == "enable_file_tx_mode") {
+            $("#file_download").attr("src", "");
+            Socket.send(
+              JSON.stringify({
+                "request-type": "enable_LoRa_file_rx_mode",
+              })
+            );
+            start_file_transfer_mode();
+          } else if (action == "disable_file_tx_mode") {
+            Socket.send(
+              JSON.stringify({
+                "request-type": "disable_LoRa_file_rx_mode",
+              })
+            );
+            stop_file_transfer_mode();
+          }
         }
       }
     }

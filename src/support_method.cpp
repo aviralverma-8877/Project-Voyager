@@ -114,31 +114,36 @@ void handle_operations(JsonDocument doc)
     }
 }
 
-String get_username()
+void get_username()
 {
-    File file = SPIFFS.open("/config/user_data.json");
-    if(!file){
-        username = WiFi.macAddress();
-        return WiFi.macAddress();
-    }
-    String username_config;
-    while(file.available()){
-        username_config += file.readString();
-    }
-    file.close();
-    serial_print("Reading username");
-    JsonDocument doc;
-    deserializeJson(doc, username_config);
-    const char* uname = doc["username"];
-    if(strcmp(uname, "")==0)
+    serial_print("get_username");
+    if (SPIFFS.exists("/config/user_data.json"))
     {
-        username = WiFi.macAddress();
-        return WiFi.macAddress();
-    }
-    else
-    {
-        username = uname;
-        return uname;
+        File file = SPIFFS.open("/config/user_data.json");
+        serial_print("reading SPIFFS");
+        if(!file){
+            username = WiFi.macAddress();
+            return;
+        }
+        String username_config;
+        while(file.available()){
+            username_config += file.readString();
+        }
+        file.close();
+        serial_print("Reading username");
+        JsonDocument doc;
+        deserializeJson(doc, username_config);
+        const char* uname = doc["username"];
+        if(strcmp(uname, "")==0)
+        {
+            username = WiFi.macAddress();
+            return;
+        }
+        else
+        {
+            username = uname;
+            return;
+        }
     }
 }
 
