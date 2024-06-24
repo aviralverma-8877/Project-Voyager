@@ -55,8 +55,11 @@ void onMqttConnect(bool sessionPresent) {
     serial_print("MQTT connected.");
     // display_buffer[4].msg = "MQTT";
     // display_text_oled();
-    mqttClient.subscribe(mqtt_topic_to_subscribe.c_str(), 2);
-    mqttClient.subscribe(mqtt_topic_to_send_raw.c_str(), 2);
+    String mac = WiFi.macAddress();
+    String sub_topic = "voyager/"+mac+"/"+mqtt_topic_to_subscribe;
+    String raw_data = "voyager/"+mac+"/"+mqtt_topic_to_send_raw;
+    mqttClient.subscribe(sub_topic.c_str(), 2);
+    mqttClient.subscribe(raw_data.c_str(), 2);
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {

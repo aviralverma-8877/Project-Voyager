@@ -49,55 +49,6 @@
     </button>
 </div>
 <hr>
-<div class="mb-3">
-    <h5>File Broadcast.</h5>
-</div>
-<div class="mb-3">
-    <input
-        type="file"
-        accept="image/png, image/jpeg"
-        class="form-control"
-        onchange="reset_progress_bar()"
-        id="broadcastFile"
-    >
-    <input
-        class="form-control form-control-sm"
-        id="wait_time"
-        value="1000"
-        type="number"
-        placeholder="Time delay between packets in mili secs (>500)"
-    >
-    <input
-        class="form-control form-control-sm"
-        id="chunk_size"
-        value="250"
-        type="number"
-        placeholder="Packet Size (1-250)"
-    >
-</div>
-<div class="mb-3">
-    <button
-        type="button"
-        id="fileBroadcastButton"
-        class="btn btn-primary"
-        onclick="file_broadcast()"
-    >Broadcast</button>
-</div>
-<label id="chunk_ratio"></label>
-<div class="progress">
-    <div
-        id="file_upload_progress_bar"
-        class="progress-bar progress-bar-striped"
-        role="progressbar"
-        style="width: 0%"
-        aria-valuenow="10"
-        aria-valuemin="0"
-        aria-valuemax="100"
-    ></div>
-</div>
-<br>
-<img id="file_download" style="width:40%" class="img-thumbnail" src="Voyager_spacecraft.jpg">
-<hr>
 <div class="mb-3 mw-10">
     <h5>LoRa recieved messages:</h5>
     <ul class="list-group" id="lora_rx_msg"></ul>
