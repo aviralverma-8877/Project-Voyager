@@ -18,8 +18,9 @@ void setup_mqtt()
     String mqtt_config = get_mqtt_config();
     JsonDocument doc;
     deserializeJson(doc, mqtt_config);
-    String host_string = doc["host"];
+    const char* host_string = doc["host"];
     uint16_t port = doc["port"];
+    bool auth = doc["auth"];
     const char* uname = doc["username"];
     const char* pass = doc["password"];
 
@@ -38,7 +39,8 @@ void setup_mqtt()
     serial_print(String(port));
     serial_print(uname);
     serial_print(pass);
-    mqttClient.setCredentials(uname, pass);
+    if(auth)
+        mqttClient.setCredentials(uname, pass);
     mqttClient.setServer(host, port);
     connectToMqtt();
 }
@@ -51,6 +53,8 @@ void connectToMqtt()
 
 void onMqttConnect(bool sessionPresent) {
     serial_print("MQTT connected.");
+    // display_buffer[4].msg = "MQTT";
+    // display_text_oled();
     mqttClient.subscribe(mqtt_topic_to_subscribe.c_str(), 2);
     mqttClient.subscribe(mqtt_topic_to_send_raw.c_str(), 2);
 }
@@ -127,7 +131,10 @@ void onMqttPublish(uint16_t packetId) {
 void send_to_mqtt(String msg)
 {
     String mac = WiFi.macAddress();
-    String topic = "voyager/"+mac+"/"+mqtt_topic_to_subscribe;
+    String topic = "voyager/"+mac+"/"+mqtt_topic_to_publish;
+    serial_print("Sending msg to mqtt");
+    serial_print(topic);
+    serial_print(msg);
     mqttClient.publish(topic.c_str(), 2, false, msg.c_str(), msg.length());
 }
 

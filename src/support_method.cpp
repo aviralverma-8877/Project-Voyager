@@ -171,7 +171,8 @@ void reset_device()
 {
     show_alert("Device reset successfully,\nPlease reconfigure the device by connecting to the AP.\nRebooting Now.");
     clear_oled_display();
-    display_text_oled("Resetting", 0, 10);
+    display_buffer[1].msg = "Resetting";
+    display_text_oled();
     serial_print("Stopping WiFi and tickers");
     if (WiFi.status() == WL_CONNECTED)
     {
@@ -250,7 +251,6 @@ void serial_print(String msg)
 {
     if(DEBUGGING)
     {
-        // display_text_oled(msg, 0, 10);
         Serial.println(msg);
     }
 }

@@ -1,6 +1,7 @@
 #ifndef mqtt_support
     #define mqtt_support
     #include <Arduino.h>
+    #include <WiFi.h>
     extern "C" {
         #include "freertos/FreeRTOS.h"
         #include "freertos/timers.h"

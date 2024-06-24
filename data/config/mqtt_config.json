@@ -1,8 +1,9 @@
 {
-    "host":"192.168.1.132",
+    "host":"192.168.1.133",
     "port":1883,
-    "username":"iotconnect",
-    "password":"iot-12345",
+    "auth":false,
+    "username":"",
+    "password":"",
     "raw_data":"send_raw",
     "pub_topic":"lora_rx",
     "sub_topic":"lora_tx"

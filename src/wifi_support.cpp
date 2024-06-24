@@ -105,9 +105,10 @@ void setup_sta(const char* wifi_ssid, const char* wifi_pass)
     serial_print("WiFi connected.");
     IPAddress IP = WiFi.localIP();
     serial_print(IP.toString());
-    display_text_oled("WiFi Type : STA", 0, 10);
-    display_text_oled(wifi_ssid, 0, 20);
-    display_text_oled(IP.toString(), 0, 30);
+    display_buffer[1].msg = "WiFi Type : STA";
+    display_buffer[2].msg = wifi_ssid;
+    display_buffer[3].msg = IP.toString();
+    display_text_oled();
     setup_mdns();
     TickerForWiFiTimeout.once(1, wifi_connection_check);
 }
@@ -118,9 +119,10 @@ void setup_ap(const char* wifi_ssid)
     WiFi.softAP(wifi_ssid);
     IPAddress IP = WiFi.softAPIP();
     serial_print(IP.toString());
-    display_text_oled("WiFi Type : AP", 0, 10);
-    display_text_oled(wifi_ssid, 0, 20);
-    display_text_oled(IP.toString(), 0, 30);
+    display_buffer[1].msg = "WiFi Type : AP";
+    display_buffer[2].msg = wifi_ssid;
+    display_buffer[3].msg = IP.toString();
+    display_text_oled();
     setup_dns();
     setup_mdns();
 }
