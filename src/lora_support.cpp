@@ -157,7 +157,14 @@ void onReceive(int packetSize)
     message = LoRa.readString();
     TaskParameters* taskParams = new TaskParameters();
     taskParams->data=message;
-    xTaskCreate(send_msg_to_ws, "lora message to ws", 6000, (void*)taskParams, 0, NULL);
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, message);
+    if(error)
+    {}
+    else{
+        if(doc.containsKey("mac"))
+            xTaskCreate(send_msg_to_ws, "lora message to ws", 6000, (void*)taskParams, 0, NULL);
+    }
     xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 6000, (void*)taskParams, 0, NULL);
 }
 
