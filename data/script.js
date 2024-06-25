@@ -80,7 +80,7 @@ function get_hostname() {
 }
 
 function dashboard() {
-  $(".nav-item").removeClass("active");
+  $(".nav-link").removeClass("active");
   $("#navbar-dashboard").addClass("active");
   $.get("dashboard.html", function (data) {
     $("#main_content").html(data);
@@ -93,15 +93,23 @@ function dashboard() {
 }
 
 function wifi() {
-  $(".nav-item").removeClass("active");
+  $(".nav-link").removeClass("active");
   $("#navbar-wifi").addClass("active");
   $.get("wifi.html", function (data) {
     $("#main_content").html(data);
   });
 }
 
+function lora() {
+  $(".nav-link").removeClass("active");
+  $("#navbar-lora").addClass("active");
+  $.get("lora.html", function (data) {
+    $("#main_content").html(data);
+  });
+}
+
 function update() {
-  $(".nav-item").removeClass("active");
+  $(".nav-link").removeClass("active");
   $("#navbar-update").addClass("active");
   $.get("update", function (data) {
     $("#main_content").html(data);

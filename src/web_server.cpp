@@ -61,6 +61,10 @@ void define_api()
             {
         serial_print("wifi.html");
         request->send(SPIFFS, "/wifi.html", "text/html"); });
+  server.on("/lora.html", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+        serial_print("lora.html");
+        request->send(SPIFFS, "/lora.html", "text/html"); });
   server.on("/hostname", HTTP_GET, [](AsyncWebServerRequest *request)
             {
         serial_print("hostname");
