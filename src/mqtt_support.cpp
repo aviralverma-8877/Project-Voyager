@@ -9,6 +9,7 @@ AsyncMqttClient mqttClient;
 void setup_mqtt()
 {
     serial_print("Setting up mqtt");
+    while(!WiFi.isConnected()){}
     mqttClient.onConnect(onMqttConnect);
     mqttClient.onDisconnect(onMqttDisconnect);
     mqttClient.onSubscribe(onMqttSubscribe);
@@ -37,10 +38,13 @@ void setup_mqtt()
     host.fromString(host_string);
     serial_print(host.toString());
     serial_print(String(port));
-    serial_print(uname);
-    serial_print(pass);
+
     if(auth)
+    {
+        serial_print(uname);
+        serial_print(pass);
         mqttClient.setCredentials(uname, pass);
+    }
     mqttClient.setServer(host, port);
     connectToMqtt();
 }

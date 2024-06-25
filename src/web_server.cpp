@@ -75,10 +75,10 @@ void define_api()
               {
           serial_print("/config/wifi_config.json");
           request->send(SPIFFS, "/config/wifi_config.json", "text/json"); });
-    server.on("/wifi_backup", HTTP_GET, [](AsyncWebServerRequest *request)
+    server.on("/mqtt_config.json", HTTP_GET, [](AsyncWebServerRequest *request)
               {
-                request->send(200, "text/json", wifi_backup.backup_config);
-              });
+          serial_print("/config/mqtt_config.json");
+          request->send(SPIFFS, "/config/mqtt_config.json", "text/json"); });
   }
   firmware_web_updater();
   server.begin();
