@@ -19,16 +19,10 @@ function change_sync_word(val) {
   }
 }
 
-function get_sync_word() {
-  Socket.send(
-    JSON.stringify({
-      "request-type": "get_sync_word",
-    })
-  );
-}
-
 function set_sync_word(val) {
-  $("#sync_word").val(val);
+  $.get("lora_config.json", function (lora_config) {
+    $("#sync_word").val(lora_config.SyncWord);
+  });
 }
 
 function generate_sync_word() {
@@ -87,7 +81,7 @@ function dashboard() {
     generate_sync_word();
     setTimeout(function () {
       get_username();
-      get_sync_word();
+      set_sync_word();
     }, 10);
   });
 }
@@ -100,11 +94,48 @@ function wifi() {
   });
 }
 
+function save_lora_config() {
+  $.get("lora_config.json", function (lora_config) {
+    freq = $("#freq_range").val();
+    tx_power = $("#tx_power_range").val();
+    s_fact = $("#spreading_factor").val();
+    bandwidth = $("#bandwidth").val();
+    coding_rate = $("#coding_rate").val();
+
+    lora_config["freq"] = parseInt(freq * 1000000);
+    lora_config["TxPower"] = parseInt(tx_power);
+    lora_config["SpreadingFactor"] = parseInt(s_fact);
+    lora_config["SignalBandwidth"] = parseInt(bandwidth);
+    lora_config["CodingRate4"] = parseInt(coding_rate);
+    Socket.send(
+      JSON.stringify({
+        "request-type": "set_lora_config",
+        val: JSON.stringify(lora_config),
+      })
+    );
+  });
+}
+
 function lora() {
   $(".nav-link").removeClass("active");
   $("#navbar-lora").addClass("active");
   $.get("lora.html", function (data) {
     $("#main_content").html(data);
+    $.get("lora_config.json", function (lora_config) {
+      $("#freq_range").val(lora_config.freq / 1000000);
+      $("#selected_lora_freq").html(lora_config.freq / 1000000);
+
+      $("#tx_power_range").val(lora_config.TxPower);
+      $("#selected_lora_tx_power").html(lora_config.TxPower);
+
+      $("#spreading_factor").val(lora_config.SpreadingFactor);
+      $("#selected_lora_spreading_factor").html(lora_config.SpreadingFactor);
+
+      $("#bandwidth").val(lora_config.SignalBandwidth);
+
+      $("#coding_rate").val(lora_config.CodingRate4);
+      $("#selected_lora_coding_rate").html(lora_config.CodingRate4);
+    });
   });
 }
 
@@ -246,4 +277,18 @@ function init_socket() {
   Socket.onerror = function (event) {
     //console.log("Error in websockets");
   };
+}
+
+function set_freq_range(val) {
+  $("#selected_lora_freq").html(val);
+}
+function set_tx_power(val) {
+  $("#selected_lora_tx_power").html(val);
+}
+function set_spreading_factor(val) {
+  $("#selected_lora_spreading_factor").html(val);
+}
+function set_bandwidth(val) {}
+function set_coding_rate(val) {
+  $("#selected_lora_coding_rate").html(val);
 }

@@ -72,23 +72,12 @@ void handle_operations(JsonDocument doc)
             send_to_ws(return_value);
         });
     }
-    if(strcmp(request_type, "set_sync_word") == 0)
+    if(strcmp(request_type, "set_lora_config") == 0)
     {
-        int val = doc["val"];
+        String val = doc["val"];
         serial_print("changing sync word");
-        serial_print((String)val);
-        save_lora_config(5,val);
-    }
-    if(strcmp(request_type, "get_sync_word") == 0)
-    {
-        TickerForTimeOut.once_ms(100, [](){
-            JsonDocument doc;
-            doc["response_type"] = "set_sync_word";
-            doc["value"] = SyncWord;
-            String return_value;
-            serializeJson(doc, return_value);
-            send_to_ws(return_value);
-        });
+        serial_print(val);
+        save_lora_config(val);
     }
     if(strcmp(request_type, "send_raw") == 0)
     {

@@ -49,10 +49,6 @@ void define_api()
             {
         serial_print("favicon.ico");
         request->send(SPIFFS, "/favicon.ico", "image/vnd"); });
-  server.on("/Voyager_spacecraft.jpg", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-        serial_print("Voyager_spacecraft.jpg");
-        request->send(SPIFFS, "/Voyager_spacecraft.jpg", "image/jpeg"); });
   server.on("/dashboard.html", HTTP_GET, [](AsyncWebServerRequest *request)
             {
         serial_print("dashboard.html");
@@ -69,7 +65,10 @@ void define_api()
             {
         serial_print("hostname");
         request->send(200, "text/plain", hostname); });
-
+  server.on("/lora_config.json", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+          serial_print("/config/lora_config.json");
+          request->send(SPIFFS, "/config/lora_config.json", "text/json"); });
   if(DEBUG)
   {
     server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request)

@@ -11,10 +11,8 @@
     #define SS              LNSS
     #define RST             LRST
     #define IRQ             DIO0
-    extern int SyncWord;
-    extern int lora_freq;
     void setup_mqtt();
-    void save_lora_config(int param, int value);
+    void save_lora_config(String value);
     void enable_LoRa_file_tx_mode();
     void disable_LoRa_file_tx_mode();
     void enable_LoRa_file_rx_mode();

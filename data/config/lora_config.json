@@ -3,6 +3,6 @@
     "TxPower" : 10,
     "SpreadingFactor" : 10,
     "SignalBandwidth" : 500E3,
-    "CodingRate4" : 1,
+    "CodingRate4" : 5,
     "SyncWord" : 52
 }

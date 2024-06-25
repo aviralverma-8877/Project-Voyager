@@ -1,8 +1,5 @@
 #include<lora_support.h>
 
-int SyncWord = 0x34;
-int lora_freq = 433E6;
-
 struct TaskParameters {
   String data;
 };
@@ -11,7 +8,7 @@ void config_lora()
     serial_print("Configuring LORA");
     SPI.begin(SCK, MISO, MOSI, SS);
     LoRa.setPins(SS, RST, IRQ);
-    if (!LoRa.begin(lora_freq)) {
+    if (!LoRa.begin(433E6)) {
         serial_print("LoRa init failed. Check your connections.");
         while (true);
     }
@@ -21,55 +18,39 @@ void config_lora()
     LoRa_rxMode();
 }
 
-void save_lora_config(int param, int value)
+void save_lora_config(String value)
 {
     if (SPIFFS.exists("/config/lora_config.json"))
     {
-        File file = SPIFFS.open("/config/lora_config.json");
+        File file = SPIFFS.open("/config/lora_config.json", FILE_WRITE);
         if(!file){
             return;
         }
-        String lora_config;
-        while(file.available()){
-            lora_config += file.readString();
-        }
-        JsonDocument doc;
-        deserializeJson(doc, lora_config);
-        switch (param)
-        {
-            case 1:
-                doc["TxPower"] = value;
-                break;
-            case 2:
-                doc["SpreadingFactor"] = value;
-                break;
-            case 3:
-                doc["SignalBandwidth"] = value;
-                break;
-            case 4:
-                doc["CodingRate4"] = value;
-                break;
-            case 5:
-                doc["SyncWord"] = value;
-                SyncWord = value;
-                LoRa.setSyncWord(SyncWord);
-            case 6:
-                doc["freq"] = value;
-                lora_freq = value;
-                LoRa.setFrequency(lora_freq);
-            default:
-                break;
-        }
-        deserializeJson(doc, lora_config);
-        File file2 = SPIFFS.open("/config/lora_config.json", FILE_WRITE);
-        if(!file2){
-            Serial.println("No username file present.");
-            return;
-        }
-        if(file2.print(lora_config)){
+        if(file.print(value)){
             serial_print("LoRa config saved");
         }
-        file2.close();
+        JsonDocument doc;
+        deserializeJson(doc, value);
+
+        int lora_freq = doc["freq"];
+        LoRa.setFrequency(lora_freq);
+
+        int TxPower = doc["TxPower"];
+        LoRa.setTxPower(TxPower);
+
+        int SpreadingFactor = doc["SpreadingFactor"];
+        LoRa.setSpreadingFactor(SpreadingFactor);
+
+        int SignalBandwidth = doc["SignalBandwidth"];
+        LoRa.setSignalBandwidth(SignalBandwidth);
+
+        int CodingRate = doc["CodingRate4"];
+        LoRa.setCodingRate4(CodingRate);
+
+        int SyncWord = doc["SyncWord"];
+        LoRa.setSyncWord(SyncWord);
+
+        show_alert("LoRa config saved successfully");
     }
 }
 
@@ -94,7 +75,7 @@ void set_lora_parameters()
         int SpreadingFactor = doc["SpreadingFactor"];
         int SignalBandwidth = doc["SignalBandwidth"];
         int CodingRate = doc["CodingRate4"];
-        SyncWord = doc["SyncWord"];
+        int SyncWord = doc["SyncWord"];
         LoRa.setFrequency(freq);
         LoRa.setTxPower(TxPower);
         LoRa.setSpreadingFactor(SpreadingFactor);
