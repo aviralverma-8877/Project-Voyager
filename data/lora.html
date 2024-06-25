@@ -1,3 +1,35 @@
 <h1>
     LoRa Configration
 </h1>
+<hr>
+<div class="mb-3">
+    <label for="freq_range" class="form-label">LoRa Frequency</label>
+    <input type="range" class="form-range" min="410" max="525" step="0.5" id="freq_range">
+</div>
+<div class="mb-3">
+    <label for="tx_power_range" class="form-label">LoRa Tx Power</label>
+    <input type="range" class="form-range" min="0" max="14" step="1" id="tx_power_range">
+</div>
+<div class="mb-3">
+    <label for="spreading_factor" class="form-label">LoRa Spreading Factor</label>
+    <input type="range" class="form-range" min="6" max="12" step="1" id="spreading_factor">
+</div>
+<div class="mb-3">
+    <label for="bandwidth" class="form-label">LoRa Bandwidth</label>
+    <select id="bandwidth" class="form-select" aria-label="Bandwidth">
+        <option value=7800>7.8E3</option>
+        <option value=10400>10.4E3</option>
+        <option value=15600>15.6E3</option>
+        <option value=20800>20.8E3</option>
+        <option value=31250>31.25E3</option>
+        <option value=41700>41.7E3</option>
+        <option value=62500>62.5E3</option>
+        <option value=125000>125E3</option>
+        <option value=250000>250E3</option>
+        <option value=500000>500E3</option>
+    </select>
+</div>
+<div class="mb-3">
+    <label for="coding_rate" class="form-label">LoRa Coding Rate</label>
+    <input type="range" class="form-range" min="5" max="8" step="1" id="coding_rate">
+</div>
