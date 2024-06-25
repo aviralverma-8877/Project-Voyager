@@ -23,7 +23,6 @@ void config_wifi()
         if(strcmp(mode, "STA") == 0)
         {
             setup_sta(wifi_ssid, wifi_pass);
-            setup_mqtt();
         }
     }
     else
@@ -35,6 +34,7 @@ void config_wifi()
 void onWifiConnect(WiFiEvent_t event, WiFiEventInfo_t info)
 {
     serial_print("WiFi Connected.");
+    setup_mqtt();
 }
 
 void onWifiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info)
