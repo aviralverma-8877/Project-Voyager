@@ -10,9 +10,9 @@
     #define MOSI            LMOSI
     #define SS              LNSS
     #define RST             LRST
-    #define FREQ            433E6
     #define IRQ             DIO0
     extern int SyncWord;
+    extern int lora_freq;
     void setup_mqtt();
     void save_lora_config(int param, int value);
     void enable_LoRa_file_tx_mode();

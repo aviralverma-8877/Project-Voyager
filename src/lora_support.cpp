@@ -1,6 +1,7 @@
 #include<lora_support.h>
 
 int SyncWord = 0x34;
+int lora_freq = 433E6;
 
 struct TaskParameters {
   String data;
@@ -10,7 +11,7 @@ void config_lora()
     serial_print("Configuring LORA");
     SPI.begin(SCK, MISO, MOSI, SS);
     LoRa.setPins(SS, RST, IRQ);
-    if (!LoRa.begin(FREQ)) {
+    if (!LoRa.begin(lora_freq)) {
         serial_print("LoRa init failed. Check your connections.");
         while (true);
     }
@@ -52,6 +53,10 @@ void save_lora_config(int param, int value)
                 doc["SyncWord"] = value;
                 SyncWord = value;
                 LoRa.setSyncWord(SyncWord);
+            case 6:
+                doc["freq"] = value;
+                lora_freq = value;
+                LoRa.setFrequency(lora_freq);
             default:
                 break;
         }
@@ -84,11 +89,13 @@ void set_lora_parameters()
         serial_print(lora_config);
         JsonDocument doc;
         deserializeJson(doc, lora_config);
+        int freq = doc["freq"];
         int TxPower = doc["TxPower"];
         int SpreadingFactor = doc["SpreadingFactor"];
         int SignalBandwidth = doc["SignalBandwidth"];
         int CodingRate = doc["CodingRate4"];
         SyncWord = doc["SyncWord"];
+        LoRa.setFrequency(freq);
         LoRa.setTxPower(TxPower);
         LoRa.setSpreadingFactor(SpreadingFactor);
         LoRa.setSignalBandwidth(SignalBandwidth);

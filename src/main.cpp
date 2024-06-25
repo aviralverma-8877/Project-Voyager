@@ -23,10 +23,10 @@ void setup() {
   init_oled();
 
   config_wifi();
-  // WiFi.onEvent(onWifiConnect, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
-  // WiFi.onEvent(onWifiDisconnect, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
-  WiFi.onEvent(onWifiConnect, SYSTEM_EVENT_STA_GOT_IP);
-  WiFi.onEvent(onWifiDisconnect, SYSTEM_EVENT_STA_DISCONNECTED);
+  WiFi.onEvent(onWifiConnect, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
+  WiFi.onEvent(onWifiDisconnect, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+  // WiFi.onEvent(onWifiConnect, SYSTEM_EVENT_STA_GOT_IP);
+  // WiFi.onEvent(onWifiDisconnect, SYSTEM_EVENT_STA_DISCONNECTED);
 
   define_api();
   initWebSocket();
