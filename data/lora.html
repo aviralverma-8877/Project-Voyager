@@ -1,5 +1,5 @@
 <h1>
-    LoRa Configration
+    LoRa Configuration
 </h1>
 <hr>
 <div class="mb-3">
@@ -85,6 +85,10 @@
         id="coding_rate"
         onchange="set_coding_rate(this.value)"
     >
+</div>
+<div class="mb-3">
+    <h5 for="sync_word">Sync Word:</h5>
+    <select class="form-control" id="sync_word"></select>
 </div>
 <div class="mb-3">
     <button class="btn btn-primary" onclick="save_lora_config()">Save</button>

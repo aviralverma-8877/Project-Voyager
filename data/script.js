@@ -8,17 +8,6 @@ $("#myModal").on("shown.bs.modal", function () {
   $("#myInput").trigger("focus");
 });
 
-function change_sync_word(val) {
-  if (val != "") {
-    Socket.send(
-      JSON.stringify({
-        "request-type": "set_sync_word",
-        val: val,
-      })
-    );
-  }
-}
-
 function set_sync_word(val) {
   $.get("lora_config.json", function (lora_config) {
     $("#sync_word").val(lora_config.SyncWord);
@@ -78,7 +67,6 @@ function dashboard() {
   $("#navbar-dashboard").addClass("active");
   $.get("dashboard.html", function (data) {
     $("#main_content").html(data);
-    generate_sync_word();
     setTimeout(function () {
       get_username();
       set_sync_word();
@@ -101,12 +89,14 @@ function save_lora_config() {
     s_fact = $("#spreading_factor").val();
     bandwidth = $("#bandwidth").val();
     coding_rate = $("#coding_rate").val();
+    sync_word = $("#sync_word").val();
 
     lora_config["freq"] = parseInt(freq * 1000000);
     lora_config["TxPower"] = parseInt(tx_power);
     lora_config["SpreadingFactor"] = parseInt(s_fact);
     lora_config["SignalBandwidth"] = parseInt(bandwidth);
     lora_config["CodingRate4"] = parseInt(coding_rate);
+    lora_config["SyncWord"] = parseInt(sync_word);
     Socket.send(
       JSON.stringify({
         "request-type": "set_lora_config",
@@ -122,6 +112,8 @@ function lora() {
   $.get("lora.html", function (data) {
     $("#main_content").html(data);
     $.get("lora_config.json", function (lora_config) {
+      generate_sync_word();
+
       $("#freq_range").val(lora_config.freq / 1000000);
       $("#selected_lora_freq").html(lora_config.freq / 1000000);
 
@@ -135,6 +127,8 @@ function lora() {
 
       $("#coding_rate").val(lora_config.CodingRate4);
       $("#selected_lora_coding_rate").html(lora_config.CodingRate4);
+
+      $("#sync_word").val(lora_config.SyncWord);
     });
   });
 }

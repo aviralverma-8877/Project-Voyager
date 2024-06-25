@@ -248,7 +248,7 @@ void setupTickers()
 {
     TickerForBtnPresses.attach_ms(10, btn_intrupt);
     transmit_beacon();
-    // TickerForLoraBeacon.attach(10, transmit_beacon);
+    TickerForLoraBeacon.attach(10, transmit_beacon);
 }
 
 void stop_nortify_led()
