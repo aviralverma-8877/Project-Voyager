@@ -1,6 +1,7 @@
 #include<mqtt_support.h>
 
 Ticker mqttReconnectTimer;
+String mqtt_topic_to_ping = "";
 String mqtt_topic_to_subscribe = "";
 String mqtt_topic_to_send_raw = "";
 String mqtt_topic_to_publish = "";
@@ -34,6 +35,9 @@ void setup_mqtt()
     String sub_topic = doc["sub_topic"];
     mqtt_topic_to_subscribe = sub_topic;
 
+    String ping_topic = doc["ping_topic"];
+    mqtt_topic_to_ping = ping_topic;
+
     IPAddress host;
     host.fromString(host_string);
     serial_print(host.toString());
@@ -64,10 +68,13 @@ void onMqttConnect(bool sessionPresent) {
     String raw_data = "voyager/"+mac+"/"+mqtt_topic_to_send_raw;
     mqttClient.subscribe(sub_topic.c_str(), 2);
     mqttClient.subscribe(raw_data.c_str(), 2);
+    mqttReconnectTimer.detach();
+    TickerForMQTTPing.attach(30, ping_mqtt_timer);
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
     serial_print("MQTT is disconnected.");
+    TickerForMQTTPing.detach();
     switch (reason)
     {
         case AsyncMqttClientDisconnectReason::TCP_DISCONNECTED:
@@ -139,6 +146,16 @@ void send_to_mqtt(String msg)
 {
     String mac = WiFi.macAddress();
     String topic = "voyager/"+mac+"/"+mqtt_topic_to_publish;
+    serial_print("Sending msg to mqtt");
+    serial_print(topic);
+    serial_print(msg);
+    mqttClient.publish(topic.c_str(), 2, false, msg.c_str(), msg.length());
+}
+
+void ping_mqtt(String msg)
+{
+    String mac = WiFi.macAddress();
+    String topic = "voyager/"+mac+"/"+mqtt_topic_to_ping;
     serial_print("Sending msg to mqtt");
     serial_print(topic);
     serial_print(msg);

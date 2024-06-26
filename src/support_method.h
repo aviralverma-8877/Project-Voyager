@@ -15,6 +15,7 @@
     extern String username;
     extern String hostname;
     extern DNSServer dnsServer;
+    extern Ticker TickerForMQTTPing;
     extern Ticker TickerForLedNotification;
     extern Ticker TickerForLoraBeacon;
 

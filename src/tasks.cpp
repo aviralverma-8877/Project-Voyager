@@ -12,6 +12,17 @@ void wifi_connection_check()
     }
 }
 
+void ping_mqtt_timer()
+{
+    String mac = WiFi.macAddress();
+    JsonDocument doc;
+    doc["mac"] = mac;
+    doc["uname"] = username;
+    String mqtt_ping;
+    serializeJson(doc, mqtt_ping);
+    ping_mqtt(mqtt_ping);
+}
+
 void transmit_beacon()
 {
     serial_print("Beacon Transmitted");

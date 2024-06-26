@@ -18,6 +18,7 @@
     extern String mqtt_topic_to_send_raw;
     extern String mqtt_topic_to_publish;
 
+    void ping_mqtt(String msg);
     void connectToMqtt();
     void onMqttConnect(bool sessionPresent);
     void onMqttDisconnect(AsyncMqttClientDisconnectReason reason);

@@ -3,6 +3,7 @@
 String username;
 String hostname;
 DNSServer dnsServer;
+Ticker TickerForMQTTPing;
 Ticker TickerForBtnPresses;
 Ticker TickerForLoraBeacon;
 Ticker TickerForLedNotification;
