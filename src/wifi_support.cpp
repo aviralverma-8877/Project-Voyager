@@ -34,12 +34,23 @@ void config_wifi()
 void onWifiConnect(WiFiEvent_t event, WiFiEventInfo_t info)
 {
     serial_print("WiFi Connected.");
+    IPAddress IP = WiFi.localIP();
+    serial_print(IP.toString());
+    if(WiFi.getMode() == WIFI_MODE_AP)
+        display_buffer[1].msg = "WiFi Type : AP";
+    else if (WiFi.getMode() == WIFI_MODE_STA)
+        display_buffer[1].msg = "WiFi Type : STA";
+    display_buffer[2].msg = IP.toString();
+    display_text_oled();
     setup_mqtt();
 }
 
 void onWifiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info)
 {
     serial_print("WiFi Disconnected.");
+    display_buffer[1].msg = "WiFi Disconnected";
+    display_buffer[2].msg = "Retrying";
+    display_text_oled();
     config_wifi();
 }
 
@@ -102,14 +113,7 @@ void setup_sta(const char* wifi_ssid, const char* wifi_pass)
         serial_print(".");
         count++;
     }
-    IPAddress IP = WiFi.localIP();
-    serial_print(IP.toString());
-    display_buffer[1].msg = "WiFi Type : STA";
-    display_buffer[2].msg = wifi_ssid;
-    display_buffer[3].msg = IP.toString();
-    display_text_oled();
     setup_mdns();
-    TickerForWiFiTimeout.once(10, wifi_connection_check);
 }
 
 void setup_ap(const char* wifi_ssid)
