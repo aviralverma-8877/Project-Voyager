@@ -11,6 +11,7 @@ void setup_mqtt()
 {
     serial_print("Setting up mqtt");
     while(!WiFi.isConnected()){}
+    mqttClient.setCleanSession(true);
     mqttClient.onConnect(onMqttConnect);
     mqttClient.onDisconnect(onMqttDisconnect);
     mqttClient.onSubscribe(onMqttSubscribe);

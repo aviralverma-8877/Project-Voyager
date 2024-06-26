@@ -15,7 +15,7 @@ void config_wifi()
         const char* mode = doc["wifi_function"];
         const char* wifi_ssid = doc["wifi_ssid"];
         const char* wifi_pass = doc["wifi_pass"];
-        WiFi.disconnect();
+        WiFi.disconnect(true);
         if(strcmp(mode, "AP") == 0)
         {
             setup_ap(wifi_ssid);
@@ -23,7 +23,6 @@ void config_wifi()
         if(strcmp(mode, "STA") == 0)
         {
             setup_sta(wifi_ssid, wifi_pass);
-            setup_mqtt();
         }
     }
     else
@@ -35,6 +34,7 @@ void config_wifi()
 void onWifiConnect(WiFiEvent_t event, WiFiEventInfo_t info)
 {
     serial_print("WiFi Connected.");
+    setup_mqtt();
 }
 
 void onWifiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info)
@@ -102,7 +102,6 @@ void setup_sta(const char* wifi_ssid, const char* wifi_pass)
         serial_print(".");
         count++;
     }
-    serial_print("WiFi connected.");
     IPAddress IP = WiFi.localIP();
     serial_print(IP.toString());
     display_buffer[1].msg = "WiFi Type : STA";
@@ -110,7 +109,7 @@ void setup_sta(const char* wifi_ssid, const char* wifi_pass)
     display_buffer[3].msg = IP.toString();
     display_text_oled();
     setup_mdns();
-    TickerForWiFiTimeout.once(1, wifi_connection_check);
+    TickerForWiFiTimeout.once(10, wifi_connection_check);
 }
 
 void setup_ap(const char* wifi_ssid)
