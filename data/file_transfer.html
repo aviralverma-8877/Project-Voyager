@@ -1,0 +1,35 @@
+<h1>
+    File Transfer.
+</h1>
+<hr>
+<div class="mb-3">
+    <input
+        type="file"
+        accept="image/png, image/jpeg"
+        class="form-control"
+        onchange="reset_progress_bar()"
+        id="broadcastFile"
+    >
+</div>
+<div class="mb-3">
+    <button
+        type="button"
+        id="fileBroadcastButton"
+        class="btn btn-primary"
+        onclick="file_broadcast()"
+    >Broadcast</button>
+</div>
+<div class="mb-3">
+    <label id="chunk_ratio"></label>
+    <div class="progress">
+        <div
+            id="file_upload_progress_bar"
+            class="progress-bar progress-bar-striped"
+            role="progressbar"
+            style="width: 0%"
+            aria-valuenow="10"
+            aria-valuemin="0"
+            aria-valuemax="100"
+        ></div>
+    </div>    
+</div>

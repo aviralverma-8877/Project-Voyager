@@ -74,6 +74,13 @@ function dashboard() {
   });
 }
 
+function file_transfer()
+{
+  $.get("file_transfer.html", function(data){
+    $("#main_content").html(data);
+  })
+}
+
 function wifi() {
   $(".nav-link").removeClass("active");
   $("#navbar-wifi").addClass("active");

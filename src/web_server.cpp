@@ -61,6 +61,10 @@ void define_api()
             {
         serial_print("lora.html");
         request->send(SPIFFS, "/lora.html", "text/html"); });
+  server.on("/file_transfer.html", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+        serial_print("file_transfer.html");
+        request->send(SPIFFS, "/file_transfer.html", "text/html"); });
   server.on("/hostname", HTTP_GET, [](AsyncWebServerRequest *request)
             {
         serial_print("hostname");
