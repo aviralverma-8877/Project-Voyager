@@ -12,6 +12,24 @@
     >
 </div>
 <div class="mb-3">
+    <input
+        class="form-control form-control-sm"
+        id="wait_time"
+        value="1000"
+        type="number"
+        placeholder="Time delay between packets in mili secs (>500)"
+    >
+</div>
+<div class="mb-3">
+    <input
+        class="form-control form-control-sm"
+        id="chunk_size"
+        value="250"
+        type="number"
+        placeholder="Packet Size (1-250)"
+    >
+</div>
+<div class="mb-3">
     <button
         type="button"
         id="fileBroadcastButton"
@@ -32,4 +50,7 @@
             aria-valuemax="100"
         ></div>
     </div>    
+</div>
+<div class="mb-3">
+    <img id="file_download" style="width:40%" class="img-thumbnail" src="Voyager_spacecraft.jpg">
 </div>
