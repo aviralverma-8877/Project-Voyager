@@ -219,7 +219,7 @@ void setup_dns()
     dnsServer.setTTL(300);
     dnsServer.setErrorReplyCode(DNSReplyCode::ServerFailure);
     dnsServer.start(53, "*", WiFi.softAPIP());
-    xTaskCreate(dns_request_process, "DNS Request Handler", 6000, NULL, 1, NULL);
+    xTaskCreate(dns_request_process, "DNS Request Handler", 6000, NULL, 0, NULL);
 }
 
 void dns_request_process(void *parameter)

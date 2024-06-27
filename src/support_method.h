@@ -21,7 +21,7 @@
 
     void get_username();
     void save_username(String uname);
-    void dns_request_process();
+    void dns_request_process(void *parameter);
     void setup_mdns();
     void setup_dns();
     void restart();
