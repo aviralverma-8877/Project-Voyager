@@ -7,7 +7,6 @@ Ticker TickerForMQTTPing;
 Ticker TickerForBtnPresses;
 Ticker TickerForLoraBeacon;
 Ticker TickerForLedNotification;
-Ticker TickerForDNSRequest;
 
 void handle_operations(JsonDocument doc)
 {
@@ -169,7 +168,6 @@ void reset_device()
         WiFi.disconnect();
     }
     TickerForBtnPresses.detach();
-    TickerForDNSRequest.detach();
     TickerForLedNotification.detach();
     serial_print("Formatting SPIFFS");
     bool formatted = SPIFFS.format();
@@ -221,12 +219,13 @@ void setup_dns()
     dnsServer.setTTL(300);
     dnsServer.setErrorReplyCode(DNSReplyCode::ServerFailure);
     dnsServer.start(53, "*", WiFi.softAPIP());
-    TickerForDNSRequest.attach_ms(10, dns_request_process);
+    xTaskCreate(dns_request_process, "DNS Request Handler", 6000, NULL, 1, NULL);
 }
 
-void dns_request_process()
+void dns_request_process(void *parameter)
 {
-    dnsServer.processNextRequest();
+    for(;;)
+        dnsServer.processNextRequest();
 }
 
 void config_gpios()
