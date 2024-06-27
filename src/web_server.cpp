@@ -65,6 +65,10 @@ void define_api()
             {
         serial_print("file_transfer.html");
         request->send(SPIFFS, "/file_transfer.html", "text/html"); });
+  server.on("/Voyager_spacecraft.jpg", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+        serial_print("Voyager_spacecraft.jpg");
+        request->send(SPIFFS, "/Voyager_spacecraft.jpg", "image/jpeg"); });
   server.on("/hostname", HTTP_GET, [](AsyncWebServerRequest *request)
             {
         serial_print("hostname");
