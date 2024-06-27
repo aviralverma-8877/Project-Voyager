@@ -106,8 +106,7 @@ void setup_sta(const char* wifi_ssid, const char* wifi_pass)
     while (WiFi.status() != WL_CONNECTED) {
         if(count > 120)
         {
-            setup_ap("Voyager");
-            return;
+            ESP.restart();
         }
         vTaskDelay(500/portTICK_PERIOD_MS);
         serial_print(".");
