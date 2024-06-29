@@ -77,6 +77,10 @@ void define_api()
             {
           serial_print("/config/lora_config.json");
           request->send(SPIFFS, "/config/lora_config.json", "text/json"); });
+  server.on("/lora_serial.json", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+          serial_print("/config/lora_serial.json");
+          request->send(SPIFFS, "/config/lora_serial.json", "text/json"); });
   if(DEBUG)
   {
     server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request)

@@ -12,6 +12,7 @@
     #include <lora_support.h>
     #include <wifi_support.h>
     #include "SPIFFS.h"
+    extern bool lora_serial;
     extern String username;
     extern String hostname;
     extern DNSServer dnsServer;
@@ -19,6 +20,8 @@
     extern Ticker TickerForLedNotification;
     extern Ticker TickerForLoraBeacon;
 
+    void serial_to_lora(void* param);
+    void get_lora_serial();
     void get_username();
     void save_username(String uname);
     void dns_request_process(void *parameter);
@@ -34,6 +37,7 @@
     void handle_operations(JsonDocument doc);
     void reset_device();
     String device_becon();
+    void save_lora_serial_config(void* param);
     #define DEBUGGING DEBUG
 #endif
 

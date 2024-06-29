@@ -1,5 +1,6 @@
 #include <support_method.h>
 
+bool lora_serial = false;
 String username;
 String hostname;
 DNSServer dnsServer;
@@ -100,6 +101,85 @@ void handle_operations(JsonDocument doc)
     if(strcmp(request_type, "disable_LoRa_file_rx_mode") == 0)
     {
         disable_LoRa_file_rx_mode();
+    }
+    if(strcmp(request_type, "set_serial_mode")==0)
+    {
+        lora_serial = doc["value"];
+        if(lora_serial)
+        {
+            xTaskCreate(save_lora_serial_config, "save_lora_serial_config", 6000, NULL, 1, NULL);
+            xTaskCreate(serial_to_lora, "serial_to_lora", 6000, NULL, 1, NULL);
+        }
+        else
+        {
+            xTaskCreate(save_lora_serial_config, "save_lora_serial_config", 6000, NULL, 1, NULL);
+        }
+    }
+    if(strcmp(request_type, "get_serial_mode")==0)
+    {
+        TickerForTimeOut.once_ms(100, [](){
+            JsonDocument doc;
+            doc["response_type"] = "serial_mode";
+            doc["value"] = lora_serial;
+            String return_value;
+            serializeJson(doc, return_value);
+            send_to_ws(return_value);
+        });
+    }
+}
+
+void save_lora_serial_config(void* param)
+{
+    JsonDocument doc;
+    doc["lora_serial"] = lora_serial;
+    String config;
+    serializeJson(doc, config);
+    File file = SPIFFS.open("/config/lora_serial.json", FILE_WRITE);
+    if(!file){
+        Serial.println("No LoRa serial config file present.");
+        return;
+    }
+    if(file.print(config)){
+        serial_print("LoRa serial config saved.");
+    }
+    file.close();
+    vTaskDelete(NULL);
+}
+
+void serial_to_lora(void* param)
+{
+    while(lora_serial){
+        if(Serial.available())
+        {
+            String data = "";
+            while(Serial.available())
+            {
+                data += Serial.readString();
+            }
+            LoRa_sendRaw(data);
+        }
+    }
+    vTaskDelete(NULL);
+}
+
+void get_lora_serial()
+{
+    if (SPIFFS.exists("/config/lora_serial.json"))
+    {
+        File file = SPIFFS.open("/config/lora_serial.json");
+        serial_print("reading SPIFFS");
+        if(!file){
+            lora_serial = false;
+            return;
+        }
+        String lora_serial_config;
+        while(file.available()){
+            lora_serial_config += file.readString();
+        }
+        file.close();
+        JsonDocument doc;
+        deserializeJson(doc, lora_serial_config);
+        lora_serial = doc["lora_serial"];
     }
 }
 
@@ -226,6 +306,7 @@ void dns_request_process(void *parameter)
 {
     for(;;)
         dnsServer.processNextRequest();
+    vTaskDelete(NULL);
 }
 
 void config_gpios()
@@ -238,7 +319,7 @@ void config_gpios()
 
 void serial_print(String msg)
 {
-    if(DEBUGGING)
+    if(DEBUGGING && !lora_serial)
     {
         Serial.println(msg);
     }

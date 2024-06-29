@@ -141,12 +141,21 @@ void LoRa_sendMessage(String message) {
 
 void onReceive(int packetSize)
 {
-    String message;
-    message = LoRa.readString();
-    TaskParameters* taskParams = new TaskParameters();
-    taskParams->data=message;
-    xTaskCreate(send_msg_to_ws, "lora message to ws", 6000, (void*)taskParams, 0, NULL);
-    xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 6000, (void*)taskParams, 0, NULL);
+    if(lora_serial)
+    {
+        while (LoRa.available())
+        {
+            Serial.write(LoRa.read());
+        }        
+    }
+    else{
+        String message;
+        message = LoRa.readString();
+        TaskParameters* taskParams = new TaskParameters();
+        taskParams->data=message;
+        xTaskCreate(send_msg_to_ws, "lora message to ws", 6000, (void*)taskParams, 0, NULL);
+        xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 6000, (void*)taskParams, 0, NULL);
+    }
 }
 
 void send_msg_to_mqtt( void * parameters )

@@ -67,10 +67,14 @@ function dashboard() {
   $("#navbar-dashboard").addClass("active");
   $.get("dashboard.html", function (data) {
     $("#main_content").html(data);
-    setTimeout(function () {
-      get_username();
-      set_sync_word();
-    }, 10);
+    $.get('/lora_serial.json', function(config){
+      $("#lora_to_serial").attr("checked", config.lora_serial)
+      config_lora_to_serial_fields(config.lora_serial)
+      setTimeout(function () {
+        get_username();
+        set_sync_word();
+      }, 10);  
+    })
   });
 }
 
@@ -78,7 +82,10 @@ function file_transfer()
 {
   $.get("file_transfer.html", function(data){
     $("#main_content").html(data);
-  })
+    $.get('/lora_serial.json', function(config){
+      config_lora_to_serial_fields(config.lora_serial)  
+    });
+  });
 }
 
 function wifi() {
@@ -215,82 +222,87 @@ function init_socket() {
     "ws://" + window.location.hostname + ":" + window.location.port + "/ws"
   );
   Socket.onmessage = function (event) {
-    var data = JSON.parse(event.data);
-    var response_type = data.response_type;
-    //console.log("Web socket message recieved...");
-    //console.log(data);
-    if (response_type == "wifi_scan") {
-      $("#wifi_scan_btn").html("Scan SSID");
-      $("#wifi_scan_btn").attr("onclick", "scan_ssid()");
-      var ssid_list = data.SSID;
-      var output = "";
-      for (wifi_ssid in ssid_list) {
-        wifi_ssid = ssid_list[wifi_ssid];
-        output +=
-          '<li class="list-group-item d-flex justify-content-between align-items-center">\
-          <a href="#" onclick="update_wifi_ssid(\'' +
-          wifi_ssid.ssid +
-          "')\">" +
-          wifi_ssid.ssid +
-          '</a><span class="badge badge-primary badge-pill">' +
-          wifi_ssid.rssi +
-          "</span></li>";
+    try{
+      var data = JSON.parse(event.data);
+      var response_type = data.response_type;
+      //console.log("Web socket message recieved...");
+      //console.log(data);
+      if (response_type == "wifi_scan") {
+        $("#wifi_scan_btn").html("Scan SSID");
+        $("#wifi_scan_btn").attr("onclick", "scan_ssid()");
+        var ssid_list = data.SSID;
+        var output = "";
+        for (wifi_ssid in ssid_list) {
+          wifi_ssid = ssid_list[wifi_ssid];
+          output +=
+            '<li class="list-group-item d-flex justify-content-between align-items-center">\
+            <a href="#" onclick="update_wifi_ssid(\'' +
+            wifi_ssid.ssid +
+            "')\">" +
+            wifi_ssid.ssid +
+            '</a><span class="badge badge-primary badge-pill">' +
+            wifi_ssid.rssi +
+            "</span></li>";
+        }
+        $("#wifi_ssid_list").html(output);
       }
-      $("#wifi_ssid_list").html(output);
-    }
-    if (response_type == "alert") {
-      var msg = data.alert_msg;
-      alert(msg);
-    }
-    if (response_type == "lora_rx") {
-      data = JSON.parse(data.lora_msg);
-      if (typeof data == "string") {
-        if (file_transfer_mode) {
-          var _href = $("#file_download").attr("src");
-          $("#file_download").attr("src", _href + data);
-          return;
+      if (response_type == "alert") {
+        var msg = data.alert_msg;
+        alert(msg);
+      }
+      if (response_type == "lora_rx") {
+        data = JSON.parse(data.lora_msg);
+        if (typeof data == "string") {
+          if (file_transfer_mode) {
+            var _href = $("#file_download").attr("src");
+            $("#file_download").attr("src", _href + data);
+            return;
+          }
+        } 
+        else 
+        {
+          var uname = data.name;
+          var data = JSON.parse(data.data);
+          var pack_type = data["pack_type"];
+          if (pack_type == "beacon") {
+            //console.log("beacon from " + mac);
+          }
+          if (pack_type == "msg") {
+            msg = data["data"];
+            $("#lora_rx_msg").prepend(
+              "<li class='list-group-item'>" + uname + " : " + msg + "</li>"
+            );
+          }
         }
-      } 
-      else 
-      {
-        var uname = data.name;
-        var data = JSON.parse(data.data);
-        var pack_type = data["pack_type"];
-        if (pack_type == "beacon") {
-          //console.log("beacon from " + mac);
-        }
-        if (pack_type == "msg") {
-          msg = data["data"];
-          $("#lora_rx_msg").prepend(
-            "<li class='list-group-item'>" + uname + " : " + msg + "</li>"
-          );
+        if (pack_type == "action") {
+          action = data["data"];
+          if (action == "enable_file_tx_mode") {
+            $("#file_download").attr("src", "");
+            Socket.send(
+              JSON.stringify({
+                "request-type": "enable_LoRa_file_rx_mode",
+              })
+            );
+            start_file_transfer_mode();
+          } else if (action == "disable_file_tx_mode") {
+            Socket.send(
+              JSON.stringify({
+                "request-type": "disable_LoRa_file_rx_mode",
+              })
+            );
+            stop_file_transfer_mode();
+          }
         }
       }
-      if (pack_type == "action") {
-        action = data["data"];
-        if (action == "enable_file_tx_mode") {
-          $("#file_download").attr("src", "");
-          Socket.send(
-            JSON.stringify({
-              "request-type": "enable_LoRa_file_rx_mode",
-            })
-          );
-          start_file_transfer_mode();
-        } else if (action == "disable_file_tx_mode") {
-          Socket.send(
-            JSON.stringify({
-              "request-type": "disable_LoRa_file_rx_mode",
-            })
-          );
-          stop_file_transfer_mode();
-        }
+      if (response_type == "set_uname") {
+        $("#username").val(data.uname);
+      }
+      if (response_type == "set_sync_word") {
+        set_sync_word(data.value);
       }
     }
-    if (response_type == "set_uname") {
-      $("#username").val(data.uname);
-    }
-    if (response_type == "set_sync_word") {
-      set_sync_word(data.value);
+    catch(e){
+      console.log(e);
     }
   };
   Socket.onopen = function (event) {
@@ -305,8 +317,29 @@ function init_socket() {
     }, 1000);
   };
   Socket.onerror = function (event) {
-    //console.log("Error in websockets");
+    console.log("Error in websockets"+event);
   };
+}
+
+function config_lora_to_serial_fields(val)
+{
+  if(val)
+  {
+    $(".lora_transmittion").attr("disabled","true");
+  }
+  else
+  {
+    $(".lora_transmittion").removeAttr("disabled");
+  } 
+}
+
+function set_lora_to_serial(val)
+{
+  config_lora_to_serial_fields(val);
+  Socket.send(JSON.stringify({
+    "request-type": "set_serial_mode",
+    "value":val
+  }))
 }
 
 function set_freq_range(val) {
