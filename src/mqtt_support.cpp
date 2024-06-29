@@ -51,10 +51,10 @@ void setup_mqtt()
         mqttClient.setCredentials(uname, pass);
     }
     mqttClient.setServer(host, port);
-    connectToMqtt();
+    connectToMqtt(NULL);
 }
 
-void connectToMqtt()
+void connectToMqtt(void *param)
 {
     serial_print("Connecting to MQTT");
     mqttClient.connect();
@@ -106,7 +106,7 @@ void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
         break;
     }
     if (WiFi.isConnected()) {
-        mqttReconnectTimer.once(2, connectToMqtt);
+        xTaskCreate(connectToMqtt, "connectToMqtt", 6000, NULL, 1, NULL);
     }
 }
 

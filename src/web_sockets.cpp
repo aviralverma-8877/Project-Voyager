@@ -1,14 +1,12 @@
 #include <web_sockets.h>
 
 bool ws_connected = false;
-Ticker TickerForWSClientCleanup;
 AsyncWebSocket webSocket("/ws");
 
 void initWebSocket() {
   serial_print("Initilizing Websockets");
   webSocket.onEvent(onEvent);
   server.addHandler(&webSocket);
-  TickerForWSClientCleanup.attach_ms(10, cleanup_client);
 }
 
 void cleanup_client()

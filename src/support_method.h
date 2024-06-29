@@ -18,7 +18,6 @@
     extern DNSServer dnsServer;
     extern Ticker TickerForMQTTPing;
     extern Ticker TickerForLedNotification;
-    extern Ticker TickerForLoraBeacon;
 
     void serial_to_lora(void* param);
     void get_lora_serial();
@@ -27,7 +26,7 @@
     void dns_request_process(void *parameter);
     void setup_mdns();
     void setup_dns();
-    void restart();
+    void restart(void *param);
     void config_gpios();
     void serial_print(String msg);
     void setupTickers();
@@ -35,7 +34,7 @@
     void nortify_led();
     void show_alert(String msg);
     void handle_operations(JsonDocument doc);
-    void reset_device();
+    void reset_device(void *param);
     String device_becon();
     void save_lora_serial_config(void* param);
     #define DEBUGGING DEBUG

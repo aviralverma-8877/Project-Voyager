@@ -6,7 +6,6 @@ String hostname;
 DNSServer dnsServer;
 Ticker TickerForMQTTPing;
 Ticker TickerForBtnPresses;
-Ticker TickerForLoraBeacon;
 Ticker TickerForLedNotification;
 
 void handle_operations(JsonDocument doc)
@@ -15,7 +14,7 @@ void handle_operations(JsonDocument doc)
     if(strcmp(request_type, "wifi_ssid_scan") == 0)
     {
         String json_string;
-        xTaskCreatePinnedToCore(scan_ssid, "scan_wifi", 6000, NULL, 2, NULL, 0);
+        xTaskCreatePinnedToCore(scan_ssid, "scan_wifi", 6000, NULL, 1, NULL, 0);
     }
     if(strcmp(request_type, "connect_wifi") == 0)
     {
@@ -36,15 +35,15 @@ void handle_operations(JsonDocument doc)
         serial_print(wifi_config);
         // writing wifi config
         save_wifi_settings(wifi_config);
-        restart();
+        restart(NULL);
     }
     if(strcmp(request_type, "reset_device") == 0)
     {
-        TickerForTimeOut.once_ms(100, reset_device);
+        xTaskCreate(reset_device, "reset_device", 6000, NULL, 1, NULL);
     }
     if(strcmp(request_type, "restart_device") == 0)
     {
-        TickerForTimeOut.once_ms(100, restart);
+        xTaskCreate(restart, "Restart", 6000, NULL, 1, NULL);
     }
     if(strcmp(request_type, "lora_transmit") == 0)
     {
@@ -64,14 +63,12 @@ void handle_operations(JsonDocument doc)
     if(strcmp(request_type, "get_username") == 0)
     {
         serial_print("get_username");
-        TickerForTimeOut_2.once_ms(100, [](){
-            JsonDocument doc;
-            doc["response_type"] = "set_uname";
-            doc["uname"] = username;
-            String return_value;
-            serializeJson(doc, return_value);
-            send_to_ws(return_value);
-        });
+        JsonDocument doc;
+        doc["response_type"] = "set_uname";
+        doc["uname"] = username;
+        String return_value;
+        serializeJson(doc, return_value);
+        send_to_ws(return_value);
     }
     if(strcmp(request_type, "set_lora_config") == 0)
     {
@@ -116,14 +113,12 @@ void handle_operations(JsonDocument doc)
     }
     if(strcmp(request_type, "get_serial_mode")==0)
     {
-        TickerForTimeOut.once_ms(100, [](){
-            JsonDocument doc;
-            doc["response_type"] = "serial_mode";
-            doc["value"] = lora_serial;
-            String return_value;
-            serializeJson(doc, return_value);
-            send_to_ws(return_value);
-        });
+        JsonDocument doc;
+        doc["response_type"] = "serial_mode";
+        doc["value"] = lora_serial;
+        String return_value;
+        serializeJson(doc, return_value);
+        send_to_ws(return_value);
     }
 }
 
@@ -232,7 +227,7 @@ void save_username(String uname)
     username = uname;
 }
 
-void reset_device()
+void reset_device(void *param)
 {
     show_alert("Device reset successfully,\nPlease reconfigure the device by connecting to the AP.\nRebooting Now.");
     clear_oled_display();
@@ -250,7 +245,7 @@ void reset_device()
     if (formatted)
     {
         serial_print("Success formatting");
-        restart();
+        restart(NULL);
     }
     else
     {
@@ -268,7 +263,7 @@ void show_alert(String msg)
     send_to_ws(return_response);
 }
 
-void restart()
+void restart(void *param)
 {
     serial_print("Restarting esp.");
     ESP.restart();
@@ -295,7 +290,7 @@ void setup_dns()
     dnsServer.setTTL(300);
     dnsServer.setErrorReplyCode(DNSReplyCode::ServerFailure);
     dnsServer.start(53, "*", WiFi.softAPIP());
-    xTaskCreate(dns_request_process, "DNS Request Handler", 6000, NULL, 0, NULL);
+    xTaskCreate(dns_request_process, "DNS Request Handler", 6000, NULL, 1, NULL);
 }
 
 void dns_request_process(void *parameter)
@@ -324,8 +319,6 @@ void serial_print(String msg)
 void setupTickers()
 {
     TickerForBtnPresses.attach_ms(10, btn_intrupt);
-    transmit_beacon();
-    TickerForLoraBeacon.attach(10, transmit_beacon);
 }
 
 void stop_nortify_led()

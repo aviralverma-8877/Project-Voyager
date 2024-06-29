@@ -1,6 +1,5 @@
 #include<wifi_support.h>
 
-Ticker TickerForWiFiTimeout;
 WiFiBackup wifi_backup;
 
 void config_wifi()
@@ -95,7 +94,7 @@ void save_wifi_settings(String config)
         serial_print("WiFi Config saved");
     }
     file.close();
-    TickerForTimeOut.once(1,restart);
+    xTaskCreate(restart, "Restart", 6000, NULL, 1, NULL);
 }
 
 void setup_sta(const char* wifi_ssid, const char* wifi_pass)

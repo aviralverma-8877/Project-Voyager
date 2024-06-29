@@ -87,25 +87,21 @@ void set_lora_parameters()
 
 void enable_LoRa_file_tx_mode()
 {
-    TickerForLoraBeacon.detach();
     LoRa_txMode();
 }
 
 void disable_LoRa_file_tx_mode()
 {
-    TickerForLoraBeacon.attach(10, transmit_beacon);
     LoRa_rxMode();
 }
 
 void enable_LoRa_file_rx_mode()
 {
-    TickerForLoraBeacon.detach();
     LoRa_rxMode();
 }
 
 void disable_LoRa_file_rx_mode()
 {
-    TickerForLoraBeacon.attach(10, transmit_beacon);
 }
 
 void LoRa_rxMode(){
@@ -153,8 +149,8 @@ void onReceive(int packetSize)
         message = LoRa.readString();
         TaskParameters* taskParams = new TaskParameters();
         taskParams->data=message;
-        xTaskCreate(send_msg_to_ws, "lora message to ws", 6000, (void*)taskParams, 0, NULL);
-        xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 6000, (void*)taskParams, 0, NULL);
+        xTaskCreate(send_msg_to_ws, "lora message to ws", 6000, (void*)taskParams, 1, NULL);
+        xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 6000, (void*)taskParams, 1, NULL);
     }
 }
 

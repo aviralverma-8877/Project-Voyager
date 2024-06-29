@@ -19,7 +19,7 @@
     extern String mqtt_topic_to_publish;
 
     void ping_mqtt(String msg);
-    void connectToMqtt();
+    void connectToMqtt(void *param);
     void onMqttConnect(bool sessionPresent);
     void onMqttDisconnect(AsyncMqttClientDisconnectReason reason);
     void onMqttSubscribe(uint16_t packetId, uint8_t qos);

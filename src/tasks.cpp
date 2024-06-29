@@ -23,16 +23,6 @@ void ping_mqtt_timer()
     ping_mqtt(mqtt_ping);
 }
 
-void transmit_beacon()
-{
-    if(!lora_serial)
-    {
-        serial_print("Beacon Transmitted");
-        String beacon = device_becon();
-        LoRa_sendMessage(beacon);
-    }
-}
-
 void led_nortifier()
 {
     if(digitalRead(LED))

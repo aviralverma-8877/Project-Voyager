@@ -10,7 +10,6 @@
         String backup_config = "";
         bool backup_done = false;
     };
-    extern Ticker TickerForWiFiTimeout;
     extern WiFiBackup wifi_backup;
     void config_wifi();
     String get_wifi_setting();

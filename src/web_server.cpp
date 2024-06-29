@@ -1,7 +1,5 @@
 #include <web_server.h>
 
-Ticker TickerForTimeOut;
-Ticker TickerForTimeOut_2;
 AsyncWebServer server(80);
 
 void define_api()
@@ -166,7 +164,7 @@ void firmware_web_updater()
       if(Update.end(true)){
         if(DEBUG)
           Serial.printf("Update Success: %uB\n", index+len);
-        TickerForTimeOut.once(1, restart);
+        xTaskCreate(restart, "Restart", 6000, NULL, 1, NULL);
       } else {
         if(DEBUG)
           Update.printError(Serial);

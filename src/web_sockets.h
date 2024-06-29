@@ -5,7 +5,6 @@
     #include <support_method.h>
     #include <web_server.h>
     #include <ArduinoJson.h>
-    extern Ticker TickerForWSClientCleanup;
     extern AsyncWebSocket webSocket;
     extern bool ws_connected;
     void initWebSocket();
