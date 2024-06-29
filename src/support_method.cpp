@@ -108,7 +108,6 @@ void handle_operations(JsonDocument doc)
         if(lora_serial)
         {
             xTaskCreate(save_lora_serial_config, "save_lora_serial_config", 6000, NULL, 1, NULL);
-            xTaskCreate(serial_to_lora, "serial_to_lora", 6000, NULL, 1, NULL);
         }
         else
         {
@@ -148,71 +147,68 @@ void save_lora_serial_config(void* param)
 
 void serial_to_lora(void* param)
 {
-    while(lora_serial){
-        if(Serial.available())
-        {
-            String data = "";
-            while(Serial.available())
+    Serial.print("Serial LoRa mode");
+    while(true){
+        if(lora_serial)
+            if(Serial.available())
             {
-                data += Serial.readString();
+                LoRa_txMode();
+                LoRa.beginPacket();
+                while(Serial.available())
+                {
+                    LoRa.write(Serial.read());
+                }
+                LoRa.endPacket();
+                LoRa_rxMode();
             }
-            LoRa_sendRaw(data);
-        }
     }
     vTaskDelete(NULL);
 }
 
 void get_lora_serial()
 {
-    if (SPIFFS.exists("/config/lora_serial.json"))
-    {
-        File file = SPIFFS.open("/config/lora_serial.json");
-        serial_print("reading SPIFFS");
-        if(!file){
-            lora_serial = false;
-            return;
-        }
-        String lora_serial_config;
-        while(file.available()){
-            lora_serial_config += file.readString();
-        }
-        file.close();
-        JsonDocument doc;
-        deserializeJson(doc, lora_serial_config);
-        lora_serial = doc["lora_serial"];
+    File file = SPIFFS.open("/config/lora_serial.json");
+    if(!file){
+        lora_serial = false;
+        return;
     }
+    String lora_serial_config;
+    while(file.available()){
+        lora_serial_config += file.readString();
+    }
+    file.close();
+    JsonDocument doc;
+    deserializeJson(doc, lora_serial_config);
+    lora_serial = doc["lora_serial"];
+    xTaskCreate(serial_to_lora, "serial_to_lora", 6000, NULL, 1, NULL);
 }
 
 void get_username()
 {
     serial_print("get_username");
-    if (SPIFFS.exists("/config/user_data.json"))
+    File file = SPIFFS.open("/config/user_data.json");
+    if(!file){
+        username = WiFi.macAddress();
+        return;
+    }
+    String username_config;
+    while(file.available()){
+        username_config += file.readString();
+    }
+    file.close();
+    serial_print("Reading username");
+    JsonDocument doc;
+    deserializeJson(doc, username_config);
+    const char* uname = doc["username"];
+    if(strcmp(uname, "")==0)
     {
-        File file = SPIFFS.open("/config/user_data.json");
-        serial_print("reading SPIFFS");
-        if(!file){
-            username = WiFi.macAddress();
-            return;
-        }
-        String username_config;
-        while(file.available()){
-            username_config += file.readString();
-        }
-        file.close();
-        serial_print("Reading username");
-        JsonDocument doc;
-        deserializeJson(doc, username_config);
-        const char* uname = doc["username"];
-        if(strcmp(uname, "")==0)
-        {
-            username = WiFi.macAddress();
-            return;
-        }
-        else
-        {
-            username = uname;
-            return;
-        }
+        username = WiFi.macAddress();
+        return;
+    }
+    else
+    {
+        username = uname;
+        return;
     }
 }
 
