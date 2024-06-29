@@ -147,7 +147,6 @@ void save_lora_serial_config(void* param)
 
 void serial_to_lora(void* param)
 {
-    Serial.print("Serial LoRa mode");
     while(true){
         if(lora_serial)
             if(Serial.available())
@@ -158,8 +157,9 @@ void serial_to_lora(void* param)
                 {
                     LoRa.write(Serial.read());
                 }
-                LoRa.endPacket();
+                LoRa.endPacket(true);
                 LoRa_rxMode();
+                vTaskDelay(1000/portTICK_PERIOD_MS);
             }
     }
     vTaskDelete(NULL);
