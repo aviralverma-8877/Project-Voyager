@@ -116,7 +116,11 @@ void LoRa_txMode(){
 
 void LoRa_sendRaw(String data) {
     LoRa.beginPacket();
-    LoRa.print(data);
+    for(int i=0; i<data.length(); i++)
+    {
+        char r = data[i];
+        LoRa.write(r);
+    }
     LoRa.endPacket(true);
 }
 
@@ -146,7 +150,11 @@ void onReceive(int packetSize)
     }
     else{
         String message;
-        message = LoRa.readString();
+        while (LoRa.available())
+        {
+            char r = LoRa.read();
+            message += r;
+        }
         TaskParameters* taskParams = new TaskParameters();
         taskParams->data=message;
         xTaskCreate(send_msg_to_ws, "lora message to ws", 6000, (void*)taskParams, 1, NULL);

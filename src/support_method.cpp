@@ -265,6 +265,7 @@ void show_alert(String msg)
 
 void restart(void *param)
 {
+    vTaskDelay(500/portTICK_PERIOD_MS);
     serial_print("Restarting esp.");
     ESP.restart();
 }
