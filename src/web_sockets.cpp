@@ -32,7 +32,6 @@ void send_to_ws(String return_value)
 {
   if(ws_connected)
   {
-    serial_print(return_value);
     webSocket.textAll(return_value);
   }
 }

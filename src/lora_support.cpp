@@ -181,7 +181,7 @@ void send_msg_to_ws( void * parameters )
     doc["response_type"] = "lora_rx";
     doc["lora_msg"] = (String)params->data;
     String data;
-    serializeJson(doc, data);
+    serializeJsonPretty(doc, data);
     send_to_ws(data);
     vTaskDelete(NULL);
 }
