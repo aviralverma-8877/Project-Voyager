@@ -58,6 +58,7 @@ void connectToMqtt(void *param)
 {
     serial_print("Connecting to MQTT");
     mqttClient.connect();
+    vTaskDelete(NULL);
 }
 
 void onMqttConnect(bool sessionPresent) {
@@ -131,7 +132,9 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
     String raw_data = "voyager/"+mac+"/"+mqtt_topic_to_send_raw;
     if(strcmp(topic, raw_data.c_str()) == 0)
     {
-        LoRa_sendRaw(msg);
+        TaskParameters* taskParams = new TaskParameters();
+        taskParams->data=msg;
+        xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 6000, (void*)taskParams, 2, NULL);
     }
     else if(strcmp(topic, sub_topic.c_str()) == 0)
     {
@@ -141,6 +144,7 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
 
 void onMqttPublish(uint16_t packetId) {
     serial_print("MQTT message published.");
+    mqttClient.clearQueue();
 }
 
 void send_to_mqtt(String msg)

@@ -11,8 +11,7 @@
 // put function declarations here:
 
 void setup() {
-  if(DEBUG)
-    Serial.begin(BAUD);
+  Serial.begin(BAUD);
   if (!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED))
   {
     serial_print("SPIFFS Mount Failed");

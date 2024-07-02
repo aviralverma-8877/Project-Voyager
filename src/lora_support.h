@@ -11,13 +11,18 @@
     #define SS              LNSS
     #define RST             LRST
     #define IRQ             DIO0
+
+    struct TaskParameters {
+    String data;
+    };
+
     void setup_mqtt();
     void save_lora_config(String value);
     void enable_LoRa_file_tx_mode();
     void disable_LoRa_file_tx_mode();
     void enable_LoRa_file_rx_mode();
     void disable_LoRa_file_rx_mode();
-    void LoRa_sendRaw(String data);
+    void LoRa_sendRaw(void *param);
     void set_lora_parameters();
     void config_lora();
     void LoRa_rxMode();

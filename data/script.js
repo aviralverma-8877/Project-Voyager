@@ -226,7 +226,7 @@ function init_socket() {
       var data = JSON.parse(event.data);
       var response_type = data.response_type;
       //console.log("Web socket message recieved...");
-      //console.log(data);
+      console.log(data);
       if (response_type == "wifi_scan") {
         $("#wifi_scan_btn").html("Scan SSID");
         $("#wifi_scan_btn").attr("onclick", "scan_ssid()");

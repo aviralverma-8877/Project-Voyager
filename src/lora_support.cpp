@@ -1,8 +1,5 @@
 #include<lora_support.h>
 
-struct TaskParameters {
-  String data;
-};
 void config_lora()
 {
     serial_print("Configuring LORA");
@@ -114,7 +111,9 @@ void LoRa_txMode(){
     LoRa.disableInvertIQ();               // normal mode
 }
 
-void LoRa_sendRaw(String data) {
+void LoRa_sendRaw(void *param) {
+    TaskParameters* params = (TaskParameters*)param;
+    String data = params->data;
     LoRa.beginPacket();
     for(int i=0; i<data.length(); i++)
     {
@@ -122,6 +121,7 @@ void LoRa_sendRaw(String data) {
         LoRa.write(r);
     }
     LoRa.endPacket(true);
+    vTaskDelete(NULL);
 }
 
 void LoRa_sendMessage(String message) {
@@ -143,23 +143,24 @@ void onReceive(int packetSize)
 {
     if(lora_serial)
     {
-        while (LoRa.available())
+        for (int i=0; i<packetSize; i++)
         {
             Serial.write(LoRa.read());
         }        
     }
     else{
         String message;
-        while (LoRa.available())
+        for (int i=0; i<packetSize; i++)
         {
             char r = LoRa.read();
             message += r;
         }
         TaskParameters* taskParams = new TaskParameters();
         taskParams->data=message;
-        xTaskCreate(send_msg_to_ws, "lora message to ws", 6000, (void*)taskParams, 1, NULL);
-        xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 6000, (void*)taskParams, 1, NULL);
+        xTaskCreate(send_msg_to_ws, "lora message to ws", 12000, (void*)taskParams, 1, NULL);
+        xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 12000, (void*)taskParams, 1, NULL);
     }
+    LoRa.flush();
 }
 
 void send_msg_to_mqtt( void * parameters )
@@ -170,6 +171,7 @@ void send_msg_to_mqtt( void * parameters )
     doc["lora_msg"] = (String)params->data;
     String data;
     serializeJson(doc, data);
+    doc.clear();
     send_to_mqtt(data);
     vTaskDelete(NULL);
 }
@@ -182,6 +184,7 @@ void send_msg_to_ws( void * parameters )
     doc["lora_msg"] = (String)params->data;
     String data;
     serializeJsonPretty(doc, data);
+    doc.clear();
     send_to_ws(data);
     vTaskDelete(NULL);
 }

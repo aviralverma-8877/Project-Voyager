@@ -5,13 +5,21 @@ AsyncWebSocket webSocket("/ws");
 
 void initWebSocket() {
   serial_print("Initilizing Websockets");
+  webSocket.makeBuffer(6000);
   webSocket.onEvent(onEvent);
   server.addHandler(&webSocket);
+  xTaskCreate(cleanup_client, "Clean up client", 6000, NULL, 1, NULL);
 }
 
-void cleanup_client()
+void cleanup_client(void *param)
 {
-  webSocket.cleanupClients();
+  while(true)
+  {
+    if(ws_connected)
+      webSocket.cleanupClients();
+    vTaskDelay(100/portTICK_PERIOD_MS);
+  }
+  vTaskDelete(NULL);
 }
 
 void handle_ws_request(void *arg, uint8_t *data, size_t len)
