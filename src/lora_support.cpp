@@ -152,8 +152,7 @@ void onReceive(int packetSize)
         String message;
         while (LoRa.available())
         {
-            char r = LoRa.read();
-            message += r;
+            message += (char)LoRa.read();
         }
         TaskParameters* taskParams = new TaskParameters();
         taskParams->data=message;
