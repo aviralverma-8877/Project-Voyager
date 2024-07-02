@@ -162,48 +162,54 @@ void serial_to_lora(void* param)
 
 void get_lora_serial()
 {
-    File file = SPIFFS.open("/config/lora_serial.json");
-    if(!file){
-        lora_serial = false;
-        return;
+    if (SPIFFS.exists("/config/lora_serial.json"))
+    {
+        File file = SPIFFS.open("/config/lora_serial.json");
+        if(!file){
+            lora_serial = false;
+            return;
+        }
+        String lora_serial_config;
+        while(file.available()){
+            lora_serial_config += file.readString();
+        }
+        file.close();
+        JsonDocument doc;
+        deserializeJson(doc, lora_serial_config);
+        lora_serial = doc["lora_serial"];
+        xTaskCreate(serial_to_lora, "serial_to_lora", 6000, NULL, 1, NULL);
     }
-    String lora_serial_config;
-    while(file.available()){
-        lora_serial_config += file.readString();
-    }
-    file.close();
-    JsonDocument doc;
-    deserializeJson(doc, lora_serial_config);
-    lora_serial = doc["lora_serial"];
-    xTaskCreate(serial_to_lora, "serial_to_lora", 6000, NULL, 1, NULL);
 }
 
 void get_username()
 {
     serial_print("get_username");
-    File file = SPIFFS.open("/config/user_data.json");
-    if(!file){
-        username = WiFi.macAddress();
-        return;
-    }
-    String username_config;
-    while(file.available()){
-        username_config += file.readString();
-    }
-    file.close();
-    serial_print("Reading username");
-    JsonDocument doc;
-    deserializeJson(doc, username_config);
-    const char* uname = doc["username"];
-    if(strcmp(uname, "")==0)
+    if (SPIFFS.exists("/config/user_data.json"))
     {
-        username = WiFi.macAddress();
-        return;
-    }
-    else
-    {
-        username = uname;
-        return;
+        File file = SPIFFS.open("/config/user_data.json");
+        if(!file){
+            username = WiFi.macAddress();
+            return;
+        }
+        String username_config;
+        while(file.available()){
+            username_config += file.readString();
+        }
+        file.close();
+        serial_print("Reading username");
+        JsonDocument doc;
+        deserializeJson(doc, username_config);
+        const char* uname = doc["username"];
+        if(strcmp(uname, "")==0)
+        {
+            username = WiFi.macAddress();
+            return;
+        }
+        else
+        {
+            username = uname;
+            return;
+        }
     }
 }
 
