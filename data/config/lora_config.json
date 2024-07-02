@@ -1,8 +1,8 @@
 {
-    "freq" : 433E6,
-    "TxPower" : 10,
-    "SpreadingFactor" : 10,
-    "SignalBandwidth" : 500E3,
-    "CodingRate4" : 5,
-    "SyncWord" : 52
+    "freq": 510000000,
+    "TxPower": 10,
+    "SpreadingFactor": 9,
+    "SignalBandwidth": 250000,
+    "CodingRate4": 5,
+    "SyncWord": 52
 }
