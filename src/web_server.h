@@ -1,6 +1,7 @@
 #ifndef web_server
     #define web_server
     #include <Arduino.h>
+    #include <WiFi.h>
     #include <AsyncTCP.h>
     #include <ESPAsyncWebServer.h>
     #include <support_method.h>
