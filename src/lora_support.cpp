@@ -134,7 +134,9 @@ void LoRa_sendRaw(void *param) {
     vTaskDelete(NULL);
 }
 
-void LoRa_sendMessage(String message) {
+void LoRa_sendMessage(void *param)  {
+    TaskParameters* params = (TaskParameters*)param;
+    String message = (String)params->data;
     serial_print("LoRa_sendMessage");
     JsonDocument doc;
     doc["name"] = username;
@@ -157,6 +159,7 @@ void LoRa_sendMessage(String message) {
     LoRa.flush();
     lora_available_for_write = true;
     LoRa_rxMode();
+    vTaskDelete(NULL);
 }
 
 void onReceive(int packetSize)

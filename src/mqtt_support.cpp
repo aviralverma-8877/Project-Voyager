@@ -137,7 +137,9 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
     }
     else if(strcmp(topic, sub_topic.c_str()) == 0)
     {
-        LoRa_sendMessage(msg);
+        TaskParameters* taskParams = new TaskParameters();
+        taskParams->data=msg;
+        xTaskCreate(LoRa_sendMessage, "LoRa_sendMessage", 12000, (void*)taskParams, 2, NULL);
     }
 }
 

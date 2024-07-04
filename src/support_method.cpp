@@ -49,7 +49,9 @@ void handle_operations(JsonDocument doc)
     {
         String msg = doc["data"];
         bool get_response = doc["get_response"];
-        LoRa_sendMessage(msg);
+        TaskParameters* taskParams = new TaskParameters();
+        taskParams->data=msg;
+        xTaskCreate(LoRa_sendMessage, "LoRa_sendMessage", 12000, (void*)taskParams, 2, NULL);
         if(get_response)
             show_alert("LoRa msg transmitted successfully");
     }

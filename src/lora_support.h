@@ -32,7 +32,7 @@
     void config_lora();
     void LoRa_rxMode();
     void LoRa_txMode();
-    void LoRa_sendMessage(String message);
+    void LoRa_sendMessage(void *param);
     void onReceive(int packetSize);
     void onTxDone();
     void send_msg_to_mqtt( void * parameters );
