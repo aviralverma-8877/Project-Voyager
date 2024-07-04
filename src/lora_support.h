@@ -16,6 +16,8 @@
     String data;
     };
 
+    extern bool lora_available_for_write;
+
     void setup_mqtt();
     void save_lora_config(String value);
     void enable_LoRa_file_tx_mode();

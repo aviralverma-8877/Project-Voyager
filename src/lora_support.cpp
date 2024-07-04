@@ -1,5 +1,7 @@
 #include<lora_support.h>
 
+bool lora_available_for_write = true;
+
 void config_lora()
 {
     serial_print("Configuring LORA");
@@ -115,6 +117,9 @@ void LoRa_sendRaw(void *param) {
     serial_print("LoRa_sendRaw");
     TaskParameters* params = (TaskParameters*)param;
     String data = params->data;
+    while(!lora_available_for_write){}
+    lora_available_for_write=false;
+    LoRa.flush();
     LoRa.beginPacket();
     LoRa.write(data.length());
     for(int i=0; i<data.length(); i++)
@@ -124,6 +129,7 @@ void LoRa_sendRaw(void *param) {
     }
     LoRa.endPacket(true);
     LoRa.flush();
+    lora_available_for_write = true;
     vTaskDelete(NULL);
 }
 
@@ -136,6 +142,9 @@ void LoRa_sendMessage(String message) {
     String lora_payload;
     serializeJson(doc, lora_payload);
     LoRa_txMode();                        // set tx mode
+    while(!lora_available_for_write){}
+    lora_available_for_write=false;
+    LoRa.flush();
     LoRa.beginPacket();                   // start packet
     LoRa.write(lora_payload.length());
     for(int i=0; i<lora_payload.length(); i++)
@@ -145,6 +154,7 @@ void LoRa_sendMessage(String message) {
     }
     LoRa.endPacket(true);                 // finish packet and send it
     LoRa.flush();
+    lora_available_for_write = true;
     LoRa_rxMode();
 }
 
