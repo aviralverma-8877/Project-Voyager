@@ -1,8 +1,7 @@
 #include<lora_support.h>
 
-struct TaskParameters {
-  String data;
-};
+bool lora_available_for_write = true;
+
 void config_lora()
 {
     serial_print("Configuring LORA");
@@ -114,17 +113,28 @@ void LoRa_txMode(){
     LoRa.disableInvertIQ();               // normal mode
 }
 
-void LoRa_sendRaw(String data) {
+void LoRa_sendRaw(void *param) {
+    serial_print("LoRa_sendRaw");
+    TaskParameters* params = (TaskParameters*)param;
+    String data = params->data;
+    while(!lora_available_for_write){}
+    lora_available_for_write=false;
+    LoRa.flush();
     LoRa.beginPacket();
+    LoRa.write(data.length());
     for(int i=0; i<data.length(); i++)
     {
         char r = data[i];
         LoRa.write(r);
     }
     LoRa.endPacket(true);
+    LoRa.flush();
+    lora_available_for_write = true;
+    vTaskDelete(NULL);
 }
 
 void LoRa_sendMessage(String message) {
+    serial_print("LoRa_sendMessage");
     JsonDocument doc;
     doc["name"] = username;
     doc["mac"] = WiFi.macAddress();
@@ -132,33 +142,45 @@ void LoRa_sendMessage(String message) {
     String lora_payload;
     serializeJson(doc, lora_payload);
     LoRa_txMode();                        // set tx mode
-    LoRa.beginPacket();                   // start packet
-    LoRa.print(lora_payload);                  // add payload
-    LoRa.endPacket(true);                 // finish packet and send it
-    LoRa_rxMode();
+    while(!lora_available_for_write){}
+    lora_available_for_write=false;
     LoRa.flush();
+    LoRa.beginPacket();                   // start packet
+    LoRa.write(lora_payload.length());
+    for(int i=0; i<lora_payload.length(); i++)
+    {
+        char r = lora_payload[i];
+        LoRa.write(r);
+    }
+    LoRa.endPacket(true);                 // finish packet and send it
+    LoRa.flush();
+    lora_available_for_write = true;
+    LoRa_rxMode();
 }
 
 void onReceive(int packetSize)
 {
     if(lora_serial)
     {
-        while (LoRa.available())
+        for (int i=0; i<packetSize; i++)
         {
             Serial.write(LoRa.read());
         }        
     }
     else{
         String message;
-        while (LoRa.available())
+        int size = LoRa.read();
+        serial_print((String)size);
+        for (int i=0; i<size; i++)
         {
             message += (char)LoRa.read();
         }
         TaskParameters* taskParams = new TaskParameters();
         taskParams->data=message;
-        xTaskCreate(send_msg_to_ws, "lora message to ws", 6000, (void*)taskParams, 1, NULL);
-        xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 6000, (void*)taskParams, 1, NULL);
+        xTaskCreate(send_msg_to_ws, "lora message to ws", 12000, (void*)taskParams, 1, NULL);
+        xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 12000, (void*)taskParams, 1, NULL);
     }
+    LoRa.flush();
 }
 
 void send_msg_to_mqtt( void * parameters )
@@ -169,6 +191,7 @@ void send_msg_to_mqtt( void * parameters )
     doc["lora_msg"] = (String)params->data;
     String data;
     serializeJson(doc, data);
+    doc.clear();
     send_to_mqtt(data);
     vTaskDelete(NULL);
 }
@@ -180,7 +203,8 @@ void send_msg_to_ws( void * parameters )
     doc["response_type"] = "lora_rx";
     doc["lora_msg"] = (String)params->data;
     String data;
-    serializeJsonPretty(doc, data);
+    serializeJson(doc, data);
+    doc.clear();
     send_to_ws(data);
     vTaskDelete(NULL);
 }

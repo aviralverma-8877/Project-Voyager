@@ -11,6 +11,7 @@
     #include <ArduinoJson.h>
     #include <lora_support.h>
     #include <wifi_support.h>
+    #include <lora_support.h>
     #include "SPIFFS.h"
     extern bool lora_serial;
     extern String username;
