@@ -234,15 +234,14 @@ function init_socket() {
         var output = "";
         for (wifi_ssid in ssid_list) {
           wifi_ssid = ssid_list[wifi_ssid];
+          quality = 2 * (wifi_ssid.rssi + 100)
           output +=
             '<li class="list-group-item d-flex justify-content-between align-items-center">\
-            <a href="#" onclick="update_wifi_ssid(\'' +
+            <a href="#wifi_password" onclick="update_wifi_ssid(\'' +
             wifi_ssid.ssid +
             "')\">" +
             wifi_ssid.ssid +
-            '</a><span class="badge badge-primary badge-pill">' +
-            wifi_ssid.rssi +
-            "</span></li>";
+            ' ('+ quality +' %)</a></li>';
         }
         $("#wifi_ssid_list").html(output);
       }
