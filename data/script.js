@@ -67,23 +67,22 @@ function dashboard() {
   $("#navbar-dashboard").addClass("active");
   $.get("dashboard.html", function (data) {
     $("#main_content").html(data);
-    $.get('/lora_serial.json', function(config){
-      $("#lora_to_serial").attr("checked", config.lora_serial)
-      config_lora_to_serial_fields(config.lora_serial)
+    $.get("/lora_serial.json", function (config) {
+      $("#lora_to_serial").attr("checked", config.lora_serial);
+      config_lora_to_serial_fields(config.lora_serial);
       setTimeout(function () {
         get_username();
         set_sync_word();
-      }, 10);  
-    })
+      }, 10);
+    });
   });
 }
 
-function file_transfer()
-{
-  $.get("file_transfer.html", function(data){
+function file_transfer() {
+  $.get("file_transfer.html", function (data) {
     $("#main_content").html(data);
-    $.get('/lora_serial.json', function(config){
-      config_lora_to_serial_fields(config.lora_serial)  
+    $.get("/lora_serial.json", function (config) {
+      config_lora_to_serial_fields(config.lora_serial);
     });
   });
 }
@@ -222,8 +221,8 @@ function init_socket() {
     "ws://" + window.location.hostname + ":" + window.location.port + "/ws"
   );
   Socket.onmessage = function (event) {
-    console.log(event.data)
-    try{
+    console.log(event.data);
+    try {
       var data = JSON.parse(event.data);
       var response_type = data.response_type;
       //console.log("Web socket message recieved...");
@@ -235,14 +234,16 @@ function init_socket() {
         var output = "";
         for (wifi_ssid in ssid_list) {
           wifi_ssid = ssid_list[wifi_ssid];
-          quality = 2 * (wifi_ssid.rssi + 100)
+          quality = 2 * (wifi_ssid.rssi + 100);
           output +=
             '<li class="list-group-item d-flex justify-content-between align-items-center">\
             <a href="#wifi_password" onclick="update_wifi_ssid(\'' +
             wifi_ssid.ssid +
             "')\">" +
             wifi_ssid.ssid +
-            ' ('+ quality +' %)</a></li>';
+            " (" +
+            quality +
+            " %)</a></li>";
         }
         $("#wifi_ssid_list").html(output);
       }
@@ -258,9 +259,7 @@ function init_socket() {
             $("#file_download").attr("src", _href + data);
             return;
           }
-        } 
-        else 
-        {
+        } else {
           var uname = data.name;
           var data = JSON.parse(data.data);
           var pack_type = data["pack_type"];
@@ -300,8 +299,7 @@ function init_socket() {
       if (response_type == "set_sync_word") {
         set_sync_word(data.value);
       }
-    }
-    catch(e){
+    } catch (e) {
       console.log(e);
     }
   };
@@ -317,29 +315,26 @@ function init_socket() {
     }, 1000);
   };
   Socket.onerror = function (event) {
-    console.log("Error in websockets"+event);
+    console.log("Error in websockets" + event);
   };
 }
 
-function config_lora_to_serial_fields(val)
-{
-  if(val)
-  {
-    $(".lora_transmittion").attr("disabled","true");
-  }
-  else
-  {
+function config_lora_to_serial_fields(val) {
+  if (val) {
+    $(".lora_transmittion").attr("disabled", "true");
+  } else {
     $(".lora_transmittion").removeAttr("disabled");
-  } 
+  }
 }
 
-function set_lora_to_serial(val)
-{
+function set_lora_to_serial(val) {
   config_lora_to_serial_fields(val);
-  Socket.send(JSON.stringify({
-    "request-type": "set_serial_mode",
-    "value":val
-  }))
+  Socket.send(
+    JSON.stringify({
+      "request-type": "set_serial_mode",
+      value: val,
+    })
+  );
 }
 
 function set_freq_range(val) {
@@ -356,9 +351,8 @@ function set_coding_rate(val) {
   $("#selected_lora_coding_rate").html(val);
 }
 
-function reset_progress_bar()
-{
-  $("#file_upload_progress_bar").css("width","0%");
+function reset_progress_bar() {
+  $("#file_upload_progress_bar").css("width", "0%");
 }
 
 function file_broadcast() {
@@ -369,11 +363,11 @@ function file_broadcast() {
     const dataURL = reader.result;
     const chunkSize = parseInt($("#chunk_size").val());
     const waitTime = parseInt($("#wait_time").val());
-    if (chunkSize > 250 || chunkSize < 0) {
+    if (chunkSize > 200 || chunkSize < 0) {
       alert("packet size should be between 1-250");
       return;
     }
-    if (waitTime < 500) {
+    if (waitTime < 1000) {
       alert("Wait time should be greater than 500ms");
       return;
     }
@@ -399,7 +393,9 @@ function file_broadcast() {
         s += chunkSize;
         var percent = Math.abs((s / dataURL.length) * 100);
         $("#file_upload_progress_bar").css("width", percent + "%");
-        setTimeout(()=>{loop(s)}, waitTime);
+        setTimeout(() => {
+          loop(s);
+        }, waitTime);
       } else {
         Socket.send(
           JSON.stringify({
@@ -433,7 +429,9 @@ function file_broadcast() {
           get_response: false,
         })
       );
-      setTimeout(()=>{loop(0)}, 2000);
+      setTimeout(() => {
+        loop(0);
+      }, 2000);
     }, 2000);
   };
   reader.onerror = function (e) {
