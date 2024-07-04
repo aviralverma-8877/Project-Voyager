@@ -396,9 +396,9 @@ function file_broadcast() {
     function loop(s) {
       if (s < dataURL.length) {
         uploadChunk(dataURL.slice(s, s + chunkSize));
+        s += chunkSize;
         var percent = Math.abs((s / dataURL.length) * 100);
         $("#file_upload_progress_bar").css("width", percent + "%");
-        s += chunkSize;
         setTimeout(()=>{loop(s)}, waitTime);
       } else {
         Socket.send(
@@ -442,7 +442,7 @@ function file_broadcast() {
 }
 
 function uploadChunk(chunk) {
-  //console.log(chunk);
+  console.log(chunk);
   Socket.send(
     JSON.stringify({
       "request-type": "send_raw",
