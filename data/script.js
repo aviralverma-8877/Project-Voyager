@@ -217,6 +217,10 @@ function update_wifi_ssid(ssid) {
   $("#wifi_ssid").attr("value", ssid);
 }
 
+var total_packets = 0;
+var current_packet = 0;
+var file_data = "";
+
 function init_events() {
   var source = new EventSource("/rawEvents");
   source.addEventListener(
@@ -248,15 +252,20 @@ function init_events() {
     function (e) {
       data = e.data;
       console.log(data);
-      var _href = $("#file_download").attr("src");
-      $("#file_download").attr("src", _href + data);
+      file_data += data;
+      current_packet += 1;
+      var percent = (current_packet / total_packets) * 100;
+      $("#chunk_ratio").html(
+        "(" + current_packet + " / " + total_packets + ") Received"
+      );
+      $("#file_upload_progress_bar").css("width", percent + "%");
     },
     false
   );
 }
 
 function init_socket() {
-  //console.log("Initilizing web sockets.");
+  console.log("Initilizing web sockets.");
   Socket = new WebSocket(
     "ws://" + window.location.hostname + ":" + window.location.port + "/ws"
   );
@@ -308,9 +317,16 @@ function init_socket() {
         if (pack_type == "action") {
           action = data["data"];
           if (action == "enable_file_tx_mode") {
-            $("#file_download").attr("src", "");
+            total_packets = data["total_packets"];
+            current_packet = 0;
+            $("#file_upload_progress_bar").addClass("bg-success");
+            $("#chunk_ratio").html(
+              "Total " + total_packets + " file chunks will be recieved."
+            );
+            file_data = "";
             start_file_transfer_mode();
           } else if (action == "disable_file_tx_mode") {
+            $("#file_download").attr("src", file_data);
             stop_file_transfer_mode();
           }
         }
@@ -390,7 +406,7 @@ function file_broadcast() {
       return;
     }
     if (waitTime < 1000) {
-      alert("Wait time should be greater than 500ms");
+      alert("Wait time should be greater than 1000ms");
       return;
     }
     const total_chunk = Math.floor(dataURL.length / chunkSize);
@@ -409,6 +425,7 @@ function file_broadcast() {
         s +
         "."
     );
+    $("#file_upload_progress_bar").removeClass("bg-success");
     function loop(s) {
       if (s < dataURL.length) {
         uploadChunk(dataURL.slice(s, s + chunkSize));
@@ -438,6 +455,7 @@ function file_broadcast() {
       tx_msg = {
         pack_type: "action",
         data: "enable_file_tx_mode",
+        total_packets: total_chunk,
       };
       Socket.send(
         JSON.stringify({
@@ -461,7 +479,7 @@ function uploadChunk(chunk) {
   Socket.send(
     JSON.stringify({
       "request-type": "send_raw",
-      val: JSON.stringify(chunk),
+      val: chunk,
     })
   );
 }
