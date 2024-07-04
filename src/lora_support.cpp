@@ -112,19 +112,23 @@ void LoRa_txMode(){
 }
 
 void LoRa_sendRaw(void *param) {
+    serial_print("LoRa_sendRaw");
     TaskParameters* params = (TaskParameters*)param;
     String data = params->data;
     LoRa.beginPacket();
+    LoRa.write(data.length());
     for(int i=0; i<data.length(); i++)
     {
         char r = data[i];
         LoRa.write(r);
     }
     LoRa.endPacket(true);
+    LoRa.flush();
     vTaskDelete(NULL);
 }
 
 void LoRa_sendMessage(String message) {
+    serial_print("LoRa_sendMessage");
     JsonDocument doc;
     doc["name"] = username;
     doc["mac"] = WiFi.macAddress();
@@ -133,10 +137,15 @@ void LoRa_sendMessage(String message) {
     serializeJson(doc, lora_payload);
     LoRa_txMode();                        // set tx mode
     LoRa.beginPacket();                   // start packet
-    LoRa.print(lora_payload);                  // add payload
+    LoRa.write(lora_payload.length());
+    for(int i=0; i<lora_payload.length(); i++)
+    {
+        char r = lora_payload[i];
+        LoRa.write(r);
+    }
     LoRa.endPacket(true);                 // finish packet and send it
-    LoRa_rxMode();
     LoRa.flush();
+    LoRa_rxMode();
 }
 
 void onReceive(int packetSize)
@@ -150,7 +159,9 @@ void onReceive(int packetSize)
     }
     else{
         String message;
-        for (int i=0; i<packetSize; i++)
+        int size = LoRa.read();
+        serial_print((String)size);
+        for (int i=0; i<size; i++)
         {
             char r = LoRa.read();
             message += r;
@@ -183,7 +194,7 @@ void send_msg_to_ws( void * parameters )
     doc["response_type"] = "lora_rx";
     doc["lora_msg"] = (String)params->data;
     String data;
-    serializeJsonPretty(doc, data);
+    serializeJson(doc, data);
     doc.clear();
     send_to_ws(data);
     vTaskDelete(NULL);

@@ -222,11 +222,12 @@ function init_socket() {
     "ws://" + window.location.hostname + ":" + window.location.port + "/ws"
   );
   Socket.onmessage = function (event) {
+    console.log(event.data)
     try{
       var data = JSON.parse(event.data);
       var response_type = data.response_type;
       //console.log("Web socket message recieved...");
-      console.log(data);
+      // console.log(data);
       if (response_type == "wifi_scan") {
         $("#wifi_scan_btn").html("Scan SSID");
         $("#wifi_scan_btn").attr("onclick", "scan_ssid()");
@@ -376,7 +377,6 @@ function file_broadcast() {
       alert("Wait time should be greater than 500ms");
       return;
     }
-    let start = 0;
     const total_chunk = Math.floor(dataURL.length / chunkSize);
     const time_estimate = Math.abs(total_chunk * (waitTime / 1000));
     var h = Math.floor(time_estimate / 3600);
@@ -393,13 +393,13 @@ function file_broadcast() {
         s +
         "."
     );
-    function loop() {
-      if (start < dataURL.length) {
-        uploadChunk(dataURL.slice(start, start + chunkSize));
-        start += chunkSize;
-        var percent = Math.abs((start / dataURL.length) * 100);
+    function loop(s) {
+      if (s < dataURL.length) {
+        uploadChunk(dataURL.slice(s, s + chunkSize));
+        s += chunkSize;
+        var percent = Math.abs((s / dataURL.length) * 100);
         $("#file_upload_progress_bar").css("width", percent + "%");
-        setTimeout(loop, waitTime);
+        setTimeout(()=>{loop(s)}, waitTime);
       } else {
         Socket.send(
           JSON.stringify({
@@ -433,7 +433,7 @@ function file_broadcast() {
           get_response: false,
         })
       );
-      setTimeout(loop, 2000);
+      setTimeout(()=>{loop(0)}, 2000);
     }, 2000);
   };
   reader.onerror = function (e) {
