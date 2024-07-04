@@ -86,22 +86,6 @@ void handle_operations(JsonDocument doc)
         packets.push(&val);
         xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 6000, NULL, 2, NULL);
     }
-    if(strcmp(request_type, "enable_LoRa_file_tx_mode") == 0)
-    {
-        enable_LoRa_file_tx_mode();
-    }
-    if(strcmp(request_type, "disable_LoRa_file_tx_mode") == 0)
-    {
-        disable_LoRa_file_tx_mode();
-    }
-    if(strcmp(request_type, "enable_LoRa_file_rx_mode") == 0)
-    {
-        enable_LoRa_file_rx_mode();
-    }
-    if(strcmp(request_type, "disable_LoRa_file_rx_mode") == 0)
-    {
-        disable_LoRa_file_rx_mode();
-    }
     if(strcmp(request_type, "set_serial_mode")==0)
     {
         lora_serial = doc["value"];
@@ -149,7 +133,6 @@ void serial_to_lora(void* param)
         if(lora_serial)
             if(Serial.available())
             {
-                vTaskDelay(500/portTICK_PERIOD_MS);
                 LoRa_txMode();
                 LoRa.beginPacket();
                 while(Serial.available())

@@ -277,18 +277,8 @@ function init_socket() {
           action = data["data"];
           if (action == "enable_file_tx_mode") {
             $("#file_download").attr("src", "");
-            Socket.send(
-              JSON.stringify({
-                "request-type": "enable_LoRa_file_rx_mode",
-              })
-            );
             start_file_transfer_mode();
           } else if (action == "disable_file_tx_mode") {
-            Socket.send(
-              JSON.stringify({
-                "request-type": "disable_LoRa_file_rx_mode",
-              })
-            );
             stop_file_transfer_mode();
           }
         }
@@ -412,11 +402,6 @@ function file_broadcast() {
         );
       }
     }
-    Socket.send(
-      JSON.stringify({
-        "request-type": "enable_LoRa_file_tx_mode",
-      })
-    );
     setTimeout(() => {
       tx_msg = {
         pack_type: "action",

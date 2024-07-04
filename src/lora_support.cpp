@@ -85,25 +85,6 @@ void set_lora_parameters()
     }
 }
 
-void enable_LoRa_file_tx_mode()
-{
-    LoRa_txMode();
-}
-
-void disable_LoRa_file_tx_mode()
-{
-    LoRa_rxMode();
-}
-
-void enable_LoRa_file_rx_mode()
-{
-    LoRa_rxMode();
-}
-
-void disable_LoRa_file_rx_mode()
-{
-}
-
 void LoRa_rxMode(){
     LoRa.enableInvertIQ();                // active invert I and Q signals
     LoRa.receive();                       // set receive mode
@@ -118,6 +99,7 @@ void LoRa_sendRaw(void *param) {
     serial_print("LoRa_sendRaw");
     String data;
     packets.pop(&data);
+    LoRa_txMode();
     while(!lora_available_for_write){}
     lora_available_for_write=false;
     LoRa.flush();
@@ -130,6 +112,7 @@ void LoRa_sendRaw(void *param) {
     }
     LoRa.endPacket(true);
     LoRa.flush();
+    LoRa_rxMode();
     vTaskDelay(500/portTICK_PERIOD_MS);
     lora_available_for_write = true;
     vTaskDelete(NULL);
