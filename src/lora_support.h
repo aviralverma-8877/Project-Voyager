@@ -4,6 +4,7 @@
     #include <SPI.h>
     #include <LoRa.h>
     #include <support_method.h>
+    #include <cppQueue.h>
     #include "mqtt_support.h"
     #define SCK             LSCK
     #define MISO            LMISO
@@ -11,7 +12,9 @@
     #define SS              LNSS
     #define RST             LRST
     #define IRQ             DIO0
+    #define	IMPLEMENTATION	LIFO
 
+    extern cppQueue packets;
     struct TaskParameters {
     String data;
     };

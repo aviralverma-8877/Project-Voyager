@@ -1,5 +1,6 @@
 #include<lora_support.h>
 
+cppQueue packets(sizeof(String), 10, IMPLEMENTATION);
 bool lora_available_for_write = true;
 
 void config_lora()
@@ -115,8 +116,8 @@ void LoRa_txMode(){
 
 void LoRa_sendRaw(void *param) {
     serial_print("LoRa_sendRaw");
-    TaskParameters* params = (TaskParameters*)param;
-    String data = params->data;
+    String data;
+    packets.pop(&data);
     while(!lora_available_for_write){}
     lora_available_for_write=false;
     LoRa.flush();

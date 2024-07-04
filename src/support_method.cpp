@@ -81,9 +81,8 @@ void handle_operations(JsonDocument doc)
     {
         String val = doc["val"];
         serial_print(val);
-        TaskParameters* taskParams = new TaskParameters();
-        taskParams->data=val;
-        xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 6000, (void*)taskParams, 2, NULL);
+        packets.push(&val);
+        xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 6000, NULL, 2, NULL);
     }
     if(strcmp(request_type, "enable_LoRa_file_tx_mode") == 0)
     {
