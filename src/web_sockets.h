@@ -8,9 +8,12 @@
     #include <web_server.h>
     #include <ArduinoJson.h>
     extern AsyncWebSocket webSocket;
+    extern AsyncEventSource rawEvents;
     extern bool ws_connected;
     void initWebSocket();
+    void onRawEvents(AsyncEventSourceClient *client);
     void cleanup_client(void *param);
+    void send_to_events(const char* return_value, const char* topic);
     void send_to_ws(String return_value);
     void handle_ws_request(void *arg, uint8_t *data, size_t len);
     void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,

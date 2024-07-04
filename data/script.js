@@ -1,6 +1,7 @@
 var hostname_url;
 $(document).ready(function () {
   init_socket();
+  init_events();
   get_hostname();
 });
 
@@ -215,6 +216,45 @@ function isJSON(str) {
 function update_wifi_ssid(ssid) {
   $("#wifi_ssid").attr("value", ssid);
 }
+
+function init_events() {
+  var source = new EventSource("/rawEvents");
+  source.addEventListener(
+    "open",
+    function (e) {
+      console.log("Events Connected");
+    },
+    false
+  );
+  source.addEventListener(
+    "error",
+    function (e) {
+      if (e.target.readyState != EventSource.OPEN) {
+        console.log("Events Disconnected");
+      }
+    },
+    false
+  );
+  source.addEventListener(
+    "message",
+    function (e) {
+      console.log("message", e.data);
+    },
+    false
+  );
+
+  source.addEventListener(
+    "RAW_DATA",
+    function (e) {
+      data = e.data;
+      console.log(data);
+      var _href = $("#file_download").attr("src");
+      $("#file_download").attr("src", _href + data);
+    },
+    false
+  );
+}
+
 function init_socket() {
   //console.log("Initilizing web sockets.");
   Socket = new WebSocket(
@@ -253,25 +293,17 @@ function init_socket() {
       }
       if (response_type == "lora_rx") {
         data = JSON.parse(data.lora_msg);
-        if (typeof data == "string") {
-          if (file_transfer_mode) {
-            var _href = $("#file_download").attr("src");
-            $("#file_download").attr("src", _href + data);
-            return;
-          }
-        } else {
-          var uname = data.name;
-          var data = JSON.parse(data.data);
-          var pack_type = data["pack_type"];
-          if (pack_type == "beacon") {
-            //console.log("beacon from " + mac);
-          }
-          if (pack_type == "msg") {
-            msg = data["data"];
-            $("#lora_rx_msg").prepend(
-              "<li class='list-group-item'>" + uname + " : " + msg + "</li>"
-            );
-          }
+        var uname = data.name;
+        var data = JSON.parse(data.data);
+        var pack_type = data["pack_type"];
+        if (pack_type == "beacon") {
+          //console.log("beacon from " + mac);
+        }
+        if (pack_type == "msg") {
+          msg = data["data"];
+          $("#lora_rx_msg").prepend(
+            "<li class='list-group-item'>" + uname + " : " + msg + "</li>"
+          );
         }
         if (pack_type == "action") {
           action = data["data"];
@@ -294,13 +326,13 @@ function init_socket() {
     }
   };
   Socket.onopen = function (event) {
-    //console.log("Connected to web sockets...");
+    console.log("Connected to web sockets...");
     dashboard();
   };
   Socket.onclose = function (event) {
-    //console.log("Connection to websockets closed....");
+    console.log("Connection to websockets closed....");
     setTimeout(function () {
-      //console.log("Retrying websocket connection....");
+      console.log("Retrying websocket connection....");
       init_socket();
     }, 1000);
   };

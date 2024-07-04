@@ -105,6 +105,7 @@ void LoRa_sendRaw(void *param) {
     LoRa.flush();
     LoRa.beginPacket();
     LoRa.write(data.length());
+    LoRa.write(RAW_DATA);
     for(int i=0; i<data.length(); i++)
     {
         char r = data[i];
@@ -134,6 +135,7 @@ void LoRa_sendMessage(void *param)  {
     LoRa.flush();
     LoRa.beginPacket();                   // start packet
     LoRa.write(lora_payload.length());
+    LoRa.write(LORA_MSG);
     for(int i=0; i<lora_payload.length(); i++)
     {
         char r = lora_payload[i];
@@ -159,6 +161,7 @@ void onReceive(int packetSize)
     else{
         String message;
         int size = LoRa.read();
+        int type = LoRa.read();
         serial_print((String)size);
         for (int i=0; i<size; i++)
         {
@@ -166,7 +169,18 @@ void onReceive(int packetSize)
         }
         TaskParameters* taskParams = new TaskParameters();
         taskParams->data=message;
-        xTaskCreate(send_msg_to_ws, "lora message to ws", 12000, (void*)taskParams, 1, NULL);
+        switch (type)
+        {
+            case RAW_DATA:
+                xTaskCreate(send_msg_to_events, "lora message to ws", 12000, (void*)taskParams, 1, NULL);
+                break;
+            case LORA_MSG:
+                xTaskCreate(send_msg_to_ws, "lora message to ws", 12000, (void*)taskParams, 1, NULL);
+                break;      
+            default:
+                break;
+        }
+        
         xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 12000, (void*)taskParams, 1, NULL);
     }
     LoRa.flush();
@@ -182,6 +196,14 @@ void send_msg_to_mqtt( void * parameters )
     serializeJson(doc, data);
     doc.clear();
     send_to_mqtt(data);
+    vTaskDelete(NULL);
+}
+
+void send_msg_to_events(void * parameters)
+{
+    TaskParameters* params = (TaskParameters*)parameters;
+    String data = (String)params->data;
+    send_to_events(data.c_str(), "RAW_DATA");
     vTaskDelete(NULL);
 }
 

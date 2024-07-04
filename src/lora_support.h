@@ -13,6 +13,8 @@
     #define RST             LRST
     #define IRQ             DIO0
     #define	IMPLEMENTATION	LIFO
+    #define LORA_MSG 0
+    #define RAW_DATA 1
 
     extern cppQueue packets;
     struct TaskParameters {
@@ -31,6 +33,7 @@
     void LoRa_sendMessage(void *param);
     void onReceive(int packetSize);
     void onTxDone();
+    void send_msg_to_events(void * parameters);
     void send_msg_to_mqtt( void * parameters );
     void send_msg_to_ws( void * parameter );
 #endif

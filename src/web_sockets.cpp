@@ -2,11 +2,13 @@
 
 bool ws_connected = false;
 AsyncWebSocket webSocket("/ws");
+AsyncEventSource rawEvents("/rawEvents");
 
 void initWebSocket() {
   serial_print("Initilizing Websockets");
-  webSocket.makeBuffer(6000);
   webSocket.onEvent(onEvent);
+  rawEvents.onConnect(onRawEvents);
+  server.addHandler(&rawEvents);
   server.addHandler(&webSocket);
   xTaskCreate(cleanup_client, "Clean up client", 6000, NULL, 1, NULL);
 }
@@ -36,11 +38,22 @@ void handle_ws_request(void *arg, uint8_t *data, size_t len)
   handle_operations(doc);
 }
 
+void send_to_events(const char* return_value, const char* topic)
+{
+  rawEvents.send(return_value, topic);
+}
+
 void send_to_ws(String return_value)
 {
   if(ws_connected)
   {
     webSocket.textAll(return_value);
+  }
+}
+
+void onRawEvents(AsyncEventSourceClient *client){
+  if(client->lastId()){
+    serial_print("Client reconnected! Last message ID that it got is: "+client->lastId());
   }
 }
 
