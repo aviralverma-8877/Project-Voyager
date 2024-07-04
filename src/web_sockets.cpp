@@ -15,11 +15,10 @@ void initWebSocket() {
 
 void cleanup_client(void *param)
 {
-  while(true)
+  for (;;)
   {
-    if(ws_connected)
-      webSocket.cleanupClients();
-    vTaskDelay(100/portTICK_PERIOD_MS);
+    webSocket.cleanupClients();
+    vTaskDelay(10/portTICK_PERIOD_MS);
   }
   vTaskDelete(NULL);
 }
