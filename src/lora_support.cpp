@@ -130,6 +130,7 @@ void LoRa_sendRaw(void *param) {
     }
     LoRa.endPacket(true);
     LoRa.flush();
+    vTaskDelay(500/portTICK_PERIOD_MS);
     lora_available_for_write = true;
     vTaskDelete(NULL);
 }
@@ -157,8 +158,9 @@ void LoRa_sendMessage(void *param)  {
     }
     LoRa.endPacket(true);                 // finish packet and send it
     LoRa.flush();
-    lora_available_for_write = true;
     LoRa_rxMode();
+    vTaskDelay(500/portTICK_PERIOD_MS);
+    lora_available_for_write = true;
     vTaskDelete(NULL);
 }
 
