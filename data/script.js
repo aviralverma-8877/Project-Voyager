@@ -253,12 +253,13 @@ function init_events() {
       data = e.data;
       console.log(data);
       file_data += data;
-      current_packet += 1;
-      var percent = (current_packet / total_packets) * 100;
       $("#chunk_ratio").html(
         "(" + current_packet + " / " + total_packets + ") Received"
       );
+      current_packet += 1;
+      var percent = (current_packet / total_packets) * 100;
       $("#file_upload_progress_bar").css("width", percent + "%");
+      $("#file_download").attr("src", file_data);
     },
     false
   );
@@ -401,6 +402,7 @@ function file_broadcast() {
     const dataURL = reader.result;
     const chunkSize = parseInt($("#chunk_size").val());
     const waitTime = parseInt($("#wait_time").val());
+    $("#file_download").attr("src", "");
     if (chunkSize > 200 || chunkSize < 0) {
       alert("packet size should be between 1-250");
       return;
@@ -475,6 +477,8 @@ function file_broadcast() {
 }
 
 function uploadChunk(chunk) {
+  var _href = $("#file_download").attr("src");
+  $("#file_download").attr("src", _href+chunk);
   console.log(chunk);
   Socket.send(
     JSON.stringify({
