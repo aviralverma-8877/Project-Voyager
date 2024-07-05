@@ -32,7 +32,7 @@ void setup() {
   initWebSocket();
   
   config_lora();
-  setupTickers();
+  setupTasks();
   serial_print("config done");
 }
 

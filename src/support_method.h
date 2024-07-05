@@ -1,7 +1,6 @@
 #ifndef support_methods
     #define support_methods
     #include <Arduino.h>
-    #include <Ticker.h>
     #include <string.h>
     #include <oled_display.h>
     #include <tasks.h>
@@ -17,8 +16,6 @@
     extern String username;
     extern String hostname;
     extern DNSServer dnsServer;
-    extern Ticker TickerForMQTTPing;
-    extern Ticker TickerForLedNotification;
 
     void serial_to_lora(void* param);
     void get_lora_serial();
@@ -30,7 +27,7 @@
     void restart(void *param);
     void config_gpios();
     void serial_print(String msg);
-    void setupTickers();
+    void setupTasks();
     void stop_nortify_led();
     void nortify_led();
     void show_alert(String msg);

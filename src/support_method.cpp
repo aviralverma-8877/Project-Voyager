@@ -4,9 +4,6 @@ bool lora_serial = false;
 String username;
 String hostname;
 DNSServer dnsServer;
-Ticker TickerForMQTTPing;
-Ticker TickerForBtnPresses;
-Ticker TickerForLedNotification;
 
 void handle_operations(JsonDocument doc)
 {
@@ -14,7 +11,7 @@ void handle_operations(JsonDocument doc)
     if(strcmp(request_type, "wifi_ssid_scan") == 0)
     {
         String json_string;
-        xTaskCreatePinnedToCore(scan_ssid, "scan_wifi", 6000, NULL, 1, NULL, 0);
+        xTaskCreate(scan_ssid, "scan_wifi", 6000, NULL, 1, NULL);
     }
     if(strcmp(request_type, "connect_wifi") == 0)
     {
@@ -226,13 +223,11 @@ void reset_device(void *param)
     clear_oled_display();
     display_buffer[1].msg = "Resetting";
     display_text_oled();
-    serial_print("Stopping WiFi and tickers");
+    serial_print("Stopping WiFi");
     if (WiFi.status() == WL_CONNECTED)
     {
         WiFi.disconnect();
     }
-    TickerForBtnPresses.detach();
-    TickerForLedNotification.detach();
     serial_print("Formatting SPIFFS");
     bool formatted = SPIFFS.format();
     if (formatted)
@@ -290,7 +285,10 @@ void setup_dns()
 void dns_request_process(void *parameter)
 {
     for(;;)
+    {
         dnsServer.processNextRequest();
+        vTaskDelay(10/portTICK_PERIOD_MS);
+    }
     vTaskDelete(NULL);
 }
 
@@ -310,21 +308,22 @@ void serial_print(String msg)
     }
 }
 
-void setupTickers()
+void setupTasks()
 {
-    TickerForBtnPresses.attach_ms(10, btn_intrupt);
+    xTaskCreate(btn_intrupt, "btn_intrupt", 6000, NULL, 2, NULL);
+    xTaskCreate(led_nortifier, "led_nortifier", 6000, NULL, 1, NULL);
 }
 
 void stop_nortify_led()
 {
-    TickerForLedNotification.detach();
+    notify = false;
     digitalWrite(LED, LOW);
 }
 
 void nortify_led()
 {
     serial_print("Nortify");
-    TickerForLedNotification.attach_ms(500, led_nortifier);
+    notify = true;
 }
 
 String device_becon()

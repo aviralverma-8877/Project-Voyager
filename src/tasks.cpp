@@ -1,6 +1,6 @@
 #include <tasks.h>
 
-bool notify = true;
+bool notify = false;
 bool btn_1_pressed = false;
 bool btn_2_pressed = false;
 
@@ -12,63 +12,82 @@ void wifi_connection_check()
     }
 }
 
-void ping_mqtt_timer()
+void ping_mqtt_timer(void *param)
 {
-    String mac = WiFi.macAddress();
-    JsonDocument doc;
-    doc["mac"] = mac;
-    doc["uname"] = username;
-    String mqtt_ping;
-    serializeJson(doc, mqtt_ping);
-    ping_mqtt(mqtt_ping);
+    while(true)
+    {
+        if(mqttClient.connected())
+        {
+            String mac = WiFi.macAddress();
+            JsonDocument doc;
+            doc["mac"] = mac;
+            doc["uname"] = username;
+            String mqtt_ping;
+            serializeJson(doc, mqtt_ping);
+            ping_mqtt(mqtt_ping);
+        }
+        vTaskDelay(MQTT_PING_TIME/portTICK_PERIOD_MS);
+    }
+    vTaskDelete(NULL);
 }
 
-void led_nortifier()
+void led_nortifier(void *param)
 {
-    if(digitalRead(LED))
+    while(notify)
     {
-        digitalWrite(LED, LOW);
+        if(digitalRead(LED))
+        {
+            digitalWrite(LED, LOW);
+            vTaskDelay(NOTIFY_LED_DELAY/portTICK_PERIOD_MS);
+        }
+        else
+        {
+            digitalWrite(LED, HIGH);
+            vTaskDelay(NOTIFY_LED_DELAY/portTICK_PERIOD_MS);
+        }
     }
-    else
-    {
-        digitalWrite(LED, HIGH);
-    }
+    vTaskDelete(NULL);
 }
 
-void btn_intrupt()
+void btn_intrupt(void *param)
 {
-    if(digitalRead(BTN1) == STATE)
+    while(true)
     {
-        if(!btn_1_pressed)
+        if(digitalRead(BTN1) == STATE)
         {
-            btn_1_pressed = true;
-            serial_print("BUTTON 1 Pressed");
-            stop_nortify_led();
+            if(!btn_1_pressed)
+            {
+                btn_1_pressed = true;
+                serial_print("BUTTON 1 Pressed");
+                stop_nortify_led();
+            }
         }
-    }
-    else
-    {
-        if(btn_1_pressed)
+        else
         {
-            serial_print("BUTTON 1 Released");
-            btn_1_pressed = false;
+            if(btn_1_pressed)
+            {
+                serial_print("BUTTON 1 Released");
+                btn_1_pressed = false;
+            }
         }
-    }
-    if(digitalRead(BTN2) == STATE)
-    {
-        if(!btn_2_pressed)
+        
+        if(digitalRead(BTN2) == STATE)
         {
-            btn_2_pressed = true;
-            serial_print("BUTTON 2 Pressed");
+            if(!btn_2_pressed)
+            {
+                btn_2_pressed = true;
+                serial_print("BUTTON 2 Pressed");
+            }
         }
-    }
-    else
-    {
-        if(btn_2_pressed)
+        else
         {
-            serial_print("BUTTON 2 Released");
-            btn_2_pressed = false;
+            if(btn_2_pressed)
+            {
+                serial_print("BUTTON 2 Released");
+                btn_2_pressed = false;
+            }
         }
+        vTaskDelay(100/portTICK_PERIOD_MS);
     }
 }
 
