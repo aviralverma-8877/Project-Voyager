@@ -102,7 +102,6 @@ void LoRa_sendRaw(void *param) {
     LoRa_txMode();
     while(!lora_available_for_write){}
     lora_available_for_write=false;
-    LoRa.flush();
     LoRa.beginPacket();
     LoRa.write(data.length());
     LoRa.write(RAW_DATA);
@@ -112,7 +111,6 @@ void LoRa_sendRaw(void *param) {
         LoRa.write(r);
     }
     LoRa.endPacket(true);
-    LoRa.flush();
     LoRa_rxMode();
     vTaskDelay(500/portTICK_PERIOD_MS);
     lora_available_for_write = true;
@@ -132,7 +130,6 @@ void LoRa_sendMessage(void *param)  {
     LoRa_txMode();                        // set tx mode
     while(!lora_available_for_write){}
     lora_available_for_write=false;
-    LoRa.flush();
     LoRa.beginPacket();                   // start packet
     LoRa.write(lora_payload.length());
     LoRa.write(LORA_MSG);
@@ -142,7 +139,6 @@ void LoRa_sendMessage(void *param)  {
         LoRa.write(r);
     }
     LoRa.endPacket(true);                 // finish packet and send it
-    LoRa.flush();
     LoRa_rxMode();
     vTaskDelay(500/portTICK_PERIOD_MS);
     lora_available_for_write = true;
@@ -180,10 +176,8 @@ void onReceive(int packetSize)
             default:
                 break;
         }
-        
         xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 12000, (void*)taskParams, 1, NULL);
     }
-    LoRa.flush();
 }
 
 void send_msg_to_mqtt( void * parameters )
