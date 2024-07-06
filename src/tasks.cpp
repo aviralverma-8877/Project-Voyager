@@ -24,6 +24,7 @@ void ping_mqtt_timer(void *param)
             doc["uname"] = username;
             String mqtt_ping;
             serializeJson(doc, mqtt_ping);
+            doc.clear();
             ping_mqtt(mqtt_ping);
         }
         vTaskDelay(MQTT_PING_TIME/portTICK_PERIOD_MS);

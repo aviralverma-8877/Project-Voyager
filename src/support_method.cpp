@@ -25,10 +25,12 @@ void handle_operations(JsonDocument doc)
         serial_print(wifi_config);
         JsonDocument wifi_conf;
         deserializeJson(wifi_conf, wifi_config);
+        wifi_conf.shrinkToFit();
         wifi_conf["wifi_function"] = "STA";
         wifi_conf["wifi_ssid"] = wifi_ssid;
         wifi_conf["wifi_pass"] = psk;
         serializeJsonPretty(wifi_conf, wifi_config);
+        wifi_conf.clear();
         serial_print(wifi_config);
         // writing wifi config
         save_wifi_settings(wifi_config);
@@ -67,6 +69,7 @@ void handle_operations(JsonDocument doc)
         doc["uname"] = username;
         String return_value;
         serializeJson(doc, return_value);
+        doc.clear();
         send_to_ws(return_value);
     }
     if(strcmp(request_type, "set_lora_config") == 0)
@@ -102,6 +105,7 @@ void handle_operations(JsonDocument doc)
         doc["value"] = lora_serial;
         String return_value;
         serializeJson(doc, return_value);
+        doc.clear();
         send_to_ws(return_value);
     }
 }
@@ -112,6 +116,7 @@ void save_lora_serial_config(void* param)
     doc["lora_serial"] = lora_serial;
     String config;
     serializeJson(doc, config);
+    doc.clear();
     File file = SPIFFS.open("/config/lora_serial.json", FILE_WRITE);
     if(!file){
         Serial.println("No LoRa serial config file present.");
@@ -160,7 +165,9 @@ void get_lora_serial()
         file.close();
         JsonDocument doc;
         deserializeJson(doc, lora_serial_config);
+        doc.shrinkToFit();
         lora_serial = doc["lora_serial"];
+        doc.clear();
         xTaskCreate(serial_to_lora, "serial_to_lora", 6000, NULL, 1, NULL);
     }
 }
@@ -183,7 +190,9 @@ void get_username()
         serial_print("Reading username");
         JsonDocument doc;
         deserializeJson(doc, username_config);
+        doc.shrinkToFit();
         const char* uname = doc["username"];
+        doc.clear();
         if(strcmp(uname, "")==0)
         {
             username = WiFi.macAddress();
@@ -205,6 +214,7 @@ void save_username(String uname)
     doc["username"] = uname;
     String username_config;
     serializeJson(doc, username_config);
+    doc.clear();
     File file = SPIFFS.open("/config/user_data.json", FILE_WRITE);
     if(!file){
         Serial.println("No username file present.");
@@ -248,6 +258,7 @@ void show_alert(String msg)
     doc["alert_msg"] = msg;
     String return_response;
     serializeJsonPretty(doc, return_response);
+    doc.clear();
     send_to_ws(return_response);
 }
 
@@ -334,5 +345,6 @@ String device_becon()
     doc["pack_type"] = packet_type;
     String return_string;
     serializeJson(doc, return_string);
+    doc.clear();
     return return_string;
 }

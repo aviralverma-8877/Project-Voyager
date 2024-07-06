@@ -20,6 +20,7 @@ void setup_mqtt()
     String mqtt_config = get_mqtt_config();
     JsonDocument doc;
     deserializeJson(doc, mqtt_config);
+    doc.shrinkToFit();
     const char* host_string = doc["host"];
     uint16_t port = doc["port"];
     bool auth = doc["auth"];
@@ -37,7 +38,7 @@ void setup_mqtt()
 
     String ping_topic = doc["ping_topic"];
     mqtt_topic_to_ping = ping_topic;
-
+    doc.clear();
     IPAddress host;
     host.fromString(host_string);
     serial_print(host.toString());

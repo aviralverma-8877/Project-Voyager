@@ -31,7 +31,7 @@ void save_lora_config(String value)
         }
         JsonDocument doc;
         deserializeJson(doc, value);
-
+        doc.shrinkToFit();
         int lora_freq = doc["freq"];
         LoRa.setFrequency(lora_freq);
 
@@ -49,7 +49,7 @@ void save_lora_config(String value)
 
         int SyncWord = doc["SyncWord"];
         LoRa.setSyncWord(SyncWord);
-
+        doc.clear();
         show_alert("LoRa config saved successfully");
     }
 }
@@ -70,12 +70,14 @@ void set_lora_parameters()
         serial_print(lora_config);
         JsonDocument doc;
         deserializeJson(doc, lora_config);
+        doc.shrinkToFit();
         int freq = doc["freq"];
         int TxPower = doc["TxPower"];
         int SpreadingFactor = doc["SpreadingFactor"];
         int SignalBandwidth = doc["SignalBandwidth"];
         int CodingRate = doc["CodingRate4"];
         int SyncWord = doc["SyncWord"];
+        doc.clear();
         LoRa.setFrequency(freq);
         LoRa.setTxPower(TxPower);
         LoRa.setSpreadingFactor(SpreadingFactor);
@@ -127,6 +129,7 @@ void LoRa_sendMessage(void *param)  {
     doc["data"] = message;
     String lora_payload;
     serializeJson(doc, lora_payload);
+    doc.clear();
     LoRa_txMode();                        // set tx mode
     while(!lora_available_for_write){}
     lora_available_for_write=false;
@@ -140,7 +143,7 @@ void LoRa_sendMessage(void *param)  {
     }
     LoRa.endPacket(true);                 // finish packet and send it
     LoRa_rxMode();
-    vTaskDelay(500/portTICK_PERIOD_MS);
+    vTaskDelay(100/portTICK_PERIOD_MS);
     lora_available_for_write = true;
     vTaskDelete(NULL);
 }

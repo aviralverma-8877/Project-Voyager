@@ -34,7 +34,9 @@ void handle_ws_request(void *arg, uint8_t *data, size_t len)
   serial_print(json);
   JsonDocument doc;
   deserializeJson(doc, json);
+  doc.shrinkToFit();
   handle_operations(doc);
+  doc.clear();
 }
 
 void send_to_events(const char* return_value, const char* topic)

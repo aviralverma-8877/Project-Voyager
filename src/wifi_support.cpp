@@ -11,16 +11,20 @@ void config_wifi()
         serial_print(wifi_config);
         JsonDocument doc;
         deserializeJson(doc, wifi_config);
+        doc.shrinkToFit();
         const char* mode = doc["wifi_function"];
         const char* wifi_ssid = doc["wifi_ssid"];
         const char* wifi_pass = doc["wifi_pass"];
+        doc.clear();
         WiFi.disconnect(true);
         if(strcmp(mode, "AP") == 0)
         {
+            serial_print("AP Mode");
             setup_ap(wifi_ssid);
         }
         if(strcmp(mode, "STA") == 0)
         {
+            serial_print("STA Mode");
             setup_sta(wifi_ssid, wifi_pass);
         }
     }
@@ -141,10 +145,12 @@ void scan_ssid(void* args)
         JsonDocument r;
         r["ssid"] = WiFi.SSID(i);
         r["rssi"] = WiFi.RSSI(i);
+        r.shrinkToFit();
         array.add(r);
     }
     String return_value;
     serializeJson(doc, return_value);
+    doc.clear();
     send_to_ws(return_value);
     vTaskDelete(NULL);
 }
