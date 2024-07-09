@@ -79,6 +79,21 @@ void define_api()
             {
           serial_print("/config/lora_serial.json");
           request->send(SPIFFS, "/config/lora_serial.json", "text/json"); });
+  server.on("/send_raw", HTTP_POST, [](AsyncWebServerRequest * request) 
+          {
+            AsyncWebParameter * j = request->getParam(0);
+            String data = j->value();
+            serial_print(data);
+            packets.push(&data);
+            TaskHandle_t xHandle = NULL;
+            xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 6000, NULL, 2, &xHandle);
+            eTaskState ts = eTaskGetState(xHandle);
+            while(ts == eRunning)
+            {
+              ts = eTaskGetState(xHandle);
+            }
+            request->send(200);
+          });
   if(DEBUG)
   {
     server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request)

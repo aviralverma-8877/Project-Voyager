@@ -403,14 +403,14 @@ function file_broadcast() {
     const chunkSize = parseInt($("#chunk_size").val());
     const waitTime = parseInt($("#wait_time").val());
     $("#file_download").attr("src", "");
-    if (chunkSize > 200 || chunkSize < 0) {
-      alert("packet size should be between 1-250");
-      return;
-    }
-    if (waitTime < 1000) {
-      alert("Wait time should be greater than 1000ms");
-      return;
-    }
+    // if (chunkSize > 200 || chunkSize < 0) {
+    //   alert("packet size should be between 1-250");
+    //   return;
+    // }
+    // if (waitTime < 1000) {
+    //   alert("Wait time should be greater than 1000ms");
+    //   return;
+    // }
     const total_chunk = Math.floor(dataURL.length / chunkSize);
     const time_estimate = Math.abs(total_chunk * (waitTime / 1000));
     var h = Math.floor(time_estimate / 3600);
@@ -430,13 +430,32 @@ function file_broadcast() {
     $("#file_upload_progress_bar").removeClass("bg-success");
     function loop(s) {
       if (s < dataURL.length) {
-        uploadChunk(dataURL.slice(s, s + chunkSize));
-        s += chunkSize;
-        var percent = Math.abs((s / dataURL.length) * 100);
-        $("#file_upload_progress_bar").css("width", percent + "%");
-        setTimeout(() => {
-          loop(s);
-        }, waitTime);
+        uploadChunk(
+          dataURL.slice(s, s + chunkSize),
+          () => {
+            s += chunkSize;
+            var percent = Math.abs((s / dataURL.length) * 100);
+            $("#file_upload_progress_bar").css("width", percent + "%");
+            setTimeout(() => {
+              loop(s);
+            }, waitTime);
+          },
+          () => {
+            Socket.send(
+              JSON.stringify({
+                "request-type": "disable_LoRa_file_tx_mode",
+              })
+            );
+            tx_msg = { pack_type: "action", data: "disable_file_tx_mode" };
+            Socket.send(
+              JSON.stringify({
+                "request-type": "lora_transmit",
+                data: JSON.stringify(tx_msg),
+                get_response: false,
+              })
+            );
+          }
+        );
       } else {
         Socket.send(
           JSON.stringify({
@@ -476,17 +495,21 @@ function file_broadcast() {
   };
 }
 
-function uploadChunk(chunk) {
+function uploadChunk(chunk, passes_callback, failed_callback) {
   var _href = $("#file_download").attr("src");
-  $("#file_download").attr("src", _href+chunk);
+  $("#file_download").attr("src", _href + chunk);
   console.log(chunk);
-  Socket.send(
-    JSON.stringify({
-      "request-type": "send_raw",
-      val: chunk,
+  $.post("/send_raw", { data: chunk }, function (data) {
+    console.log(data);
+  })
+    .done(function () {
+      passes_callback();
     })
-  );
+    .fail(function () {
+      failed_callback();
+    });
 }
+
 var file_transfer_mode = false;
 function start_file_transfer_mode() {
   file_transfer_mode = true;

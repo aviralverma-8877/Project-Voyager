@@ -143,7 +143,7 @@ void LoRa_sendMessage(void *param)  {
     }
     LoRa.endPacket(true);                 // finish packet and send it
     LoRa_rxMode();
-    vTaskDelay(100/portTICK_PERIOD_MS);
+    vTaskDelay(10/portTICK_PERIOD_MS);
     lora_available_for_write = true;
     vTaskDelete(NULL);
 }
