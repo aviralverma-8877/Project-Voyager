@@ -396,13 +396,12 @@ function reset_progress_bar() {
 
 var transmission = false;
 
-function stop_broadcast(){
-  transmission=false;
+function stop_broadcast() {
+  stop_file_transfer_mode();
 }
 
 function file_broadcast() {
-  if(transmission)
-    return
+  if (transmission) return;
   const file = $("#broadcastFile").prop("files")[0];
   const reader = new FileReader();
   reader.readAsDataURL(file);
@@ -437,7 +436,7 @@ function file_broadcast() {
     );
     $("#file_upload_progress_bar").removeClass("bg-success");
     function loop(s) {
-      if (s < dataURL.length && transmission==true) {
+      if (s < dataURL.length && transmission == true) {
         uploadChunk(
           dataURL.slice(s, s + chunkSize),
           () => {
@@ -525,5 +524,6 @@ function start_file_transfer_mode() {
   file_transfer_mode = true;
 }
 function stop_file_transfer_mode() {
+  transmission = false;
   file_transfer_mode = false;
 }
