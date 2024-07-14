@@ -401,6 +401,8 @@ function stop_broadcast(){
 }
 
 function file_broadcast() {
+  if(transmission)
+    return
   const file = $("#broadcastFile").prop("files")[0];
   const reader = new FileReader();
   reader.readAsDataURL(file);
