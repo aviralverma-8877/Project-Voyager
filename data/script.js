@@ -397,7 +397,7 @@ function reset_progress_bar() {
 var transmission = false;
 
 function stop_broadcast(){
-  stop_file_transfer_mode();
+  transmission=false;
 }
 
 function file_broadcast() {
@@ -525,6 +525,5 @@ function start_file_transfer_mode() {
   file_transfer_mode = true;
 }
 function stop_file_transfer_mode() {
-  transmission = false
   file_transfer_mode = false;
 }

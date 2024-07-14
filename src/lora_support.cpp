@@ -16,7 +16,6 @@ void config_lora()
     LoRa.onReceive(onReceive);
     LoRa.onTxDone(onTxDone);
     LoRa_rxMode();
-    xTaskCreate(LoRa_sendRaw,"LoRa_sendRaw",12000,NULL,2,NULL);
 }
 
 void save_lora_config(String value)
@@ -100,28 +99,24 @@ void LoRa_txMode(){
 
 void LoRa_sendRaw(void *param) {
     serial_print("LoRa_sendRaw");
-    while(true)
-        if(packets.getCount()>0)
-        {
-            String data;
-            packets.pop(&data);
-            LoRa_txMode();
-            while(!lora_available_for_write){}
-            lora_available_for_write=false;
-            LoRa.beginPacket();
-            LoRa.write(data.length());
-            LoRa.write(RAW_DATA);
-            for(int i=0; i<data.length(); i++)
-            {
-                char r = data[i];
-                LoRa.write(r);
-            }
-            LoRa.endPacket(true);
-            LoRa_rxMode();
-            vTaskDelay(500/portTICK_PERIOD_MS);
-            lora_available_for_write = true;
-            vTaskDelete(NULL);
-        }
+    String data;
+    packets.pop(&data);
+    LoRa_txMode();
+    while(!lora_available_for_write){}
+    lora_available_for_write=false;
+    LoRa.beginPacket();
+    LoRa.write(data.length());
+    LoRa.write(RAW_DATA);
+    for(int i=0; i<data.length(); i++)
+    {
+        char r = data[i];
+        LoRa.write(r);
+    }
+    LoRa.endPacket(true);
+    LoRa_rxMode();
+    vTaskDelay(500/portTICK_PERIOD_MS);
+    lora_available_for_write = true;
+    vTaskDelete(NULL);
 }
 
 void LoRa_sendMessage(void *param)  {
