@@ -84,7 +84,6 @@ void handle_operations(JsonDocument doc)
         String val = doc["val"];
         serial_print(val);
         packets.push(&val);
-        xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 6000, NULL, 2, NULL);
     }
     if(strcmp(request_type, "set_serial_mode")==0)
     {

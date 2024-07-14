@@ -131,7 +131,6 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
     if(strcmp(topic, raw_data.c_str()) == 0)
     {
         packets.push(&msg);
-        xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 6000, NULL, 2, NULL);
     }
     else if(strcmp(topic, sub_topic.c_str()) == 0)
     {
