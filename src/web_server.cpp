@@ -5,7 +5,7 @@ AsyncWebServer server(80);
 void define_api()
 {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-    {
+            {
       if (SPIFFS.exists("/index.html"))
       {
         File index = SPIFFS.open("/index.html");
@@ -21,12 +21,11 @@ void define_api()
       else{
         serial_print("Redirected to /update");
         request->redirect("/update");
-      }
-    });
-  server.onNotFound([](AsyncWebServerRequest *request){
+      } });
+  server.onNotFound([](AsyncWebServerRequest *request)
+                    {
     serial_print("Not Found");
-    request->redirect("/");
-  });
+    request->redirect("/"); });
   server.on("/bootstrap.min.css", HTTP_GET, [](AsyncWebServerRequest *request)
             {
         serial_print("bootstrap.min.css");
@@ -79,8 +78,8 @@ void define_api()
             {
           serial_print("/config/lora_serial.json");
           request->send(SPIFFS, "/config/lora_serial.json", "text/json"); });
-  server.on("/send_raw", HTTP_POST, [](AsyncWebServerRequest * request) 
-          {
+  server.on("/send_raw", HTTP_POST, [](AsyncWebServerRequest *request)
+            {
             AsyncWebParameter * j = request->getParam(0);
             String data = j->value();
             serial_print(data);
@@ -92,9 +91,20 @@ void define_api()
             {
               ts = eTaskGetState(xHandle);
             }
-            request->send(200);
-          });
-  if(DEBUG)
+            request->send(200); });
+  server.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+              serial_print("/config/lora_serial.json");
+              request->send(200, "Restarting device ....");
+              xTaskCreate(restart, "restart", 6000, NULL, 1, NULL);
+            });
+  server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+              serial_print("/config/lora_serial.json");
+              request->send(200, "Resetting device ....");
+              xTaskCreate(reset_device, "reset_devide", 6000, NULL, 1, NULL);
+            });
+  if (DEBUG)
   {
     server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request)
               {
@@ -111,8 +121,8 @@ void define_api()
 
 void firmware_web_updater()
 {
-  server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send(200, "text/html", "<script>\
+  server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send(200, "text/html", "<script>\
     function httpGet(action, options = {})\
     {\
         if(action == \"device\")\
@@ -144,10 +154,10 @@ void firmware_web_updater()
         <input id='spiff_file' type='file' class='form-control row' placeholder='spiffs.bin' name='update'>\
       </div>\
       <input class='btn btn-primary mb-2' type='submit' value='Update'>\
-    </form>");
-  });
+    </form>"); });
 
-  server.on("/update_flash", HTTP_POST, [](AsyncWebServerRequest *request){
+  server.on("/update_flash", HTTP_POST, [](AsyncWebServerRequest *request)
+            {
     bool shouldReboot = !Update.hasError();
     if(shouldReboot)
     {
@@ -159,8 +169,8 @@ void firmware_web_updater()
               window.location.href = \"/\"\
             },10000);\
       </script>");
-    }
-  },[](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
+    } }, [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final)
+            {
     LoRa_txMode();
     if(!index){
       if(DEBUG)
@@ -184,10 +194,10 @@ void firmware_web_updater()
         if(DEBUG)
           Update.printError(Serial);
       }
-    }
-  });
+    } });
 
-  server.on("/update_spiffs", HTTP_POST, [](AsyncWebServerRequest *request){
+  server.on("/update_spiffs", HTTP_POST, [](AsyncWebServerRequest *request)
+            {
     bool shouldReboot = !Update.hasError();
     if(shouldReboot)
     {
@@ -199,8 +209,8 @@ void firmware_web_updater()
               window.location.href = \"/\"\
             },10000);\
       </script>");
-    }
-  },[](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
+    } }, [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final)
+            {
     LoRa_txMode();
     if(!index){
       if(DEBUG)
@@ -228,6 +238,5 @@ void firmware_web_updater()
         if(DEBUG)
           Update.printError(Serial);
       }
-    }
-  });
+    } });
 }
