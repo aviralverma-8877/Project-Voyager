@@ -171,15 +171,15 @@ void onReceive(int packetSize)
         switch (type)
         {
             case RAW_DATA:
-                xTaskCreate(send_msg_to_events, "lora message to ws", 12000, (void*)taskParams, 1, NULL);
+                xTaskCreate(send_msg_to_events, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
                 break;
             case LORA_MSG:
-                xTaskCreate(send_msg_to_ws, "lora message to ws", 12000, (void*)taskParams, 1, NULL);
+                xTaskCreate(send_msg_to_ws, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
                 break;      
             default:
                 break;
         }
-        xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 12000, (void*)taskParams, 1, NULL);
+        xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 20000, (void*)taskParams, 1, NULL);
     }
 }
 

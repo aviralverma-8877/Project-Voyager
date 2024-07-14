@@ -86,7 +86,7 @@ void define_api()
             serial_print(data);
             packets.push(&data);
             TaskHandle_t xHandle = NULL;
-            xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 12000, NULL, 2, &xHandle);
+            xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 20000, NULL, 2, &xHandle);
             eTaskState ts = eTaskGetState(xHandle);
             while(ts == eRunning)
             {
