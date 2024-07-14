@@ -394,6 +394,12 @@ function reset_progress_bar() {
   $("#file_upload_progress_bar").css("width", "0%");
 }
 
+var transmission = false;
+
+function stop_broadcast(){
+  transmission=false;
+}
+
 function file_broadcast() {
   const file = $("#broadcastFile").prop("files")[0];
   const reader = new FileReader();
@@ -429,7 +435,7 @@ function file_broadcast() {
     );
     $("#file_upload_progress_bar").removeClass("bg-success");
     function loop(s) {
-      if (s < dataURL.length) {
+      if (s < dataURL.length && transmission==true) {
         uploadChunk(
           dataURL.slice(s, s + chunkSize),
           () => {
@@ -486,6 +492,7 @@ function file_broadcast() {
         })
       );
       setTimeout(() => {
+        transmission = true;
         loop(0);
       }, 2000);
     }, 2000);
@@ -512,6 +519,7 @@ function uploadChunk(chunk, passes_callback, failed_callback) {
 
 var file_transfer_mode = false;
 function start_file_transfer_mode() {
+  $("#file_download").attr("src", "");
   file_transfer_mode = true;
 }
 function stop_file_transfer_mode() {
