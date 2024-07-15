@@ -42,6 +42,6 @@ void display_text_oled()
 
 void show_splash()
 {
-    display_buffer[0].msg = "ESP32 LORA";
+    display_buffer[0].msg = PROJECT_NAME;
     display_text_oled();
 }
