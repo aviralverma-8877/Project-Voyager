@@ -12,7 +12,7 @@
     #define SS              LNSS
     #define RST             LRST
     #define IRQ             DIO0
-    #define	IMPLEMENTATION	LIFO
+    #define	IMPLEMENTATION	FIFO
     #define LORA_MSG 0
     #define RAW_DATA 1
 
