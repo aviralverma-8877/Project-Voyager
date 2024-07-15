@@ -83,9 +83,10 @@ void define_api()
             AsyncWebParameter * j = request->getParam(0);
             String data = j->value();
             serial_print(data);
-            packets.push(&data);
+            TaskParameters *packet = new TaskParameters();
+            packet->data = data;
             TaskHandle_t xHandle = NULL;
-            xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 20000, NULL, 2, &xHandle);
+            xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 20000, (void*)packet, 2, &xHandle);
             eTaskState ts = eTaskGetState(xHandle);
             while(ts == eRunning)
             {

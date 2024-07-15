@@ -130,8 +130,9 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
     String raw_data = "voyager/"+mac+"/"+mqtt_topic_to_send_raw;
     if(strcmp(topic, raw_data.c_str()) == 0)
     {
-        packets.push(&msg);
-        xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 6000, NULL, 2, NULL);
+        TaskParameters *packet = new TaskParameters();
+        packet->data = msg;
+        xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 6000, (void*)packet, 2, NULL);
     }
     else if(strcmp(topic, sub_topic.c_str()) == 0)
     {

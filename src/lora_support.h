@@ -16,7 +16,6 @@
     #define LORA_MSG 0
     #define RAW_DATA 1
 
-    extern cppQueue packets;
     struct TaskParameters {
     String data;
     };

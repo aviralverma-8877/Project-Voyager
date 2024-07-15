@@ -1,6 +1,5 @@
 #include<lora_support.h>
 
-cppQueue packets(sizeof(String), 10, IMPLEMENTATION);
 bool lora_available_for_write = true;
 
 void config_lora()
@@ -99,29 +98,22 @@ void LoRa_txMode(){
 
 void LoRa_sendRaw(void *param) {
     serial_print("LoRa_sendRaw");
-    if(packets.getCount()>0)
+    TaskParameters* params = (TaskParameters*)param;
+    String data = (String)params->data;
+    LoRa_txMode();
+    while(!lora_available_for_write){}
+    lora_available_for_write=false;
+    LoRa.beginPacket();
+    LoRa.write(data.length());
+    LoRa.write(RAW_DATA);
+    for(int i=0; i<data.length(); i++)
     {
-        while(packets.getCount()>0)
-        {
-            String data;
-            packets.pop(&data);
-            LoRa_txMode();
-            while(!lora_available_for_write){}
-            lora_available_for_write=false;
-            LoRa.beginPacket();
-            LoRa.write(data.length());
-            LoRa.write(RAW_DATA);
-            for(int i=0; i<data.length(); i++)
-            {
-                char r = data[i];
-                LoRa.write(r);
-            }
-            LoRa.endPacket(true);
-            LoRa_rxMode();
-            vTaskDelay(500/portTICK_PERIOD_MS);
-            lora_available_for_write = true;
-        }
+        char r = data[i];
+        LoRa.write(r);
     }
+    LoRa.endPacket(true);
+    LoRa_rxMode();
+    lora_available_for_write = true;
     vTaskDelete(NULL);
 }
 
