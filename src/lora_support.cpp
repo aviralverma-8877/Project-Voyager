@@ -159,25 +159,27 @@ void onReceive(int packetSize)
         String message;
         int size = LoRa.read();
         int type = LoRa.read();
-        serial_print((String)size);
         for (int i=0; i<size; i++)
         {
             message += (char)LoRa.read();
         }
-        TaskParameters* taskParams = new TaskParameters();
-        taskParams->data=message;
-        switch (type)
+        if(message.length() == size)
         {
-            case RAW_DATA:
-                xTaskCreate(send_msg_to_events, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
-                break;
-            case LORA_MSG:
-                xTaskCreate(send_msg_to_ws, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
-                break;      
-            default:
-                break;
+            TaskParameters* taskParams = new TaskParameters();
+            taskParams->data=message;
+            switch (type)
+            {
+                case RAW_DATA:
+                    xTaskCreate(send_msg_to_events, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
+                    break;
+                case LORA_MSG:
+                    xTaskCreate(send_msg_to_ws, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
+                    break;      
+                default:
+                    break;
+            }
+            xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 20000, (void*)taskParams, 1, NULL);
         }
-        xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 20000, (void*)taskParams, 1, NULL);
     }
 }
 

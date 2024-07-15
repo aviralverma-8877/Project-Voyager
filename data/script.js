@@ -507,9 +507,7 @@ function uploadChunk(chunk, passes_callback, failed_callback) {
   var _href = $("#file_download").attr("src");
   $("#file_download").attr("src", _href + chunk);
   console.log(chunk);
-  $.post("/send_raw", { data: chunk }, function (data) {
-    console.log(data);
-  })
+  $.post("/send_raw", { data: chunk }, function (data) {})
     .done(function () {
       passes_callback();
     })
