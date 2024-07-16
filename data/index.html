@@ -136,7 +136,7 @@
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="promptModalLabel"></h5>
+                        <h5 class="modal-title" id="promptModalLabel">Project Voyager</h5>
                         <button
                             type="button"
                             class="btn-close"
@@ -146,7 +146,6 @@
                     </div>
                     <div class="modal-body" id="prompt_body"></div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                         <button type="button" class="btn btn-primary" id="promptModelProceed">Proceed</button>
                     </div>
                 </div>
@@ -162,7 +161,7 @@
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="alertModalLabel"></h5>
+                        <h5 class="modal-title" id="alertModalLabel">Project Voyager</h5>
                         <button
                             type="button"
                             class="btn-close"
@@ -171,23 +170,24 @@
                         ></button>
                     </div>
                     <div class="modal-body" id="alert_body"></div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Ok</button>
-                    </div>
                 </div>
             </div>
         </div>
-        <div id="alert" class="alert-warning alert-dismissible fade" role="alert">
-            <strong>Alert!</strong>
-            <p id="alert_body"></p>
-            <button
-                type="button"
-                class="close"
-                data-dismiss="alert"
-                aria-label="Close"
-            >
-                <span aria-hidden="true">&times;</span>
-            </button>
+        <div
+            class="modal fade"
+            id="loadingModal"
+            tabindex="-1"
+            aria-labelledby="promptModalLabel"
+            aria-hidden="true"
+        >
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Project Voyager</h5>
+                    </div>
+                    <div class="modal-body" id="loading_model_body">Connecting...</div>
+                </div>
+            </div>
         </div>
     </body>
 </html>

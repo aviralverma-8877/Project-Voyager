@@ -1,8 +1,16 @@
 var hostname_url;
+var loading_alert;
+var promptModal;
+var alertModel;
 $(document).ready(function () {
   init_socket();
   init_events();
   get_hostname();
+  promptModal = new bootstrap.Modal($("#promptModal"), {});
+  alertModel = new bootstrap.Modal($("#alertModal"), {});
+  loading_alert = new bootstrap.Modal($("#loadingModal"), {});
+  $("#loading_model_body").html("Connecting...");
+  loading_alert.show();
 });
 
 $("#myModal").on("shown.bs.modal", function () {
@@ -48,10 +56,9 @@ function send_lora(msg) {
 function restart() {
   $("#promptModalLabel").html("Device Restart");
   $("#prompt_body").html("Are you sure you want to restart the device");
-  var alertModal = new bootstrap.Modal($("#promptModal"), {});
-  alertModal.show();
+  promptModal.show();
   $("#promptModelProceed").click(function () {
-    alertModal.hide();
+    promptModal.hide();
     Socket.send(JSON.stringify({ "request-type": "restart_device" }));
   });
 }
@@ -155,13 +162,17 @@ function update() {
   });
 }
 
+function alert(msg){
+  $("#alert_body").html(msg);
+  alertModel.show();
+}
+
 function reset() {
   $("#promptModalLabel").html("Device Reset");
   $("#prompt_body").html("Are you sure you want to reset the device");
-  var alertModal = new bootstrap.Modal($("#promptModal"), {});
-  alertModal.show();
+  promptModal.show();
   $("#promptModelProceed").click(function () {
-    alertModal.hide();
+    promptModal.hide();
     Socket.send(JSON.stringify({ "request-type": "reset_device" }));
   });
 }
@@ -344,9 +355,14 @@ function init_socket() {
   };
   Socket.onopen = function (event) {
     console.log("Connected to web sockets...");
+    setTimeout(function(){
+      loading_alert.hide();
+    },1000);
     dashboard();
   };
   Socket.onclose = function (event) {
+    $("#loading_model_body").html("Connecting...");
+    loading_alert.show();
     console.log("Connection to websockets closed....");
     setTimeout(function () {
       console.log("Retrying websocket connection....");
