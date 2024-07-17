@@ -138,7 +138,6 @@ void serial_to_lora(void* param)
         {
             if(Serial.available())
             {
-                vTaskDelay(50/portTICK_PERIOD_MS);
                 LoRa_txMode();
                 LoRa.beginPacket();
                 while(Serial.available())
@@ -149,6 +148,7 @@ void serial_to_lora(void* param)
                 LoRa_rxMode();
             }
         }
+        vTaskDelay(50/portTICK_PERIOD_MS);
     }
     vTaskDelete(NULL);
 }

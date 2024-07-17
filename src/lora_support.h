@@ -4,7 +4,8 @@
     #include <SPI.h>
     #include <LoRa.h>
     #include <support_method.h>
-    #include <CRC32.h>
+    #include "CRC8.h"
+    #include "CRC.h"
     #include "mqtt_support.h"
     #define SCK             LSCK
     #define MISO            LMISO
@@ -23,12 +24,12 @@
     String data;
     };
 
-    extern CRC32 crc;
+    extern CRC8 crc;
     extern bool lora_available_for_write;
 
     void setup_mqtt();
     void save_lora_config(String value);
-    uint32_t get_checksum(String data);
+    uint8_t get_checksum(String data);
     void LoRa_sendRaw(void *param);
     void set_lora_parameters();
     void config_lora();

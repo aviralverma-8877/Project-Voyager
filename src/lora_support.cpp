@@ -1,7 +1,7 @@
 #include<lora_support.h>
 
 bool lora_available_for_write = true;
-CRC32 crc;
+CRC8 crc;
 
 void config_lora()
 {
@@ -97,15 +97,11 @@ void LoRa_txMode(){
     LoRa.disableInvertIQ();               // normal mode
 }
 
-uint32_t get_checksum(String data)
+uint8_t get_checksum(String data)
 {
-    size_t numBytes = sizeof(data) - 1;
-    for (size_t i = 0; i < numBytes; i++)
-    {
-        crc.update(data[i]);
-    }
-    uint32_t checksum = crc.finalize();
-    return checksum;
+    crc.restart();
+    crc.add((uint8_t*)data.c_str(), data.length());
+    return crc.calc();
 }
 
 void LoRa_sendRaw(void *param) {
@@ -175,11 +171,14 @@ void onReceive(int packetSize)
         String message;
         int size = LoRa.read();
         int type = LoRa.read();
-        uint32_t checksum = LoRa.read();
+        uint8_t checksum = LoRa.read();
         for (int i=0; i<size; i++)
         {
             message += (char)LoRa.read();
         }
+        serial_print("Message Recieved: "+message);
+        serial_print("Recieved Checksum: "+(String)checksum);
+        serial_print("Calculated Checksum: "+(String)get_checksum(message));
         if(checksum == get_checksum(message))
         {
             TaskParameters* taskParams = new TaskParameters();
