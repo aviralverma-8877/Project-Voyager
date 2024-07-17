@@ -464,11 +464,6 @@ function file_broadcast() {
             }, waitTime);
           },
           () => {
-            Socket.send(
-              JSON.stringify({
-                "request-type": "disable_LoRa_file_tx_mode",
-              })
-            );
             tx_msg = { pack_type: "action", data: "disable_file_tx_mode" };
             Socket.send(
               JSON.stringify({
@@ -480,11 +475,6 @@ function file_broadcast() {
           }
         );
       } else {
-        Socket.send(
-          JSON.stringify({
-            "request-type": "disable_LoRa_file_tx_mode",
-          })
-        );
         tx_msg = { pack_type: "action", data: "disable_file_tx_mode" };
         Socket.send(
           JSON.stringify({
