@@ -1,6 +1,7 @@
 #include<lora_support.h>
 
 bool lora_available_for_write = true;
+CRC32 crc;
 
 void config_lora()
 {
@@ -96,6 +97,17 @@ void LoRa_txMode(){
     LoRa.disableInvertIQ();               // normal mode
 }
 
+uint32_t get_checksum(String data)
+{
+    size_t numBytes = sizeof(data) - 1;
+    for (size_t i = 0; i < numBytes; i++)
+    {
+        crc.update(data[i]);
+    }
+    uint32_t checksum = crc.finalize();
+    return checksum;
+}
+
 void LoRa_sendRaw(void *param) {
     serial_print("LoRa_sendRaw");
     TaskParameters* params = (TaskParameters*)param;
@@ -106,6 +118,7 @@ void LoRa_sendRaw(void *param) {
     LoRa.beginPacket();
     LoRa.write(data.length());
     LoRa.write(RAW_DATA);
+    LoRa.write(get_checksum(data));
     for(int i=0; i<data.length(); i++)
     {
         char r = data[i];
@@ -135,6 +148,7 @@ void LoRa_sendMessage(void *param)  {
     LoRa.beginPacket();                   // start packet
     LoRa.write(lora_payload.length());
     LoRa.write(LORA_MSG);
+    LoRa.write(get_checksum(lora_payload));
     for(int i=0; i<lora_payload.length(); i++)
     {
         char r = lora_payload[i];
@@ -156,15 +170,17 @@ void onReceive(int packetSize)
             Serial.write(LoRa.read());
         }        
     }
-    else{
+    else
+    {
         String message;
         int size = LoRa.read();
         int type = LoRa.read();
+        uint32_t checksum = LoRa.read();
         for (int i=0; i<size; i++)
         {
             message += (char)LoRa.read();
         }
-        if(message.length() == size)
+        if(checksum == get_checksum(message))
         {
             TaskParameters* taskParams = new TaskParameters();
             taskParams->data=message;
@@ -180,6 +196,9 @@ void onReceive(int packetSize)
                     break;
             }
             xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 20000, (void*)taskParams, 1, NULL);
+        }
+        else{
+            //Re-request message by sending aknowledgement.
         }
     }
 }
