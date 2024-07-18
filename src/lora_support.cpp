@@ -163,7 +163,7 @@ void LoRa_sendAkn(bool result)
     LoRa_txMode();
     lora_available_for_write=false;
     LoRa.beginPacket();                   // start packet
-    LoRa.write(sizeof(result));
+    LoRa.write(1);
     LoRa.write(REC_AKNG);
     LoRa.write(result);
     LoRa.endPacket(true);                 // finish packet and send it
@@ -201,10 +201,12 @@ void onReceive(int packetSize)
             {
                 case RAW_DATA:
                     xTaskCreate(send_msg_to_events, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
+                    vTaskDelay(500/portTICK_PERIOD_MS);
                     LoRa_sendAkn(true);
                     break;
                 case LORA_MSG:
                     xTaskCreate(send_msg_to_ws, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
+                    vTaskDelay(500/portTICK_PERIOD_MS);
                     LoRa_sendAkn(true);
                     break;
                 case REC_AKNG:
