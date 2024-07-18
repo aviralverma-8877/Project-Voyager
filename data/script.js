@@ -140,7 +140,7 @@ function save_mqtt(){
     data.port = port;
     data.auth = auth;
     data.username = uname;
-    data.password = password;
+    data.password = pass;
     Socket.send(
       JSON.stringify({
         "request-type": "set_mqtt_config",
