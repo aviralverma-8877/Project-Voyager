@@ -105,7 +105,7 @@ function wifi() {
 
 function set_mqtt_auth(val)
 {
-  if (val) {
+  if (!val) {
     $(".mqtt_auth").attr("disabled", "true");
     $("#mqtt_uname").val("");
     $("#mqtt_password").val("");
