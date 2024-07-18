@@ -103,6 +103,25 @@ function wifi() {
   });
 }
 
+function set_mqtt_auth(val)
+{
+  if (val) {
+    $(".mqtt_auth").attr("disabled", "true");
+    $("#mqtt_uname").val("");
+    $("#mqtt_password").val("");
+  } else {
+    $(".mqtt_auth").removeAttr("disabled");
+  }
+}
+
+function mqtt() {
+  $(".nav-link").removeClass("active");
+  $("#navbar-mqtt").addClass("active");
+  $.get("mqtt.html", function (data) {
+    $("#main_content").html(data);
+  });
+}
+
 function save_lora_config() {
   $.get("lora_config.json", function (lora_config) {
     freq = $("#freq_range").val();

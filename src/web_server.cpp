@@ -54,6 +54,10 @@ void define_api()
             {
         serial_print("wifi.html");
         request->send(SPIFFS, "/wifi.html", "text/html"); });
+    server.on("/mqtt.html", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+        serial_print("mqtt.html");
+        request->send(SPIFFS, "/mqtt.html", "text/html"); });
   server.on("/lora.html", HTTP_GET, [](AsyncWebServerRequest *request)
             {
         serial_print("lora.html");
@@ -105,17 +109,14 @@ void define_api()
               request->send(200, "Resetting device ....");
               xTaskCreate(reset_device, "reset_devide", 6000, NULL, 1, NULL);
             });
-  if (DEBUG)
-  {
-    server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request)
-              {
-          serial_print("/config/wifi_config.json");
-          request->send(SPIFFS, "/config/wifi_config.json", "text/json"); });
-    server.on("/mqtt_config.json", HTTP_GET, [](AsyncWebServerRequest *request)
-              {
-          serial_print("/config/mqtt_config.json");
-          request->send(SPIFFS, "/config/mqtt_config.json", "text/json"); });
-  }
+  server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+        serial_print("/config/wifi_config.json");
+        request->send(SPIFFS, "/config/wifi_config.json", "text/json"); });
+  server.on("/mqtt_config.json", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+        serial_print("/config/mqtt_config.json");
+        request->send(SPIFFS, "/config/mqtt_config.json", "text/json"); });
   firmware_web_updater();
   server.begin();
 }
