@@ -210,7 +210,8 @@ void onReceive(int packetSize)
                     LoRa_sendAkn(true);
                     break;
                 case REC_AKNG:
-                    xTaskCreate(send_msg_to_ws, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
+                    bool result = (bool)message;
+                    serial_print((String)result);
                     break; 
                 default:
                     break;
