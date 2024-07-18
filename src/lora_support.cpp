@@ -175,8 +175,9 @@ void LoRa_sendAkn(void *param)
     LoRa_txMode();
     lora_available_for_write=false;
     LoRa.beginPacket();                   // start packet
-    LoRa.write(1);
+    LoRa.write(1);                        // Dummy data length
     LoRa.write(REC_AKNG);
+    LoRa.write(0);                        // Dummy Checksum
     LoRa.write(result);
     LoRa.endPacket(true);                 // finish packet and send it
     LoRa_rxMode();
@@ -199,6 +200,7 @@ void onReceive(int packetSize)
         String message;
         int size = LoRa.read();
         int type = LoRa.read();
+        uint8_t checksum = LoRa.read();
         if(type == REC_AKNG)
         {
             uint8_t result = (uint8_t)LoRa.read();
@@ -207,7 +209,6 @@ void onReceive(int packetSize)
             serial_print("Result: "+(String)result);
             return;
         }
-        uint8_t checksum = LoRa.read();
         for (int i=0; i<size; i++)
         {
             message += (char)LoRa.read();
