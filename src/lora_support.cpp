@@ -121,7 +121,6 @@ void LoRa_send(String data, uint8_t type)
     }
     LoRa.endPacket(true);
     LoRa_rxMode();
-    vTaskDelay(10/portTICK_PERIOD_MS);
     lora_available_for_write = true;
 }
 
@@ -135,9 +134,10 @@ void LoRa_sendRaw(void *param) {
     {
         if(AknRecieved == 0)
         {
+            AknRecieved = 2;
             LoRa_send(data, RAW_DATA);
         }
-        vTaskDelay(10/portTICK_PERIOD_MS);
+        vTaskDelay(500/portTICK_PERIOD_MS);
     }
     vTaskDelete(NULL);
 }
@@ -159,9 +159,10 @@ void LoRa_sendMessage(void *param)  {
     {
         if(AknRecieved == 0)
         {
+            AknRecieved = 2;
             LoRa_send(lora_payload, LORA_MSG);
         }
-        vTaskDelay(10/portTICK_PERIOD_MS);
+        vTaskDelay(500/portTICK_PERIOD_MS);
     }
     vTaskDelete(NULL);
 }
@@ -169,7 +170,7 @@ void LoRa_sendMessage(void *param)  {
 void LoRa_sendAkn(void *param)
 {
     AknParameters* params = (AknParameters*)param;
-    bool result = (bool)params->result;
+    uint8_t result = (uint8_t)params->result;
     while(!lora_available_for_write){}
     LoRa_txMode();
     lora_available_for_write=false;
@@ -200,7 +201,7 @@ void onReceive(int packetSize)
         int type = LoRa.read();
         if(type == REC_AKNG)
         {
-            bool result = LoRa.read();
+            uint8_t result = (uint8_t)LoRa.read();
             serial_print("Aknowledgement recieved.");
             AknRecieved=result;
             serial_print("Result: "+(String)result);
@@ -214,10 +215,10 @@ void onReceive(int packetSize)
         serial_print("Message Recieved: "+message);
         serial_print("Recieved Checksum: "+(String)checksum);
         serial_print("Calculated Checksum: "+(String)get_checksum(message));
-        if(checksum == get_checksum(message))
+        if(checksum == get_checksum(message) && message.length() == size)
         {
             AknParameters* akn_param = new AknParameters();
-            akn_param->result = true; 
+            akn_param->result = 1; 
             xTaskCreate(LoRa_sendAkn, "LoRa_sendAkn", 6000, (void*)akn_param, 3, NULL);
             TaskParameters* taskParams = new TaskParameters();
             taskParams->data=message;
@@ -236,7 +237,7 @@ void onReceive(int packetSize)
         }
         else{
             AknParameters* akn_param = new AknParameters();
-            akn_param->result = false; 
+            akn_param->result = 2; 
             xTaskCreate(LoRa_sendAkn, "LoRa_sendAkn", 6000, (void*)akn_param, 3, NULL);
         }
     }

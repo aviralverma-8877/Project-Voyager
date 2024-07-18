@@ -132,13 +132,13 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
     {
         TaskParameters *packet = new TaskParameters();
         packet->data = msg;
-        xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 6000, (void*)packet, 2, NULL);
+        xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 6000, (void*)packet, 1, NULL);
     }
     else if(strcmp(topic, sub_topic.c_str()) == 0)
     {
         TaskParameters* taskParams = new TaskParameters();
         taskParams->data=msg;
-        xTaskCreate(LoRa_sendMessage, "LoRa_sendMessage", 12000, (void*)taskParams, 2, NULL);
+        xTaskCreate(LoRa_sendMessage, "LoRa_sendMessage", 12000, (void*)taskParams, 1, NULL);
     }
 }
 

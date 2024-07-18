@@ -10,17 +10,6 @@ void initWebSocket() {
   rawEvents.onConnect(onRawEvents);
   server.addHandler(&rawEvents);
   server.addHandler(&webSocket);
-  xTaskCreate(cleanup_client, "Clean up client", 6000, NULL, 1, NULL);
-}
-
-void cleanup_client(void *param)
-{
-  for (;;)
-  {
-    webSocket.cleanupClients();
-    vTaskDelay(10/portTICK_PERIOD_MS);
-  }
-  vTaskDelete(NULL);
 }
 
 void handle_ws_request(void *arg, uint8_t *data, size_t len)

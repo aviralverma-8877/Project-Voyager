@@ -90,11 +90,12 @@ void define_api()
             TaskParameters *packet = new TaskParameters();
             packet->data = data;
             TaskHandle_t xHandle = NULL;
-            xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 20000, (void*)packet, 2, &xHandle);
+            xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 20000, (void*)packet, 1, &xHandle);
             eTaskState ts = eTaskGetState(xHandle);
             while(ts == eRunning)
             {
               ts = eTaskGetState(xHandle);
+              vTaskDelay(10/portTICK_PERIOD_MS);
             }
             request->send(200); });
   server.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request)

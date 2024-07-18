@@ -25,7 +25,7 @@
     };
 
     struct AknParameters {
-    bool result;
+    uint8_t result;
     };
 
     extern CRC8 crc;

@@ -92,7 +92,7 @@ void handle_operations(JsonDocument doc)
         serial_print(val);
         TaskParameters *packet = new TaskParameters();
         packet->data = val;
-        xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 6000, (void*)packet, 2, NULL);
+        xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 6000, (void*)packet, 1, NULL);
     }
     if(strcmp(request_type, "set_serial_mode")==0)
     {
@@ -309,7 +309,7 @@ void dns_request_process(void *parameter)
     for(;;)
     {
         dnsServer.processNextRequest();
-        vTaskDelay(10/portTICK_PERIOD_MS);
+        //vTaskDelay(10/portTICK_PERIOD_MS);
     }
     vTaskDelete(NULL);
 }
