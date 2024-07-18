@@ -167,6 +167,20 @@ void ping_mqtt(String msg)
     mqttClient.publish(topic.c_str(), 2, false, msg.c_str(), msg.length());
 }
 
+void save_mqtt_config(String value)
+{
+    if (SPIFFS.exists("/config/mqtt_config.json"))
+    {
+        File file = SPIFFS.open("/config/mqtt_config.json", FILE_WRITE);
+        if(!file){
+            return;
+        }
+        if(file.print(value)){
+            serial_print("MQTT config saved");
+        }
+    }
+}
+
 String get_mqtt_config()
 {
     if (SPIFFS.exists("/config/mqtt_config.json"))

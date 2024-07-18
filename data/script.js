@@ -129,6 +129,28 @@ function mqtt() {
   });
 }
 
+function save_mqtt(){
+  host = $("#mqtt_host").val();
+  port = $("#mqtt_port").val()
+  auth = $("#mqtt_auth").is(":checked")>0;
+  uname = $("#mqtt_uname").val();
+  pass = $("#mqtt_password").val();
+  $.get("mqtt_config.json",function(data){
+    data.host = host;
+    data.port = port;
+    data.auth = auth;
+    data.username = uname;
+    data.password = password;
+    Socket.send(
+      JSON.stringify({
+        "request-type": "set_mqtt_config",
+        val: JSON.stringify(data),
+      })
+    );
+    alert("MQTT config saved.<br>New settings will be applied after reboot.");
+  });
+}
+
 function save_lora_config() {
   $.get("lora_config.json", function (lora_config) {
     freq = $("#freq_range").val();

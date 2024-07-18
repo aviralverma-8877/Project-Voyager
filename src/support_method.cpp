@@ -72,10 +72,17 @@ void handle_operations(JsonDocument doc)
         doc.clear();
         send_to_ws(return_value);
     }
+    if(strcmp(request_type, "set_mqtt_config") == 0)
+    {
+        String val = doc["val"];
+        serial_print("saving mqtt config");
+        serial_print(val);
+        save_mqtt_config(val);
+    }
     if(strcmp(request_type, "set_lora_config") == 0)
     {
         String val = doc["val"];
-        serial_print("changing sync word");
+        serial_print("saving lora config");
         serial_print(val);
         save_lora_config(val);
     }
