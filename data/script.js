@@ -119,6 +119,13 @@ function mqtt() {
   $("#navbar-mqtt").addClass("active");
   $.get("mqtt.html", function (data) {
     $("#main_content").html(data);
+    $.get("mqtt_config.json",function(data){
+      $("#mqtt_host").val(data.host);
+      $("#mqtt_port").val(data.port);
+      $("#mqtt_auth").attr("checked", data.auth);
+      $("#mqtt_uname").val(data.username);
+      $("#mqtt_password").val(data.password);
+    })
   });
 }
 
