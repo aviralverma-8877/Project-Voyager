@@ -201,9 +201,11 @@ void onReceive(int packetSize)
             {
                 case RAW_DATA:
                     xTaskCreate(send_msg_to_events, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
+                    LoRa_sendAkn(true);
                     break;
                 case LORA_MSG:
                     xTaskCreate(send_msg_to_ws, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
+                    LoRa_sendAkn(true);
                     break;
                 case REC_AKNG:
                     xTaskCreate(send_msg_to_ws, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
@@ -212,7 +214,6 @@ void onReceive(int packetSize)
                     break;
             }
             xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 20000, (void*)taskParams, 1, NULL);
-            LoRa_sendAkn(true);
         }
         else{
             LoRa_sendAkn(false);
