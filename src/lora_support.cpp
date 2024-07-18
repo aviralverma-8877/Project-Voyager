@@ -204,7 +204,10 @@ void onReceive(int packetSize)
                     break;
                 case LORA_MSG:
                     xTaskCreate(send_msg_to_ws, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
-                    break;      
+                    break;
+                case REC_AKNG:
+                    xTaskCreate(send_msg_to_ws, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
+                    break; 
                 default:
                     break;
             }
