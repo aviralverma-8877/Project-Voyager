@@ -123,8 +123,12 @@ function mqtt() {
       $("#mqtt_host").val(data.host);
       $("#mqtt_port").val(data.port);
       $("#mqtt_auth").attr("checked", data.auth);
-      $("#mqtt_uname").val(data.username);
-      $("#mqtt_password").val(data.password);
+      set_mqtt_auth(data.auth)
+      if(data.auth)
+      {
+        $("#mqtt_uname").val(data.username);
+        $("#mqtt_password").val(data.password);  
+      }
     })
   });
 }
