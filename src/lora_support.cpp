@@ -198,9 +198,9 @@ void onReceive(int packetSize)
     else
     {
         String message;
-        int size = LoRa.read();
-        int type = LoRa.read();
-        uint8_t checksum = LoRa.read();
+        int size = (int)LoRa.read();
+        int type = (int)LoRa.read();
+        uint8_t checksum = (uint8_t)LoRa.read();
         if(type == REC_AKNG)
         {
             uint8_t result = (uint8_t)LoRa.read();
