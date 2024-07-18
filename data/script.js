@@ -426,14 +426,14 @@ function file_broadcast() {
     const chunkSize = parseInt($("#chunk_size").val());
     const waitTime = parseInt($("#wait_time").val());
     $("#file_download").attr("src", "");
-    // if (chunkSize > 200 || chunkSize < 0) {
-    //   alert("packet size should be between 1-250");
-    //   return;
-    // }
-    // if (waitTime < 1000) {
-    //   alert("Wait time should be greater than 1000ms");
-    //   return;
-    // }
+    if (chunkSize > 10 || chunkSize < 0) {
+      alert("packet size should be between 1-250");
+      return;
+    }
+    if (waitTime < 500) {
+      alert("Wait time should be greater than 1000ms");
+      return;
+    }
     const total_chunk = Math.floor(dataURL.length / chunkSize);
     const time_estimate = Math.abs(total_chunk * (waitTime / 1000));
     var h = Math.floor(time_estimate / 3600);
