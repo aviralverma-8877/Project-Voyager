@@ -132,12 +132,12 @@ void LoRa_sendRaw(void *param) {
     LoRa_send(data, RAW_DATA);
     while(AknRecieved != 1)
     {
+        vTaskDelay(500/portTICK_PERIOD_MS);
         if(AknRecieved == 0)
         {
             AknRecieved = 2;
             LoRa_send(data, RAW_DATA);
         }
-        vTaskDelay(500/portTICK_PERIOD_MS);
     }
     vTaskDelete(NULL);
 }
@@ -157,12 +157,12 @@ void LoRa_sendMessage(void *param)  {
     LoRa_send(lora_payload, LORA_MSG);
     while(AknRecieved != 1)
     {
+        vTaskDelay(500/portTICK_PERIOD_MS);
         if(AknRecieved == 0)
         {
             AknRecieved = 2;
             LoRa_send(lora_payload, LORA_MSG);
         }
-        vTaskDelay(500/portTICK_PERIOD_MS);
     }
     vTaskDelete(NULL);
 }
@@ -238,7 +238,7 @@ void onReceive(int packetSize)
         }
         else{
             AknParameters* akn_param = new AknParameters();
-            akn_param->result = 2; 
+            akn_param->result = 0; 
             xTaskCreate(LoRa_sendAkn, "LoRa_sendAkn", 6000, (void*)akn_param, 3, NULL);
         }
     }

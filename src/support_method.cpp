@@ -92,7 +92,14 @@ void handle_operations(JsonDocument doc)
         serial_print(val);
         TaskParameters *packet = new TaskParameters();
         packet->data = val;
-        xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 6000, (void*)packet, 1, NULL);
+        TaskHandle_t xHandle = NULL;
+        xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 6000, (void*)packet, 1, &xHandle);
+        eTaskState ts = eTaskGetState(xHandle);
+        while(ts == eRunning)
+        {
+            ts = eTaskGetState(xHandle);
+            vTaskDelay(10/portTICK_PERIOD_MS);
+        }
     }
     if(strcmp(request_type, "set_serial_mode")==0)
     {
