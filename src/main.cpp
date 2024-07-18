@@ -26,11 +26,10 @@ void setup() {
   // WiFi.onEvent(onWifiDisconnect, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
   WiFi.onEvent(onWifiConnect, SYSTEM_EVENT_STA_GOT_IP);
   WiFi.onEvent(onWifiDisconnect, SYSTEM_EVENT_STA_DISCONNECTED);
-  config_wifi();
 
   define_api();
   initWebSocket();
-  
+  config_wifi();
   config_lora();
   setupTasks();
   serial_print("config done");
