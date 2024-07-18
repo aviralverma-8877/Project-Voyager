@@ -210,8 +210,6 @@ void onReceive(int packetSize)
                     LoRa_sendAkn(true);
                     break;
                 case REC_AKNG:
-                    bool result = (bool)message;
-                    serial_print((String)result);
                     break; 
                 default:
                     break;
