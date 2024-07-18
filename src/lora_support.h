@@ -36,6 +36,7 @@
     void LoRa_rxMode();
     void LoRa_txMode();
     void LoRa_sendMessage(void *param);
+    void LoRa_sendAkn(bool result);
     void onReceive(int packetSize);
     void onTxDone();
     void send_msg_to_events(void * parameters);

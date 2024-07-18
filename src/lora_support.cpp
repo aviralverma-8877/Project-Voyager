@@ -108,8 +108,8 @@ void LoRa_sendRaw(void *param) {
     serial_print("LoRa_sendRaw");
     TaskParameters* params = (TaskParameters*)param;
     String data = (String)params->data;
-    LoRa_txMode();
     while(!lora_available_for_write){}
+    LoRa_txMode();
     lora_available_for_write=false;
     LoRa.beginPacket();
     LoRa.write(data.length());
@@ -138,8 +138,8 @@ void LoRa_sendMessage(void *param)  {
     String lora_payload;
     serializeJson(doc, lora_payload);
     doc.clear();
-    LoRa_txMode();                        // set tx mode
     while(!lora_available_for_write){}
+    LoRa_txMode();                        // set tx mode
     lora_available_for_write=false;
     LoRa.beginPacket();                   // start packet
     LoRa.write(lora_payload.length());
@@ -155,6 +155,20 @@ void LoRa_sendMessage(void *param)  {
     vTaskDelay(10/portTICK_PERIOD_MS);
     lora_available_for_write = true;
     vTaskDelete(NULL);
+}
+
+void LoRa_sendAkn(bool result)
+{
+    while(!lora_available_for_write){}
+    LoRa_txMode();
+    lora_available_for_write=false;
+    LoRa.beginPacket();                   // start packet
+    LoRa.write(sizeof(result));
+    LoRa.write(REC_AKNG);
+    LoRa.write(result);
+    LoRa.endPacket(true);                 // finish packet and send it
+    LoRa_rxMode();
+    lora_available_for_write = true;
 }
 
 void onReceive(int packetSize)
@@ -195,9 +209,10 @@ void onReceive(int packetSize)
                     break;
             }
             xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 20000, (void*)taskParams, 1, NULL);
+            LoRa_sendAkn(true);
         }
         else{
-            //Re-request message by sending aknowledgement.
+            LoRa_sendAkn(false);
         }
     }
 }
