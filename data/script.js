@@ -478,8 +478,8 @@ function file_broadcast() {
     const chunkSize = parseInt($("#chunk_size").val());
     const waitTime = parseInt($("#wait_time").val());
     $("#file_download").attr("src", "");
-    if (chunkSize > 10 || chunkSize < 0) {
-      alert("packet size should be between 1-250");
+    if (chunkSize > 200 || chunkSize < 0) {
+      alert("packet size should be between 1-200");
       return;
     }
     if (waitTime < 500) {

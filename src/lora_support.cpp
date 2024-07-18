@@ -1,6 +1,7 @@
 #include<lora_support.h>
 
 bool lora_available_for_write = true;
+uint8_t AknRecieved = 2;
 CRC8 crc;
 
 void config_lora()
@@ -104,16 +105,14 @@ uint8_t get_checksum(String data)
     return crc.calc();
 }
 
-void LoRa_sendRaw(void *param) {
-    serial_print("LoRa_sendRaw");
-    TaskParameters* params = (TaskParameters*)param;
-    String data = (String)params->data;
+void LoRa_send(String data, uint8_t type)
+{
     while(!lora_available_for_write){}
     LoRa_txMode();
     lora_available_for_write=false;
     LoRa.beginPacket();
     LoRa.write(data.length());
-    LoRa.write(RAW_DATA);
+    LoRa.write(type);
     LoRa.write(get_checksum(data));
     for(int i=0; i<data.length(); i++)
     {
@@ -124,6 +123,22 @@ void LoRa_sendRaw(void *param) {
     LoRa_rxMode();
     vTaskDelay(10/portTICK_PERIOD_MS);
     lora_available_for_write = true;
+}
+
+void LoRa_sendRaw(void *param) {
+    serial_print("LoRa_sendRaw");
+    TaskParameters* params = (TaskParameters*)param;
+    String data = (String)params->data;
+    AknRecieved = 2;
+    LoRa_send(data, RAW_DATA);
+    while(AknRecieved != 1)
+    {
+        if(AknRecieved == 0)
+        {
+            LoRa_send(data, RAW_DATA);
+        }
+        vTaskDelay(10/portTICK_PERIOD_MS);
+    }
     vTaskDelete(NULL);
 }
 
@@ -138,27 +153,23 @@ void LoRa_sendMessage(void *param)  {
     String lora_payload;
     serializeJson(doc, lora_payload);
     doc.clear();
-    while(!lora_available_for_write){}
-    LoRa_txMode();                        // set tx mode
-    lora_available_for_write=false;
-    LoRa.beginPacket();                   // start packet
-    LoRa.write(lora_payload.length());
-    LoRa.write(LORA_MSG);
-    LoRa.write(get_checksum(lora_payload));
-    for(int i=0; i<lora_payload.length(); i++)
+    AknRecieved = 2;
+    LoRa_send(lora_payload, LORA_MSG);
+    while(AknRecieved != 1)
     {
-        char r = lora_payload[i];
-        LoRa.write(r);
+        if(AknRecieved == 0)
+        {
+            LoRa_send(lora_payload, LORA_MSG);
+        }
+        vTaskDelay(10/portTICK_PERIOD_MS);
     }
-    LoRa.endPacket(true);                 // finish packet and send it
-    LoRa_rxMode();
-    vTaskDelay(10/portTICK_PERIOD_MS);
-    lora_available_for_write = true;
     vTaskDelete(NULL);
 }
 
-void LoRa_sendAkn(bool result)
+void LoRa_sendAkn(void *param)
 {
+    AknParameters* params = (AknParameters*)param;
+    bool result = (bool)params->result;
     while(!lora_available_for_write){}
     LoRa_txMode();
     lora_available_for_write=false;
@@ -169,6 +180,8 @@ void LoRa_sendAkn(bool result)
     LoRa.endPacket(true);                 // finish packet and send it
     LoRa_rxMode();
     lora_available_for_write = true;
+    serial_print("Akn Sent");
+    vTaskDelete(NULL);
 }
 
 void onReceive(int packetSize)
@@ -185,6 +198,14 @@ void onReceive(int packetSize)
         String message;
         int size = LoRa.read();
         int type = LoRa.read();
+        if(type == REC_AKNG)
+        {
+            bool result = LoRa.read();
+            serial_print("Aknowledgement recieved.");
+            AknRecieved=result;
+            serial_print("Result: "+(String)result);
+            return;
+        }
         uint8_t checksum = LoRa.read();
         for (int i=0; i<size; i++)
         {
@@ -195,29 +216,28 @@ void onReceive(int packetSize)
         serial_print("Calculated Checksum: "+(String)get_checksum(message));
         if(checksum == get_checksum(message))
         {
+            AknParameters* akn_param = new AknParameters();
+            akn_param->result = true; 
+            xTaskCreate(LoRa_sendAkn, "LoRa_sendAkn", 6000, (void*)akn_param, 3, NULL);
             TaskParameters* taskParams = new TaskParameters();
             taskParams->data=message;
             switch (type)
             {
                 case RAW_DATA:
                     xTaskCreate(send_msg_to_events, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
-                    vTaskDelay(500/portTICK_PERIOD_MS);
-                    LoRa_sendAkn(true);
                     break;
                 case LORA_MSG:
                     xTaskCreate(send_msg_to_ws, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
-                    vTaskDelay(500/portTICK_PERIOD_MS);
-                    LoRa_sendAkn(true);
                     break;
-                case REC_AKNG:
-                    break; 
                 default:
-                    break;
+                    break;                                
             }
             xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 20000, (void*)taskParams, 1, NULL);
         }
         else{
-            LoRa_sendAkn(false);
+            AknParameters* akn_param = new AknParameters();
+            akn_param->result = false; 
+            xTaskCreate(LoRa_sendAkn, "LoRa_sendAkn", 6000, (void*)akn_param, 3, NULL);
         }
     }
 }

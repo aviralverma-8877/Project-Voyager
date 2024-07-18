@@ -24,19 +24,25 @@
     String data;
     };
 
+    struct AknParameters {
+    bool result;
+    };
+
     extern CRC8 crc;
     extern bool lora_available_for_write;
+    extern uint8_t AknRecieved;
 
     void setup_mqtt();
     void save_lora_config(String value);
     uint8_t get_checksum(String data);
+    void LoRa_send(String data, uint8_t type);
     void LoRa_sendRaw(void *param);
     void set_lora_parameters();
     void config_lora();
     void LoRa_rxMode();
     void LoRa_txMode();
     void LoRa_sendMessage(void *param);
-    void LoRa_sendAkn(bool result);
+    void LoRa_sendAkn(void *param);
     void onReceive(int packetSize);
     void onTxDone();
     void send_msg_to_events(void * parameters);
