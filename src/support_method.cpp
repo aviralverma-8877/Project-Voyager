@@ -50,7 +50,7 @@ void handle_operations(JsonDocument doc)
         bool get_response = doc["get_response"];
         TaskParameters* taskParams = new TaskParameters();
         taskParams->data=msg;
-        xTaskCreate(LoRa_sendMessage, "LoRa_sendMessage", 12000, (void*)taskParams, 2, NULL);
+        xTaskCreate(LoRa_sendMessage, "LoRa_sendMessage", 12000, (void*)taskParams, 1, NULL);
         if(get_response)
             show_alert("LoRa msg transmitted successfully");
     }
@@ -339,7 +339,7 @@ void serial_print(String msg)
 
 void setupTasks()
 {
-    xTaskCreate(btn_intrupt, "btn_intrupt", 6000, NULL, 2, NULL);
+    xTaskCreate(btn_intrupt, "btn_intrupt", 6000, NULL, 1, NULL);
     xTaskCreate(led_nortifier, "led_nortifier", 6000, NULL, 1, NULL);
 }
 

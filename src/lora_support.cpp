@@ -218,9 +218,6 @@ void onReceive(int packetSize)
         serial_print("Calculated Checksum: "+(String)get_checksum(message));
         if(checksum == get_checksum(message) && message.length() == size)
         {
-            AknParameters* akn_param = new AknParameters();
-            akn_param->result = 1; 
-            xTaskCreate(LoRa_sendAkn, "LoRa_sendAkn", 6000, (void*)akn_param, 3, NULL);
             TaskParameters* taskParams = new TaskParameters();
             taskParams->data=message;
             switch (type)
@@ -235,11 +232,14 @@ void onReceive(int packetSize)
                     break;                                
             }
             xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 20000, (void*)taskParams, 1, NULL);
+            AknParameters* akn_param = new AknParameters();
+            akn_param->result = 1; 
+            xTaskCreate(LoRa_sendAkn, "LoRa_sendAkn", 6000, (void*)akn_param, 1, NULL);
         }
         else{
             AknParameters* akn_param = new AknParameters();
             akn_param->result = 0; 
-            xTaskCreate(LoRa_sendAkn, "LoRa_sendAkn", 6000, (void*)akn_param, 3, NULL);
+            xTaskCreate(LoRa_sendAkn, "LoRa_sendAkn", 6000, (void*)akn_param, 1, NULL);
         }
     }
 }
