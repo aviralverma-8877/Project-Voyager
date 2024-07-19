@@ -103,8 +103,23 @@ function wifi() {
   });
 }
 
+function set_mqtt_enabled(val)
+{
+  $("#mqtt_enabled").attr("checked", val);
+  if (!val) {
+    $(".mqtt_enabled").attr("disabled", "true");
+    $("#mqtt_host").val("");
+    $("#mqtt_port").val("");
+    $("#mqtt_uname").val("");
+    $("#mqtt_password").val("");
+  } else {
+    $(".mqtt_enabled").removeAttr("disabled");
+  }
+}
+
 function set_mqtt_auth(val)
 {
+  $("#mqtt_auth").attr("checked", val);
   if (!val) {
     $(".mqtt_auth").attr("disabled", "true");
     $("#mqtt_uname").val("");
@@ -120,10 +135,12 @@ function mqtt() {
   $.get("mqtt.html", function (data) {
     $("#main_content").html(data);
     $.get("mqtt_config.json",function(data){
+      $("#mqtt_enabled").attr("checked", data.mqtt_eanbled);
       $("#mqtt_host").val(data.host);
       $("#mqtt_port").val(data.port);
       $("#mqtt_auth").attr("checked", data.auth);
-      set_mqtt_auth(data.auth)
+      set_mqtt_enabled(data.mqtt_eanbled);
+      set_mqtt_auth(data.auth);
       if(data.auth)
       {
         $("#mqtt_uname").val(data.username);
@@ -134,12 +151,14 @@ function mqtt() {
 }
 
 function save_mqtt(){
+  enable = $("#mqtt_enabled").is(":checked")>0;
   host = $("#mqtt_host").val();
   port = $("#mqtt_port").val()
   auth = $("#mqtt_auth").is(":checked")>0;
   uname = $("#mqtt_uname").val();
   pass = $("#mqtt_password").val();
   $.get("mqtt_config.json",function(data){
+    data.mqtt_eanbled = enable;
     data.host = host;
     data.port = port;
     data.auth = auth;
@@ -314,15 +333,18 @@ function init_events() {
     "RAW_DATA",
     function (e) {
       data = e.data;
-      console.log(data);
-      file_data += data;
-      $("#chunk_ratio").html(
-        "(" + current_packet + " / " + total_packets + ") Received"
-      );
-      current_packet += 1;
-      var percent = (current_packet / total_packets) * 100;
-      $("#file_upload_progress_bar").css("width", percent + "%");
-      $("#file_download").attr("src", file_data);
+      if(data != "")
+      {
+        console.log(data);
+        file_data += data;
+        $("#chunk_ratio").html(
+          "(" + current_packet + " / " + total_packets + ") Received"
+        );
+        current_packet += 1;
+        var percent = (current_packet / total_packets) * 100;
+        $("#file_upload_progress_bar").css("width", percent + "%");
+        $("#file_download").attr("src", file_data);
+      }
     },
     false
   );
@@ -565,7 +587,7 @@ function uploadChunk(chunk, passes_callback, failed_callback) {
   var _href = $("#file_download").attr("src");
   $("#file_download").attr("src", _href + chunk);
   console.log(chunk);
-  $.post("/send_raw", { data: chunk }, function (data) {})
+  $.post("/send_raw", { data: chunk }, timeout=5)
     .done(function () {
       passes_callback();
     })

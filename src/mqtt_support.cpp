@@ -1,5 +1,6 @@
 #include<mqtt_support.h>
 
+bool mqtt_enabled;
 String mqtt_topic_to_ping = "";
 String mqtt_topic_to_subscribe = "";
 String mqtt_topic_to_send_raw = "";
@@ -8,57 +9,64 @@ AsyncMqttClient mqttClient;
 
 void setup_mqtt()
 {
-    serial_print("Setting up mqtt");
-    while(!WiFi.isConnected()){}
-    mqttClient.setCleanSession(true);
-    mqttClient.onConnect(onMqttConnect);
-    mqttClient.onDisconnect(onMqttDisconnect);
-    mqttClient.onSubscribe(onMqttSubscribe);
-    mqttClient.onUnsubscribe(onMqttUnsubscribe);
-    mqttClient.onMessage(onMqttMessage);
-    mqttClient.onPublish(onMqttPublish);
     String mqtt_config = get_mqtt_config();
     JsonDocument doc;
     deserializeJson(doc, mqtt_config);
     doc.shrinkToFit();
-    const char* host_string = doc["host"];
-    uint16_t port = doc["port"];
-    bool auth = doc["auth"];
-    const char* uname = doc["username"];
-    const char* pass = doc["password"];
-
-    String raw_data = doc["raw_data"];
-    mqtt_topic_to_send_raw = raw_data;
-
-    String pub_topic = doc["pub_topic"];
-    mqtt_topic_to_publish = pub_topic;
-
-    String sub_topic = doc["sub_topic"];
-    mqtt_topic_to_subscribe = sub_topic;
-
-    String ping_topic = doc["ping_topic"];
-    mqtt_topic_to_ping = ping_topic;
-    doc.clear();
-    IPAddress host;
-    host.fromString(host_string);
-    serial_print(host.toString());
-    serial_print(String(port));
-
-    if(auth)
+    mqtt_enabled = doc["mqtt_eanbled"];
+    if(mqtt_enabled)
     {
-        serial_print(uname);
-        serial_print(pass);
-        mqttClient.setCredentials(uname, pass);
+        serial_print("Setting up mqtt");
+        while(!WiFi.isConnected()){}
+        mqttClient.setCleanSession(true);
+        mqttClient.onConnect(onMqttConnect);
+        mqttClient.onDisconnect(onMqttDisconnect);
+        mqttClient.onSubscribe(onMqttSubscribe);
+        mqttClient.onUnsubscribe(onMqttUnsubscribe);
+        mqttClient.onMessage(onMqttMessage);
+        mqttClient.onPublish(onMqttPublish);
+        const char* host_string = doc["host"];
+        uint16_t port = doc["port"];
+        bool auth = doc["auth"];
+        const char* uname = doc["username"];
+        const char* pass = doc["password"];
+
+        String raw_data = doc["raw_data"];
+        mqtt_topic_to_send_raw = raw_data;
+
+        String pub_topic = doc["pub_topic"];
+        mqtt_topic_to_publish = pub_topic;
+
+        String sub_topic = doc["sub_topic"];
+        mqtt_topic_to_subscribe = sub_topic;
+
+        String ping_topic = doc["ping_topic"];
+        mqtt_topic_to_ping = ping_topic;
+        doc.clear();
+        IPAddress host;
+        host.fromString(host_string);
+        serial_print(host.toString());
+        serial_print(String(port));
+
+        if(auth)
+        {
+            serial_print(uname);
+            serial_print(pass);
+            mqttClient.setCredentials(uname, pass);
+        }
+        mqttClient.setServer(host, port);
+        connectToMqtt(NULL);
+        xTaskCreate(ping_mqtt_timer, "ping_mqtt_timer", 6000, NULL, 0, NULL);
     }
-    mqttClient.setServer(host, port);
-    connectToMqtt(NULL);
-    xTaskCreate(ping_mqtt_timer, "ping_mqtt_timer", 6000, NULL, 0, NULL);
 }
 
 void connectToMqtt(void *param)
 {
-    serial_print("Connecting to MQTT");
-    mqttClient.connect();
+    if(mqtt_enabled)
+    {
+        serial_print("Connecting to MQTT");
+        mqttClient.connect();
+    }
     vTaskDelete(NULL);
 }
 
@@ -156,22 +164,28 @@ void onMqttPublish(uint16_t packetId) {
 
 void send_to_mqtt(String msg)
 {
-    String mac = WiFi.macAddress();
-    String topic = "voyager/"+mac+"/"+mqtt_topic_to_publish;
-    serial_print("Sending msg to mqtt");
-    // serial_print(topic);
-    // serial_print(msg);
-    mqttClient.publish(topic.c_str(), 2, false, msg.c_str(), msg.length());
+    if(mqtt_enabled)
+    {
+        String mac = WiFi.macAddress();
+        String topic = "voyager/"+mac+"/"+mqtt_topic_to_publish;
+        serial_print("Sending msg to mqtt");
+        // serial_print(topic);
+        // serial_print(msg);
+        mqttClient.publish(topic.c_str(), 2, false, msg.c_str(), msg.length());
+    }
 }
 
 void ping_mqtt(String msg)
 {
-    String mac = WiFi.macAddress();
-    String topic = "voyager/"+mac+"/"+mqtt_topic_to_ping;
-    serial_print("Sending msg to mqtt");
-    serial_print(topic);
-    serial_print(msg);
-    mqttClient.publish(topic.c_str(), 2, false, msg.c_str(), msg.length());
+    if(mqtt_enabled)
+    {
+        String mac = WiFi.macAddress();
+        String topic = "voyager/"+mac+"/"+mqtt_topic_to_ping;
+        serial_print("Sending msg to mqtt");
+        serial_print(topic);
+        serial_print(msg);
+        mqttClient.publish(topic.c_str(), 2, false, msg.c_str(), msg.length());
+    }
 }
 
 void save_mqtt_config(String value)

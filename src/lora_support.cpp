@@ -132,7 +132,7 @@ void LoRa_sendRaw(void *param) {
     LoRa_send(data, RAW_DATA);
     while(AknRecieved != 1)
     {
-        vTaskDelay(500/portTICK_PERIOD_MS);
+        vTaskDelay(50/portTICK_PERIOD_MS);
         if(AknRecieved == 0)
         {
             AknRecieved = 2;
@@ -157,7 +157,7 @@ void LoRa_sendMessage(void *param)  {
     LoRa_send(lora_payload, LORA_MSG);
     while(AknRecieved != 1)
     {
-        vTaskDelay(500/portTICK_PERIOD_MS);
+        vTaskDelay(50/portTICK_PERIOD_MS);
         if(AknRecieved == 0)
         {
             AknRecieved = 2;

@@ -2,6 +2,11 @@
     MQTT Configration.
 </h1>
 <hr>
+<div class="form-check form-switch">
+    <input class="form-check-input" type="checkbox" role="switch" id="mqtt_enabled" onclick="set_mqtt_enabled(this.checked)">
+    <label class="form-check-label" for="mqtt_enabled">Enable MQTT</label>
+</div>
+<fieldset class="mqtt_enabled">
 <div class="form-group row">
     <label for="mqtt_host" class="col-sm-2 col-form-label">MQTT Server IP</label>
     <div class="col-sm-10">
@@ -54,5 +59,6 @@
         >
     </div>
 </div>
+</fieldset>
 </fieldset>
 <button class="btn btn-primary mb-2" onclick="save_mqtt()">Save</button>

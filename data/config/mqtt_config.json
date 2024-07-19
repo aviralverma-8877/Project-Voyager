@@ -1,4 +1,5 @@
 {
+    "mqtt_eanbled":true,
     "host":"192.168.1.133",
     "port":1883,
     "auth":false,

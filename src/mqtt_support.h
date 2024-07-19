@@ -12,6 +12,7 @@
     #include "SPIFFS.h"
     #include "support_method.h"
 
+    extern bool mqtt_enabled;
     extern AsyncMqttClient mqttClient;
     extern String mqtt_topic_to_subscribe;
     extern String mqtt_topic_to_send_raw;
