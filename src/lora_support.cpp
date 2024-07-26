@@ -133,7 +133,6 @@ void LoRa_sendRaw(void *param) {
     int time = millis();
     while(AknRecieved != 1)
     {
-        vTaskDelay(50/portTICK_PERIOD_MS);
         if(AknRecieved == 0)
         {
             AknRecieved = 2;
@@ -163,7 +162,6 @@ void LoRa_sendMessage(void *param)  {
     int time = millis();
     while(AknRecieved != 1)
     {
-        vTaskDelay(50/portTICK_PERIOD_MS);
         if(AknRecieved == 0)
         {
             AknRecieved = 2;
