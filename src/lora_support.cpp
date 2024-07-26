@@ -130,6 +130,7 @@ void LoRa_sendRaw(void *param) {
     String data = (String)params->data;
     AknRecieved = 2;
     LoRa_send(data, RAW_DATA);
+    int time = millis();
     while(AknRecieved != 1)
     {
         vTaskDelay(50/portTICK_PERIOD_MS);
@@ -138,8 +139,12 @@ void LoRa_sendRaw(void *param) {
             AknRecieved = 2;
             LoRa_send(data, RAW_DATA);
         }
+        if(millis()-time > 5000)
+        {
+            AknRecieved = 2;
+            LoRa_send(data, RAW_DATA);
+        }
     }
-    vTaskDelete(NULL);
 }
 
 void LoRa_sendMessage(void *param)  {
@@ -155,11 +160,18 @@ void LoRa_sendMessage(void *param)  {
     doc.clear();
     AknRecieved = 2;
     LoRa_send(lora_payload, LORA_MSG);
+    int time = millis();
     while(AknRecieved != 1)
     {
         vTaskDelay(50/portTICK_PERIOD_MS);
         if(AknRecieved == 0)
         {
+            AknRecieved = 2;
+            LoRa_send(lora_payload, LORA_MSG);
+        }
+        if((millis()-time) > 5000)
+        {
+            time = millis();
             AknRecieved = 2;
             LoRa_send(lora_payload, LORA_MSG);
         }

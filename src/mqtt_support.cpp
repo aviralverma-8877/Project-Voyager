@@ -140,14 +140,7 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
     {
         TaskParameters *packet = new TaskParameters();
         packet->data = msg;
-        TaskHandle_t xHandle = NULL;
-        xTaskCreate(LoRa_sendRaw, "LoRa_sendRaw", 6000, (void*)packet, 1, NULL);
-        eTaskState ts = eTaskGetState(xHandle);
-        while(ts == eRunning)
-        {
-            ts = eTaskGetState(xHandle);
-            vTaskDelay(10/portTICK_PERIOD_MS);
-        }
+        LoRa_sendRaw(packet);
     }
     else if(strcmp(topic, sub_topic.c_str()) == 0)
     {
