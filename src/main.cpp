@@ -28,9 +28,9 @@ void setup() {
   WiFi.onEvent(onWifiDisconnect, SYSTEM_EVENT_STA_DISCONNECTED);
   config_wifi();
 
-  define_api();
   initWebSocket();
-  
+  define_api();  
+
   config_lora();
   setupTasks();
   serial_print("config done");
@@ -38,5 +38,4 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  //vTaskDelay(500/portTICK_PERIOD_MS);
 }

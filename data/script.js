@@ -100,6 +100,9 @@ function wifi() {
   $("#navbar-wifi").addClass("active");
   $.get("wifi.html", function (data) {
     $("#main_content").html(data);
+    $.get("/config.json",function(data){
+      $("#wifi_ssid_name").html(data.wifi_ssid)
+    });
   });
 }
 
@@ -302,7 +305,7 @@ function update_wifi_ssid(ssid) {
 var total_packets = 0;
 var current_packet = 0;
 var file_data = "";
-
+var lastEventTimestamp = 0;
 function init_events() {
   var source = new EventSource("/rawEvents");
   source.addEventListener(
@@ -332,7 +335,10 @@ function init_events() {
   source.addEventListener(
     "RAW_DATA",
     function (e) {
-      data = e.data;
+      if(lastEventTimestamp == e.timeStamp)
+        return
+      lastEventID = e.timeStamp;
+      var data = e.data;
       if(data != "")
       {
         console.log(data);
@@ -345,9 +351,7 @@ function init_events() {
         $("#file_upload_progress_bar").css("width", percent + "%");
         $("#file_download").attr("src", file_data);
       }
-    },
-    false
-  );
+    });
 }
 
 function init_socket() {
