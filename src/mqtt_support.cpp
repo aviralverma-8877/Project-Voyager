@@ -132,7 +132,6 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
     {
         msg += payload[i];
     }
-    serial_print(msg);
     String mac = WiFi.macAddress();
     String sub_topic = "voyager/"+mac+"/"+mqtt_topic_to_subscribe;
     String raw_data = "voyager/"+mac+"/"+mqtt_topic_to_send_raw;
@@ -140,8 +139,7 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
     {
         TaskParameters *packet = new TaskParameters();
         packet->data = msg;
-        xQueueSend(packets, &(packet), (TickType_t)0);
-        LoRa_sendRaw();
+        xQueueSend(send_packets, &(packet), (TickType_t)2);
     }
     else if(strcmp(topic, sub_topic.c_str()) == 0)
     {

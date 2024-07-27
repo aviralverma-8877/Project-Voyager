@@ -17,6 +17,8 @@ void config_lora()
     LoRa.onReceive(onReceive);
     LoRa.onTxDone(onTxDone);
     LoRa_rxMode();
+    xTaskCreate(LoRa_sendRaw,"LoRa_sendRaw", 12000, NULL, 1, NULL);
+    xTaskCreate(send_msg_to_events,"send_msg_to_events", 12000, NULL, 1, NULL);
 }
 
 void save_lora_config(String value)
@@ -107,6 +109,7 @@ uint8_t get_checksum(String data)
 
 void LoRa_send(String data, uint8_t type)
 {
+    serial_print(data);
     while(!lora_available_for_write){}
     LoRa_txMode();
     lora_available_for_write=false;
@@ -124,26 +127,30 @@ void LoRa_send(String data, uint8_t type)
     lora_available_for_write = true;
 }
 
-void LoRa_sendRaw() {
+void LoRa_sendRaw(void* param) {
     serial_print("LoRa_sendRaw");
-    TaskParameters* params = new TaskParameters();
-    if(xQueueReceive(packets, &(params) , (TickType_t)5 ))
+    while(true)
     {
-        String data = (String)params->data;
-        AknRecieved = 2;
-        LoRa_send(data, RAW_DATA);
-        int time = millis();
-        while(AknRecieved != 1)
+        TaskParameters* params = new TaskParameters();
+        if(xQueueReceive(send_packets, &(params) , (TickType_t)500 ))
         {
-            if(AknRecieved == 0)
+            String data = (String)params->data;
+            AknRecieved = 2;
+            LoRa_send(data, RAW_DATA);
+            int time = millis();
+            while(AknRecieved != 1)
             {
-                AknRecieved = 2;
-                LoRa_send(data, RAW_DATA);
-            }
-            if(millis()-time > 5000)
-            {
-                AknRecieved = 2;
-                LoRa_send(data, RAW_DATA);
+                if(AknRecieved == 0)
+                {
+                    AknRecieved = 2;
+                    LoRa_send(data, RAW_DATA);
+                }
+                if(millis()-time > 5000)
+                {
+                    time = millis();
+                    AknRecieved = 2;
+                    LoRa_send(data, RAW_DATA);
+                }
             }
         }
     }
@@ -226,17 +233,18 @@ void onReceive(int packetSize)
         {
             message += (char)LoRa.read();
         }
-        serial_print("Message Recieved: "+message);
-        serial_print("Recieved Checksum: "+(String)checksum);
-        serial_print("Calculated Checksum: "+(String)get_checksum(message));
         if(checksum == get_checksum(message) && message.length() == size)
         {
+            AknParameters* akn_param = new AknParameters();
+            akn_param->result = 1; 
+            xTaskCreate(LoRa_sendAkn, "LoRa_sendAkn", 6000, (void*)akn_param, 1, NULL);
+
             TaskParameters* taskParams = new TaskParameters();
             taskParams->data=message;
             switch (type)
             {
                 case RAW_DATA:
-                    xTaskCreate(send_msg_to_events, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
+                    xQueueSend(rec_packets, &(taskParams), (TickType_t)2);
                     break;
                 case LORA_MSG:
                     xTaskCreate(send_msg_to_ws, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
@@ -245,9 +253,6 @@ void onReceive(int packetSize)
                     break;                                
             }
             xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 20000, (void*)taskParams, 1, NULL);
-            AknParameters* akn_param = new AknParameters();
-            akn_param->result = 1; 
-            xTaskCreate(LoRa_sendAkn, "LoRa_sendAkn", 6000, (void*)akn_param, 1, NULL);
         }
         else{
             AknParameters* akn_param = new AknParameters();
@@ -272,10 +277,16 @@ void send_msg_to_mqtt( void * parameters )
 
 void send_msg_to_events(void * parameters)
 {
-    TaskParameters* params = (TaskParameters*)parameters;
-    String data = (String)params->data;
-    send_to_events(data.c_str(), "RAW_DATA");
-    vTaskDelete(NULL);
+    while(true)
+    {
+        TaskParameters* params = new TaskParameters();
+        if(xQueueReceive(rec_packets, &(params) , (TickType_t)500 ))
+        {
+            String data = (String)params->data;
+            serial_print(data);
+            send_to_events(data.c_str(), "RAW_DATA");
+        }
+    }
 }
 
 void send_msg_to_ws( void * parameters )

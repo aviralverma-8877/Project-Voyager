@@ -15,7 +15,8 @@
     #define U_FLASH   0
     #define U_SPIFFS  100
     #define UPDATE_SIZE_UNKNOWN 0xFFFFFFFF
-    extern QueueHandle_t packets;
+    extern QueueHandle_t send_packets;
+    extern QueueHandle_t rec_packets;
     extern AsyncWebServer server;
     void firmware_web_updater();
     void define_api();
