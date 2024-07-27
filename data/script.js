@@ -587,13 +587,13 @@ function file_broadcast() {
   };
 }
 
-function uploadChunk(chunk, passes_callback, failed_callback) {
+function uploadChunk(chunk, passed_callback, failed_callback) {
   var _href = $("#file_download").attr("src");
   $("#file_download").attr("src", _href + chunk);
   console.log(chunk);
   $.post("/send_raw", { data: chunk }, timeout=5)
     .done(function () {
-      passes_callback();
+      passed_callback();
     })
     .fail(function () {
       failed_callback();

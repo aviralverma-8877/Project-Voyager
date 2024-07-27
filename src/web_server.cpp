@@ -1,9 +1,11 @@
 #include <web_server.h>
 
 AsyncWebServer server(80);
+QueueHandle_t packets;
 
 void define_api()
 {
+  packets = xQueueCreate(10, sizeof(TaskParameters));
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
             {
       if (SPIFFS.exists("/index.html"))
@@ -89,8 +91,9 @@ void define_api()
               serial_print(data);
               TaskParameters *packet = new TaskParameters();
               packet->data = data;
-              LoRa_sendRaw(packet);
-              request->send(200); 
+              xQueueSend(packets, &(packet), (TickType_t)0);
+              request->send(200);
+              LoRa_sendRaw();
             });
   server.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request)
             {

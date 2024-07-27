@@ -140,7 +140,8 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
     {
         TaskParameters *packet = new TaskParameters();
         packet->data = msg;
-        LoRa_sendRaw(packet);
+        xQueueSend(packets, &(packet), (TickType_t)0);
+        LoRa_sendRaw();
     }
     else if(strcmp(topic, sub_topic.c_str()) == 0)
     {

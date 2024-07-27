@@ -124,24 +124,27 @@ void LoRa_send(String data, uint8_t type)
     lora_available_for_write = true;
 }
 
-void LoRa_sendRaw(void *param) {
+void LoRa_sendRaw() {
     serial_print("LoRa_sendRaw");
-    TaskParameters* params = (TaskParameters*)param;
-    String data = (String)params->data;
-    AknRecieved = 2;
-    LoRa_send(data, RAW_DATA);
-    int time = millis();
-    while(AknRecieved != 1)
+    TaskParameters* params = new TaskParameters();
+    if(xQueueReceive(packets, &(params) , (TickType_t)5 ))
     {
-        if(AknRecieved == 0)
+        String data = (String)params->data;
+        AknRecieved = 2;
+        LoRa_send(data, RAW_DATA);
+        int time = millis();
+        while(AknRecieved != 1)
         {
-            AknRecieved = 2;
-            LoRa_send(data, RAW_DATA);
-        }
-        if(millis()-time > 5000)
-        {
-            AknRecieved = 2;
-            LoRa_send(data, RAW_DATA);
+            if(AknRecieved == 0)
+            {
+                AknRecieved = 2;
+                LoRa_send(data, RAW_DATA);
+            }
+            if(millis()-time > 5000)
+            {
+                AknRecieved = 2;
+                LoRa_send(data, RAW_DATA);
+            }
         }
     }
 }

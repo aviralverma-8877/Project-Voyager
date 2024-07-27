@@ -36,7 +36,7 @@
     void save_lora_config(String value);
     uint8_t get_checksum(String data);
     void LoRa_send(String data, uint8_t type);
-    void LoRa_sendRaw(void *param);
+    void LoRa_sendRaw();
     void set_lora_parameters();
     void config_lora();
     void LoRa_rxMode();

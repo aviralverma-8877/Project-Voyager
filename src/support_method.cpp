@@ -92,7 +92,8 @@ void handle_operations(JsonDocument doc)
         serial_print(val);
         TaskParameters *packet = new TaskParameters();
         packet->data = val;
-        LoRa_sendRaw(packet);
+        xQueueSend(packets, &(packet), (TickType_t)0);
+        LoRa_sendRaw();
     }
     if(strcmp(request_type, "set_serial_mode")==0)
     {
