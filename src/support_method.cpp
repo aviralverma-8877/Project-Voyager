@@ -297,8 +297,7 @@ void setup_dns()
     serial_print("DNS service started.");
     serial_print("Soft AP IP.");
     serial_print(WiFi.softAPIP().toString());
-    dnsServer.setTTL(300);
-    dnsServer.setErrorReplyCode(DNSReplyCode::ServerFailure);
+    dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
     dnsServer.start(53, "*", WiFi.softAPIP());
     xTaskCreate(dns_request_process, "DNS Request Handler", 6000, NULL, 1, NULL);
 }
