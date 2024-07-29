@@ -100,14 +100,13 @@ function wifi() {
   $("#navbar-wifi").addClass("active");
   $.get("wifi.html", function (data) {
     $("#main_content").html(data);
-    $.get("/config.json",function(data){
-      $("#wifi_ssid_name").html(data.wifi_ssid)
+    $.get("/config.json", function (data) {
+      $("#wifi_ssid_name").html(data.wifi_ssid);
     });
   });
 }
 
-function set_mqtt_enabled(val)
-{
+function set_mqtt_enabled(val) {
   $("#mqtt_enabled").attr("checked", val);
   if (!val) {
     $(".mqtt_enabled").attr("disabled", "true");
@@ -120,8 +119,7 @@ function set_mqtt_enabled(val)
   }
 }
 
-function set_mqtt_auth(val)
-{
+function set_mqtt_auth(val) {
   $("#mqtt_auth").attr("checked", val);
   if (!val) {
     $(".mqtt_auth").attr("disabled", "true");
@@ -137,30 +135,29 @@ function mqtt() {
   $("#navbar-mqtt").addClass("active");
   $.get("mqtt.html", function (data) {
     $("#main_content").html(data);
-    $.get("mqtt_config.json",function(data){
+    $.get("mqtt_config.json", function (data) {
       $("#mqtt_enabled").attr("checked", data.mqtt_eanbled);
       $("#mqtt_host").val(data.host);
       $("#mqtt_port").val(data.port);
       $("#mqtt_auth").attr("checked", data.auth);
       set_mqtt_enabled(data.mqtt_eanbled);
       set_mqtt_auth(data.auth);
-      if(data.auth)
-      {
+      if (data.auth) {
         $("#mqtt_uname").val(data.username);
-        $("#mqtt_password").val(data.password);  
+        $("#mqtt_password").val(data.password);
       }
-    })
+    });
   });
 }
 
-function save_mqtt(){
-  enable = $("#mqtt_enabled").is(":checked")>0;
+function save_mqtt() {
+  enable = $("#mqtt_enabled").is(":checked") > 0;
   host = $("#mqtt_host").val();
-  port = $("#mqtt_port").val()
-  auth = $("#mqtt_auth").is(":checked")>0;
+  port = $("#mqtt_port").val();
+  auth = $("#mqtt_auth").is(":checked") > 0;
   uname = $("#mqtt_uname").val();
   pass = $("#mqtt_password").val();
-  $.get("mqtt_config.json",function(data){
+  $.get("mqtt_config.json", function (data) {
     data.mqtt_eanbled = enable;
     data.host = host;
     data.port = port;
@@ -236,7 +233,7 @@ function update() {
   });
 }
 
-function alert(msg){
+function alert(msg) {
   $("#alert_body").html(msg);
   alertModel.show();
 }
@@ -269,6 +266,8 @@ function wifi_connect() {
     alert("Invalid password.");
     return;
   }
+  $("#loading_model_body").html("Connecting to WiFi...");
+  loading_alert.show();
   Socket.send(
     JSON.stringify({
       "request-type": "connect_wifi",
@@ -332,26 +331,22 @@ function init_events() {
     false
   );
 
-  source.addEventListener(
-    "RAW_DATA",
-    function (e) {
-      if(lastEventTimestamp == e.timeStamp)
-        return
-      lastEventID = e.timeStamp;
-      var data = e.data;
-      if(data != "")
-      {
-        console.log(data);
-        file_data += data;
-        $("#chunk_ratio").html(
-          "(" + current_packet + " / " + total_packets + ") Received"
-        );
-        current_packet += 1;
-        var percent = (current_packet / total_packets) * 100;
-        $("#file_upload_progress_bar").css("width", percent + "%");
-        $("#file_download").attr("src", file_data);
-      }
-    });
+  source.addEventListener("RAW_DATA", function (e) {
+    if (lastEventTimestamp == e.timeStamp) return;
+    lastEventID = e.timeStamp;
+    var data = e.data;
+    if (data != "") {
+      console.log(data);
+      file_data += data;
+      $("#chunk_ratio").html(
+        "(" + current_packet + " / " + total_packets + ") Received"
+      );
+      current_packet += 1;
+      var percent = (current_packet / total_packets) * 100;
+      $("#file_upload_progress_bar").css("width", percent + "%");
+      $("#file_download").attr("src", file_data);
+    }
+  });
 }
 
 function init_socket() {
@@ -433,9 +428,9 @@ function init_socket() {
   };
   Socket.onopen = function (event) {
     console.log("Connected to web sockets...");
-    setTimeout(function(){
+    setTimeout(function () {
       loading_alert.hide();
-    },1000);
+    }, 1000);
     dashboard();
   };
   Socket.onclose = function (event) {
@@ -591,7 +586,7 @@ function uploadChunk(chunk, passed_callback, failed_callback) {
   var _href = $("#file_download").attr("src");
   $("#file_download").attr("src", _href + chunk);
   console.log(chunk);
-  $.post("/send_raw", { data: chunk }, timeout=5)
+  $.post("/send_raw", { data: chunk }, (timeout = 5))
     .done(function () {
       passed_callback();
     })
