@@ -1,30 +1,44 @@
 <!doctype html>
 <html>
-    <script type="module" src="https://unpkg.com/esp-web-tools@7.3.1/dist/web/install-button.js?module"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
     <body>
         <h1>Project Voyager Web Flasher</h1>
         <hr>
-        <h2>Version 1</h2>
-        <div id="main-1" style="display: none">
+        <select onchange="select_version(this.value)">
+            <option value="1">Version 1</option>
+            <option value="2">Version 2</option>
+        </select>
+        <div id="main" style="display: none">
             <br>
-            <esp-web-install-button id="installButton1" manifest="webflash/manifest-1.json"></esp-web-install-button>
+            <script type="module" src="https://unpkg.com/esp-web-tools@7.3.1/dist/web/install-button.js?module"></script>
+            <esp-web-install-button id="installButton" manifest="webflash/manifest.json"></esp-web-install-button>
             <br>
+            <br>
+            <span>
+                NOTE: Make sure to close anything using your devices com port (e.g.
+        Serial monitor)
+            </span
+      >
         </div>
-        <hr>
-        <h2>Version 2</h2>
-        <div id="main-2" style="display: none">
-            <br>
-            <esp-web-install-button id="installButton2" manifest="webflash/manifest-2.json"></esp-web-install-button>
-            <br>
-        </div>
-        <span>
-            NOTE: Make sure to close anything using your devices com port (e.g.
-  Serial monitor)
-        </span>
         <div id="notSupported" style="display: none">
             Your browser does not support the Web Serial API. Try Chrome
         </div>
         <script>
+      function select_version(val)
+      {
+        if(val == "1")
+        {
+          $("#installButton").attr("manifest",
+            "webflash/manifest-1.json"
+          )
+        }
+        if(val == "2")
+        {
+          $("#installButton").attr("manifest",
+            "webflash/manifest-2.json"
+          )
+        }
+      }
       if (navigator.serial) {
         document.getElementById("notSupported").style.display = "none";
         document.getElementById("main").style.display = "block";
