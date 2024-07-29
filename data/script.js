@@ -597,12 +597,10 @@ function uploadChunk(chunk, passed_callback, failed_callback) {
 
 var file_transfer_mode = false;
 function start_file_transfer_mode() {
-  config_lora_to_serial_fields(true);
   $("#file_download").attr("src", "");
   file_transfer_mode = true;
 }
 function stop_file_transfer_mode() {
-  config_lora_to_serial_fields(false);
   transmission = false;
   file_transfer_mode = false;
 }
