@@ -1,12 +1,12 @@
 {
-    "mqtt_eanbled":true,
-    "host":"192.168.1.133",
-    "port":1883,
-    "auth":false,
-    "username":"",
-    "password":"",
-    "raw_data":"send_raw",
-    "pub_topic":"lora_rx",
-    "sub_topic":"lora_tx",
-    "ping_topic":"ping"
+  "mqtt_eanbled": false,
+  "host": "",
+  "port": 1883,
+  "auth": false,
+  "username": "",
+  "password": "",
+  "raw_data": "send_raw",
+  "pub_topic": "lora_rx",
+  "sub_topic": "lora_tx",
+  "ping_topic": "ping"
 }
