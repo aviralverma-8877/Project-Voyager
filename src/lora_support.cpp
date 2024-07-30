@@ -190,6 +190,7 @@ void LoRa_sendAkn(void *param)
 {
     AknParameters* params = (AknParameters*)param;
     uint8_t result = (uint8_t)params->result;
+    serial_print("SENT AKN: "+(String)result);
     while(!lora_available_for_write){}
     LoRa_txMode();
     lora_available_for_write=false;
@@ -223,9 +224,8 @@ void onReceive(int packetSize)
         if(type == REC_AKNG)
         {
             uint8_t result = (uint8_t)LoRa.read();
-            serial_print("Aknowledgement recieved.");
+            serial_print("REC AKN: "+(String)result);
             AknRecieved=result;
-            serial_print("Result: "+(String)result);
             return;
         }
         for (int i=0; i<size; i++)
