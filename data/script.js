@@ -350,6 +350,16 @@ function init_events() {
       $("#file_download").attr("src", file_data);
     }
   });
+
+  source.addEventListener("RAM_DATA", function (e) {
+    var data = JSON.parse(e.data);
+    if (data != "") {
+      var free_heap = parseInt(data.free_heap);
+      var heap_size = parseInt(data.heap_size);
+      var heap_per = ((heap_size - free_heap) / heap_size) * 100;
+      $("#heap_progress_bar").css("width", heap_per + "%");
+    }
+  });
 }
 
 function init_socket() {

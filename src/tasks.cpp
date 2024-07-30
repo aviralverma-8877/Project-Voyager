@@ -92,3 +92,19 @@ void btn_intrupt(void *param)
     }
 }
 
+void get_heap_info(void* params)
+{
+    while(true)
+    {
+        int free_heap = ESP.getFreeHeap();
+        int heap_size = ESP.getHeapSize();
+        JsonDocument doc;
+        doc["free_heap"] = free_heap;
+        doc["heap_size"] = heap_size;
+        String data;
+        serializeJson(doc, data);
+        doc.clear();
+        send_to_events(data.c_str(), "RAM_DATA");
+        vTaskDelay(1000/portTICK_PERIOD_MS);
+    }
+}

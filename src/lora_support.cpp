@@ -152,14 +152,14 @@ void LoRa_sendRaw(void* param) {
                 }
             }
         }
-        delete params;
+        free(params);
     }
 }
 
 void LoRa_sendMessage(void *param)  {
     TaskParameters* params = (TaskParameters*)param;
     String message = (String)params->data;
-    delete params;
+    free(params);
     serial_print("LoRa_sendMessage");
     JsonDocument doc;
     doc["name"] = username;
@@ -192,7 +192,7 @@ void LoRa_sendAkn(void *param)
 {
     AknParameters* params = (AknParameters*)param;
     uint8_t result = (uint8_t)params->result;
-    delete params;
+    free(params);
     serial_print("SENT AKN: "+(String)result);
     while(!lora_available_for_write){}
     LoRa_txMode();
@@ -270,7 +270,7 @@ void send_msg_to_mqtt( void * parameters )
     JsonDocument doc;
     doc["response_type"] = "lora_rx";
     doc["lora_msg"] = (String)params->data;
-    delete params;
+    free(params);
     String data;
     serializeJson(doc, data);
     doc.clear();

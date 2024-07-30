@@ -16,4 +16,5 @@
     void led_nortifier(void *param);
     void btn_intrupt(void *param);
     void transmit_beacon();
+    void get_heap_info(void* params);
 #endif
