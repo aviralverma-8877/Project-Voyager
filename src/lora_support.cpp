@@ -192,6 +192,7 @@ void LoRa_sendAkn(void *param)
 {
     AknParameters* params = (AknParameters*)param;
     uint8_t result = (uint8_t)params->result;
+    delete params;
     serial_print("SENT AKN: "+(String)result);
     while(!lora_available_for_write){}
     LoRa_txMode();
