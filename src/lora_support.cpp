@@ -152,12 +152,14 @@ void LoRa_sendRaw(void* param) {
                 }
             }
         }
+        delete params;
     }
 }
 
 void LoRa_sendMessage(void *param)  {
     TaskParameters* params = (TaskParameters*)param;
     String message = (String)params->data;
+    delete params;
     serial_print("LoRa_sendMessage");
     JsonDocument doc;
     doc["name"] = username;
@@ -243,15 +245,15 @@ void onReceive(int packetSize)
             switch (type)
             {
                 case RAW_DATA:
-                    xTaskCreate(send_msg_to_events, "lora message to events", 20000, (void*)taskParams, 1, NULL);
+                    xTaskCreate(send_msg_to_events, "lora message to events", 6000, (void*)taskParams, 1, NULL);
                     break;
                 case LORA_MSG:
-                    xTaskCreate(send_msg_to_ws, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
+                    xTaskCreate(send_msg_to_ws, "lora message to ws", 6000, (void*)taskParams, 1, NULL);
                     break;
                 default:
                     break;                                
             }
-            xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 20000, (void*)taskParams, 1, NULL);
+            xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 6000, (void*)taskParams, 1, NULL);
         }
         else{
             AknParameters* akn_param = new AknParameters();
@@ -267,6 +269,7 @@ void send_msg_to_mqtt( void * parameters )
     JsonDocument doc;
     doc["response_type"] = "lora_rx";
     doc["lora_msg"] = (String)params->data;
+    delete params;
     String data;
     serializeJson(doc, data);
     doc.clear();

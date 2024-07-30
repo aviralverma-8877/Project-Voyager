@@ -303,6 +303,7 @@ function update_wifi_ssid(ssid) {
 
 var total_packets = 0;
 var current_packet = 0;
+var last_packet = "";
 var file_data = "";
 var lastEventTimestamp = 0;
 function init_events() {
@@ -335,6 +336,8 @@ function init_events() {
     if (lastEventTimestamp == e.timeStamp) return;
     lastEventID = e.timeStamp;
     var data = e.data;
+    if (last_packet == data) return;
+    last_packet = data;
     if (data != "") {
       console.log(data);
       file_data += data;
