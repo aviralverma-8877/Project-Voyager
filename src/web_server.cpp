@@ -7,28 +7,17 @@ void define_api()
 {
   send_packets = xQueueCreate(20, sizeof(TaskParameters));
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-      if (SPIFFS.exists("/index.html"))
-      {
-        File index = SPIFFS.open("/index.html");
-        if (index) {
-            serial_print("index");
-            request->send(SPIFFS, "/index.html", "text/html");
-        }
-        else{
-          serial_print("Redirected to /update");
-          request->redirect("/update");
-        }
-      }
-      else{
-        serial_print("Redirected to /update");
-        request->redirect("/update");
-      } });
-  server.serveStatic("/", SPIFFS, "/");
-  server.onNotFound([](AsyncWebServerRequest *request)
-                    {
-    serial_print("Not Found");
-    request->redirect("/"); });
+  {
+    File index = SPIFFS.open("/index.html");
+    if (index) {
+        serial_print("index");
+        request->send(SPIFFS, "/index.html", "text/html");
+    }
+    else{
+      serial_print("Redirected to /update");
+      request->redirect("/update");
+    }
+  });
   server.on("/hostname", HTTP_GET, [](AsyncWebServerRequest *request)
             {
         serial_print("hostname");
@@ -55,6 +44,11 @@ void define_api()
               xTaskCreate(reset_device, "reset_devide", 6000, NULL, 1, NULL);
             });
   firmware_web_updater();
+  server.serveStatic("/", SPIFFS, "/");
+  server.onNotFound([](AsyncWebServerRequest *request)
+                    {
+    serial_print("Not Found");
+    request->redirect("/"); });
   server.begin();
 }
 

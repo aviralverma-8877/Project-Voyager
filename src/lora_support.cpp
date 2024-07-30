@@ -176,7 +176,7 @@ void LoRa_sendMessage(void *param)  {
             AknRecieved = 2;
             LoRa_send(lora_payload, LORA_MSG);
         }
-        if((millis()-time) > 5000)
+        if((millis()-time) > 1000)
         {
             time = millis();
             AknRecieved = 2;
