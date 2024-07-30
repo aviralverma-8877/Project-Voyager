@@ -12,6 +12,15 @@ void initWebSocket() {
   server.addHandler(&webSocket);
 }
 
+void clean_up_client(void* params)
+{
+  while(true)
+  {
+    webSocket.cleanupClients();
+    vTaskDelay(50/portTICK_PERIOD_MS);
+  }
+}
+
 void handle_ws_request(void *arg, uint8_t *data, size_t len)
 {
   String json = "";
