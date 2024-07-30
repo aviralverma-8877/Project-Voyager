@@ -18,7 +18,7 @@ $("#myModal").on("shown.bs.modal", function () {
 });
 
 function set_sync_word(val) {
-  $.get("lora_config.json", function (lora_config) {
+  $.get("/config/lora_config.json", function (lora_config) {
     $("#sync_word").val(lora_config.SyncWord);
   });
 }
@@ -75,7 +75,7 @@ function dashboard() {
   $("#navbar-dashboard").addClass("active");
   $.get("dashboard.html", function (data) {
     $("#main_content").html(data);
-    $.get("/lora_serial.json", function (config) {
+    $.get("/config/lora_serial.json", function (config) {
       $("#lora_to_serial").attr("checked", config.lora_serial);
       config_lora_to_serial_fields(config.lora_serial);
       setTimeout(function () {
@@ -89,7 +89,7 @@ function dashboard() {
 function file_transfer() {
   $.get("file_transfer.html", function (data) {
     $("#main_content").html(data);
-    $.get("/lora_serial.json", function (config) {
+    $.get("/config/lora_serial.json", function (config) {
       config_lora_to_serial_fields(config.lora_serial);
     });
   });
@@ -100,7 +100,7 @@ function wifi() {
   $("#navbar-wifi").addClass("active");
   $.get("wifi.html", function (data) {
     $("#main_content").html(data);
-    $.get("/config.json", function (data) {
+    $.get("/config/wifi_config.json", function (data) {
       $("#wifi_ssid_name").html(data.wifi_ssid);
     });
   });
@@ -135,7 +135,7 @@ function mqtt() {
   $("#navbar-mqtt").addClass("active");
   $.get("mqtt.html", function (data) {
     $("#main_content").html(data);
-    $.get("mqtt_config.json", function (data) {
+    $.get("/config/mqtt_config.json", function (data) {
       $("#mqtt_enabled").attr("checked", data.mqtt_eanbled);
       $("#mqtt_host").val(data.host);
       $("#mqtt_port").val(data.port);
@@ -157,7 +157,7 @@ function save_mqtt() {
   auth = $("#mqtt_auth").is(":checked") > 0;
   uname = $("#mqtt_uname").val();
   pass = $("#mqtt_password").val();
-  $.get("mqtt_config.json", function (data) {
+  $.get("/config/mqtt_config.json", function (data) {
     data.mqtt_eanbled = enable;
     data.host = host;
     data.port = port;
@@ -175,7 +175,7 @@ function save_mqtt() {
 }
 
 function save_lora_config() {
-  $.get("lora_config.json", function (lora_config) {
+  $.get("/config/lora_config.json", function (lora_config) {
     freq = $("#freq_range").val();
     tx_power = $("#tx_power_range").val();
     s_fact = $("#spreading_factor").val();
@@ -203,7 +203,7 @@ function lora() {
   $("#navbar-lora").addClass("active");
   $.get("lora.html", function (data) {
     $("#main_content").html(data);
-    $.get("lora_config.json", function (lora_config) {
+    $.get("/config/lora_config.json", function (lora_config) {
       generate_sync_word();
 
       $("#freq_range").val(lora_config.freq / 1000000);
@@ -411,7 +411,6 @@ function init_socket() {
             file_data = "";
             start_file_transfer_mode();
           } else if (action == "disable_file_tx_mode") {
-            $("#file_download").attr("src", file_data);
             stop_file_transfer_mode();
           }
         }
@@ -525,7 +524,7 @@ function file_broadcast() {
     );
     $("#file_upload_progress_bar").removeClass("bg-success");
     function loop(s) {
-      if (s < dataURL.length && transmission == true) {
+      if (s < dataURL.length && transmission) {
         uploadChunk(
           dataURL.slice(s, s + chunkSize),
           () => {

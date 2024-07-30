@@ -324,7 +324,7 @@ void serial_print(String msg)
 {
     if(DEBUGGING && !lora_serial)
     {
-        Serial.println(msg);
+        Serial.println("\n"+msg);
     }
 }
 

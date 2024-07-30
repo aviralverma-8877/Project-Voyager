@@ -18,7 +18,6 @@ void config_lora()
     LoRa.onTxDone(onTxDone);
     LoRa_rxMode();
     xTaskCreate(LoRa_sendRaw,"LoRa_sendRaw", 12000, NULL, 1, NULL);
-    xTaskCreate(send_msg_to_events,"send_msg_to_events", 12000, NULL, 1, NULL);
 }
 
 void save_lora_config(String value)
@@ -202,7 +201,7 @@ void LoRa_sendAkn(void *param)
     LoRa.endPacket(true);                 // finish packet and send it
     LoRa_rxMode();
     lora_available_for_write = true;
-    serial_print("Akn Sent");
+    // serial_print("Akn Sent");
     vTaskDelete(NULL);
 }
 
@@ -244,7 +243,7 @@ void onReceive(int packetSize)
             switch (type)
             {
                 case RAW_DATA:
-                    xQueueSend(rec_packets, &(taskParams), (TickType_t)2);
+                    xTaskCreate(send_msg_to_events, "lora message to events", 20000, (void*)taskParams, 1, NULL);
                     break;
                 case LORA_MSG:
                     xTaskCreate(send_msg_to_ws, "lora message to ws", 20000, (void*)taskParams, 1, NULL);
@@ -277,16 +276,10 @@ void send_msg_to_mqtt( void * parameters )
 
 void send_msg_to_events(void * parameters)
 {
-    while(true)
-    {
-        TaskParameters* params = new TaskParameters();
-        if(xQueueReceive(rec_packets, &(params) , (TickType_t)500 ))
-        {
-            String data = (String)params->data;
-            serial_print(data);
-            send_to_events(data.c_str(), "RAW_DATA");
-        }
-    }
+    TaskParameters* params = (TaskParameters*)parameters;
+    String data = (String)params->data;
+    send_to_events(data.c_str(), "RAW_DATA");
+    vTaskDelete(NULL);
 }
 
 void send_msg_to_ws( void * parameters )

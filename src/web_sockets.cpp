@@ -30,6 +30,7 @@ void handle_ws_request(void *arg, uint8_t *data, size_t len)
 
 void send_to_events(const char* return_value, const char* topic)
 {
+  serial_print(return_value);
   rawEvents.send(return_value, topic);
 }
 

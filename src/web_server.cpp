@@ -2,12 +2,10 @@
 
 AsyncWebServer server(80);
 QueueHandle_t send_packets;
-QueueHandle_t rec_packets;
 
 void define_api()
 {
   send_packets = xQueueCreate(20, sizeof(TaskParameters));
-  rec_packets = xQueueCreate(20, sizeof(TaskParameters));
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
             {
       if (SPIFFS.exists("/index.html"))
@@ -26,66 +24,15 @@ void define_api()
         serial_print("Redirected to /update");
         request->redirect("/update");
       } });
+  server.serveStatic("/", SPIFFS, "/");
   server.onNotFound([](AsyncWebServerRequest *request)
                     {
     serial_print("Not Found");
     request->redirect("/"); });
-  server.on("/bootstrap.min.css", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-        serial_print("bootstrap.min.css");
-        request->send(SPIFFS, "/bootstrap.min.css", "text/css"); });
-  server.on("/jquery-3.7.1.min.js", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-        serial_print("jquery-3.7.1.min.js");
-        request->send(SPIFFS, "/jquery-3.7.1.min.js", "text/javascript"); });
-  server.on("/bootstrap.bundle.min.js", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-        serial_print("bootstrap.bundle.min.js");
-        request->send(SPIFFS, "/bootstrap.bundle.min.js", "text/javascript"); });
-  server.on("/script.js", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-        serial_print("script.js");
-        request->send(SPIFFS, "/script.js", "text/javascript"); });
-  server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-        serial_print("favicon.ico");
-        request->send(SPIFFS, "/favicon.ico", "image/vnd"); });
-  server.on("/dashboard.html", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-        serial_print("dashboard.html");
-        request->send(SPIFFS, "/dashboard.html", "text/html"); });
-  server.on("/wifi.html", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-        serial_print("wifi.html");
-        request->send(SPIFFS, "/wifi.html", "text/html"); });
-    server.on("/mqtt.html", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-        serial_print("mqtt.html");
-        request->send(SPIFFS, "/mqtt.html", "text/html"); });
-  server.on("/lora.html", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-        serial_print("lora.html");
-        request->send(SPIFFS, "/lora.html", "text/html"); });
-  server.on("/file_transfer.html", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-        serial_print("file_transfer.html");
-        request->send(SPIFFS, "/file_transfer.html", "text/html"); });
-  server.on("/Voyager_spacecraft.jpg", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-        serial_print("Voyager_spacecraft.jpg");
-        request->send(SPIFFS, "/Voyager_spacecraft.jpg", "image/jpeg"); });
   server.on("/hostname", HTTP_GET, [](AsyncWebServerRequest *request)
             {
         serial_print("hostname");
         request->send(200, "text/plain", hostname); });
-  server.on("/lora_config.json", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-          serial_print("/config/lora_config.json");
-          request->send(SPIFFS, "/config/lora_config.json", "text/json"); });
-  server.on("/lora_serial.json", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-          serial_print("/config/lora_serial.json");
-          request->send(SPIFFS, "/config/lora_serial.json", "text/json"); });
   server.on("/send_raw", HTTP_POST, [](AsyncWebServerRequest *request)
             {
               AsyncWebParameter * j = request->getParam(0);
@@ -107,14 +54,6 @@ void define_api()
               request->send(200, "Resetting device ....");
               xTaskCreate(reset_device, "reset_devide", 6000, NULL, 1, NULL);
             });
-  server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-        serial_print("/config/wifi_config.json");
-        request->send(SPIFFS, "/config/wifi_config.json", "text/json"); });
-  server.on("/mqtt_config.json", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-        serial_print("/config/mqtt_config.json");
-        request->send(SPIFFS, "/config/mqtt_config.json", "text/json"); });
   firmware_web_updater();
   server.begin();
 }
