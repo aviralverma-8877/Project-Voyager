@@ -516,8 +516,8 @@ function file_broadcast() {
       alert("packet size should be between 1-200");
       return;
     }
-    if (waitTime < 500) {
-      alert("Wait time should be greater than 1000ms");
+    if (waitTime < 200) {
+      alert("Wait time should be greater than 200ms");
       return;
     }
     const total_chunk = Math.floor(dataURL.length / chunkSize);
