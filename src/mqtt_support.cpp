@@ -158,6 +158,7 @@ void send_to_mqtt(void* param)
 {
     TaskParameters* params = (TaskParameters*)param;
     String msg = (String)params->data;
+    free(params);
     if(mqtt_enabled)
     {
         String mac = WiFi.macAddress();
@@ -167,7 +168,6 @@ void send_to_mqtt(void* param)
         // serial_print(msg);
         mqttClient.publish(topic.c_str(), 2, false, msg.c_str(), msg.length());
     }
-    free(params);
     vTaskDelete(NULL);
 }
 

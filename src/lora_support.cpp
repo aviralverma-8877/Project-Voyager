@@ -131,7 +131,8 @@ void LoRa_sendRaw(void* param) {
     while(true)
     {
         TaskParameters* params = new TaskParameters();
-        if(xQueueReceive(send_packets, &(params) , (TickType_t)500 ))
+        BaseType_t xTaskWokenByReceive = pdFALSE;
+        if( xQueueReceiveFromISR(send_packets, &(params) , &xTaskWokenByReceive))
         {
             String data = (String)params->data;
             AknRecieved = 2;
@@ -279,7 +280,7 @@ void send_msg_to_mqtt(String data)
     doc.clear();
     TaskParameters* taskParams = new TaskParameters();
     taskParams->data=val;
-    xTaskCreate(send_to_mqtt, "send_to_mqtt", 6000, (void*) taskParams, 1, NULL);
+    xTaskCreate(send_to_mqtt, "send_to_mqtt", 10000, (void*) taskParams, 1, NULL);
 }
 
 void send_msg_to_events(String data)
@@ -287,7 +288,7 @@ void send_msg_to_events(String data)
     EventParam* param = new EventParam();
     param->data = data;
     param->topic = "RAW_DATA";
-    xTaskCreate(send_to_events, "send_to_events", 6000, (void*)param, 1, NULL);
+    xTaskCreate(send_to_events, "send_to_events", 10000, (void*)param, 1, NULL);
 }
 
 void send_msg_to_ws(String data)
@@ -300,7 +301,7 @@ void send_msg_to_ws(String data)
     doc.clear();
     TaskParameters* taskParams = new TaskParameters();
     taskParams->data=val;
-    xTaskCreate(send_to_ws, "send_to_ws", 6000, (void*) taskParams, 1, NULL);
+    xTaskCreate(send_to_ws, "send_to_ws", 10000, (void*) taskParams, 1, NULL);
 }
 
 void onTxDone()

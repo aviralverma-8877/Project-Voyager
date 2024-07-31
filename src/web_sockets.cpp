@@ -41,9 +41,9 @@ void send_to_events(void* param)
 {
   EventParam* params = (EventParam*)param;
   String return_value = (String)params->data;
+  free(params);
   String topic = (String)params->topic;
   rawEvents.send(return_value.c_str(), topic.c_str());
-  free(params);
   vTaskDelete(NULL);
 }
 
@@ -51,11 +51,11 @@ void send_to_ws(void* param)
 {
   TaskParameters* params = (TaskParameters*)param;
   String return_value = (String)params->data;
+  free(params);
   if(ws_connected)
   {
     webSocket.textAll(return_value);
   }
-  free(params);
   vTaskDelete(NULL);
 }
 
