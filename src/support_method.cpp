@@ -70,9 +70,7 @@ void handle_operations(JsonDocument doc)
         String return_value;
         serializeJson(doc, return_value);
         doc.clear();
-        TaskParameters* taskParams = new TaskParameters();
-        taskParams->data=return_value;
-        xTaskCreate(send_to_ws, "send_to_ws", 6000, (void*) taskParams, 1, NULL);
+        send_to_ws(return_value);
     }
     if(strcmp(request_type, "set_mqtt_config") == 0)
     {
@@ -115,9 +113,7 @@ void handle_operations(JsonDocument doc)
         String return_value;
         serializeJson(doc, return_value);
         doc.clear();
-        TaskParameters* taskParams = new TaskParameters();
-        taskParams->data=return_value;
-        xTaskCreate(send_to_ws, "send_to_ws", 6000, (void*) taskParams, 1, NULL);
+        send_to_ws(return_value);
     }
 }
 
@@ -273,9 +269,7 @@ void show_alert(String msg)
     String return_response;
     serializeJsonPretty(doc, return_response);
     doc.clear();
-    TaskParameters* taskParams = new TaskParameters();
-    taskParams->data=return_response;
-    xTaskCreate(send_to_ws, "send_to_ws", 6000, (void*) taskParams, 1, NULL);
+    send_to_ws(return_response);
 }
 
 void restart(void *param)

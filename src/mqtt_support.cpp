@@ -154,11 +154,8 @@ void onMqttPublish(uint16_t packetId) {
     mqttClient.clearQueue();
 }
 
-void send_to_mqtt(void* param)
+void send_to_mqtt(String msg)
 {
-    TaskParameters* params = (TaskParameters*)param;
-    String msg = (String)params->data;
-    delete params;
     if(mqtt_enabled)
     {
         String mac = WiFi.macAddress();

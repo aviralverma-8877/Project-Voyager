@@ -18,6 +18,7 @@ void config_lora()
     LoRa.onTxDone(onTxDone);
     LoRa_rxMode();
     xTaskCreate(LoRa_sendRaw,"LoRa_sendRaw", 12000, NULL, 1, NULL);
+    xTaskCreate(manage_recv_queue,"manage_recv_queue", 12000, NULL, 1, NULL);
 }
 
 void save_lora_config(String value)
@@ -251,6 +252,27 @@ void onReceive(int packetSize)
         if(checksum == get_checksum(message) && message.length() == size)
         {
             LoRa_sendAkn(1);
+            RecvQueueParam* param = new RecvQueueParam();
+            param->type = type;
+            param->message = message;
+            xQueueSend(recv_packets, &(param), (TickType_t)2);
+        }
+        else{
+            LoRa_sendAkn(0);
+        }
+    }
+}
+
+void manage_recv_queue(void* param)
+{
+    while(true)
+    {
+        RecvQueueParam* params = new RecvQueueParam();
+        BaseType_t xTaskWokenByReceive = pdTRUE;
+        if(xQueueReceiveFromISR(recv_packets, &(params) , &xTaskWokenByReceive))
+        {
+            uint8_t type = params->type;
+            String message = params->message;
             switch (type)
             {
                 case RAW_DATA:
@@ -264,9 +286,7 @@ void onReceive(int packetSize)
             }
             send_msg_to_mqtt(message);
         }
-        else{
-            LoRa_sendAkn(0);
-        }
+        vTaskDelay(50/portTICK_PERIOD_MS);
     }
 }
 
@@ -278,17 +298,12 @@ void send_msg_to_mqtt(String data)
     String val;
     serializeJson(doc, val);
     doc.clear();
-    TaskParameters* taskParams = new TaskParameters();
-    taskParams->data=val;
-    xTaskCreate(send_to_mqtt, "send_to_mqtt", 10000, (void*) taskParams, 1, NULL);
+    send_to_mqtt(val);
 }
 
 void send_msg_to_events(String data)
 {
-    EventParam* param = new EventParam();
-    param->data = data;
-    param->topic = "RAW_DATA";
-    xTaskCreate(send_to_events, "send_to_events", 10000, (void*)param, 1, NULL);
+    send_to_events(data, "RAW_DATA");
 }
 
 void send_msg_to_ws(String data)
@@ -299,9 +314,7 @@ void send_msg_to_ws(String data)
     String val;
     serializeJson(doc, val);
     doc.clear();
-    TaskParameters* taskParams = new TaskParameters();
-    taskParams->data=val;
-    xTaskCreate(send_to_ws, "send_to_ws", 10000, (void*) taskParams, 1, NULL);
+    send_to_ws(val);
 }
 
 void onTxDone()

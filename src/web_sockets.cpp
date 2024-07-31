@@ -37,26 +37,17 @@ void handle_ws_request(void *arg, uint8_t *data, size_t len)
   doc.clear();
 }
 
-void send_to_events(void* param)
+void send_to_events(String data, String topic)
 {
-  EventParam* params = (EventParam*)param;
-  String return_value = (String)params->data;
-  String topic = (String)params->topic;
-  delete params;
-  rawEvents.send(return_value.c_str(), topic.c_str());
-  vTaskDelete(NULL);
+  rawEvents.send(data.c_str(), topic.c_str());
 }
 
-void send_to_ws(void* param)
+void send_to_ws(String return_value)
 {
-  TaskParameters* params = (TaskParameters*)param;
-  String return_value = (String)params->data;
-  delete params;
   if(ws_connected)
   {
     webSocket.textAll(return_value);
   }
-  vTaskDelete(NULL);
 }
 
 void onRawEvents(AsyncEventSourceClient *client){

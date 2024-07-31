@@ -24,9 +24,9 @@
     String data;
     };
 
-    struct EventParam {
-        String data;
-        String topic;
+    struct RecvQueueParam {
+        uint8_t type;
+        String message;
     };
 
     extern CRC8 crc;
@@ -43,6 +43,7 @@
     void LoRa_rxMode();
     void LoRa_txMode();
     void LoRa_sendMessage(void *param);
+    void manage_recv_queue(void* param);
     void LoRa_sendAkn(uint8_t result);
     void onReceive(int packetSize);
     void onTxDone();

@@ -12,8 +12,8 @@
     extern bool ws_connected;
     void initWebSocket();
     void onRawEvents(AsyncEventSourceClient *client);
-    void send_to_events(void* param);
-    void send_to_ws(void* param);
+    void send_to_events(String data, String topic);
+    void send_to_ws(String return_value);
     void handle_ws_request(void *arg, uint8_t *data, size_t len);
     void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
              void *arg, uint8_t *data, size_t len);

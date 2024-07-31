@@ -2,10 +2,12 @@
 
 AsyncWebServer server(80);
 QueueHandle_t send_packets;
+QueueHandle_t recv_packets;
 
 void define_api()
 {
   send_packets = xQueueCreate(20, sizeof(TaskParameters));
+  recv_packets = xQueueCreate(20, sizeof(RecvQueueParam));
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
   {
     File index = SPIFFS.open("/index.html");
