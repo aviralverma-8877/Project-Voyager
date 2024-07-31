@@ -348,7 +348,7 @@ function init_events() {
       current_packet += 1;
       var percent = (current_packet / total_packets) * 100;
       $("#file_upload_progress_bar").css("width", percent + "%");
-      $("#file_download").attr("src", file_data);
+      $("#data_url_download_link").attr("href", file_data);
     }
   });
 
@@ -511,13 +511,13 @@ function file_broadcast() {
     const dataURL = reader.result;
     const chunkSize = parseInt($("#chunk_size").val());
     const waitTime = parseInt($("#wait_time").val());
-    $("#file_download").attr("src", "");
+    $("#data_url_download_link").attr("href", "");
     if (chunkSize > 200 || chunkSize < 0) {
       alert("packet size should be between 1-200");
       return;
     }
-    if (waitTime < 200) {
-      alert("Wait time should be greater than 200ms");
+    if (waitTime < 500) {
+      alert("Wait time should be greater than 500ms");
       return;
     }
     const total_chunk = Math.floor(dataURL.length / chunkSize);
@@ -596,8 +596,8 @@ function file_broadcast() {
 }
 
 function uploadChunk(chunk, passed_callback, failed_callback) {
-  var _href = $("#file_download").attr("src");
-  $("#file_download").attr("src", _href + chunk);
+  var _href = $("#data_url_download_link").attr("href");
+  $("#data_url_download_link").attr("href", _href + chunk);
   console.log(chunk);
   $.post("/send_raw", { data: chunk }, (timeout = 5))
     .done(function () {
@@ -610,7 +610,7 @@ function uploadChunk(chunk, passed_callback, failed_callback) {
 
 var file_transfer_mode = false;
 function start_file_transfer_mode() {
-  $("#file_download").attr("src", "");
+  $("#data_url_download_link").attr("href", "");
   file_transfer_mode = true;
 }
 function stop_file_transfer_mode() {
