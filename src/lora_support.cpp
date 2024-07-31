@@ -161,7 +161,7 @@ void LoRa_sendRaw(void* param) {
                 vTaskDelay(50/portTICK_PERIOD_MS);
             }
         }
-        free(params);
+        delete params;
         vTaskDelay(50/portTICK_PERIOD_MS);
     }
 }
@@ -169,7 +169,7 @@ void LoRa_sendRaw(void* param) {
 void LoRa_sendMessage(void *param)  {
     TaskParameters* params = (TaskParameters*)param;
     String message = (String)params->data;
-    free(params);
+    delete params;
     serial_print("LoRa_sendMessage");
     JsonDocument doc;
     doc["name"] = username;

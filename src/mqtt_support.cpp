@@ -158,7 +158,7 @@ void send_to_mqtt(void* param)
 {
     TaskParameters* params = (TaskParameters*)param;
     String msg = (String)params->data;
-    free(params);
+    delete params;
     if(mqtt_enabled)
     {
         String mac = WiFi.macAddress();
