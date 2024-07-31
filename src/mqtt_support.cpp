@@ -161,11 +161,8 @@ void send_to_mqtt(String msg)
         String mac = WiFi.macAddress();
         String topic = "voyager/"+mac+"/"+mqtt_topic_to_publish;
         serial_print("Sending msg to mqtt");
-        // serial_print(topic);
-        // serial_print(msg);
         mqttClient.publish(topic.c_str(), 2, false, msg.c_str(), msg.length());
     }
-    vTaskDelete(NULL);
 }
 
 void ping_mqtt(String msg)

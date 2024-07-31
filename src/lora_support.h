@@ -25,7 +25,7 @@
     };
 
     struct RecvQueueParam {
-        uint8_t type;
+        int type;
         String message;
     };
 

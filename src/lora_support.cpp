@@ -17,8 +17,8 @@ void config_lora()
     LoRa.onReceive(onReceive);
     LoRa.onTxDone(onTxDone);
     LoRa_rxMode();
-    xTaskCreate(LoRa_sendRaw,"LoRa_sendRaw", 12000, NULL, 1, NULL);
-    xTaskCreate(manage_recv_queue,"manage_recv_queue", 12000, NULL, 1, NULL);
+    xTaskCreate(LoRa_sendRaw,"LoRa_sendRaw", 6000, NULL, 1, NULL);
+    xTaskCreate(manage_recv_queue,"manage_recv_queue", 6000, NULL, 1, NULL);
 }
 
 void save_lora_config(String value)
@@ -132,8 +132,7 @@ void LoRa_sendRaw(void* param) {
     while(true)
     {
         TaskParameters* params = new TaskParameters();
-        BaseType_t xTaskWokenByReceive = pdTRUE;
-        if(xQueueReceiveFromISR(send_packets, &(params) , &xTaskWokenByReceive))
+        if(xQueueReceive(send_packets, &(params) , ( TickType_t )50))
         {
             String data = (String)params->data;
             AknRecieved = 2;
@@ -255,7 +254,7 @@ void onReceive(int packetSize)
             RecvQueueParam* param = new RecvQueueParam();
             param->type = type;
             param->message = message;
-            xQueueSend(recv_packets, &(param), (TickType_t)2);
+            xQueueSend(recv_packets, &(param), (TickType_t)50);
         }
         else{
             LoRa_sendAkn(0);
@@ -267,25 +266,23 @@ void manage_recv_queue(void* param)
 {
     while(true)
     {
-        RecvQueueParam* params = new RecvQueueParam();
-        BaseType_t xTaskWokenByReceive = pdTRUE;
-        if(xQueueReceiveFromISR(recv_packets, &(params) , &xTaskWokenByReceive))
+        RecvQueueParam* param = new RecvQueueParam();
+        bool result = xQueueReceive(recv_packets, &(param) , (TickType_t)50);
+        if(result)
         {
-            uint8_t type = params->type;
-            String message = params->message;
-            switch (type)
+            int type = (int)param->type;
+            String message = (String)param->message;
+            if(type == RAW_DATA)
             {
-                case RAW_DATA:
-                    send_msg_to_events(message);
-                    break;
-                case LORA_MSG:
-                    send_msg_to_ws(message);
-                    break;
-                default:
-                    break;                                
+                send_msg_to_events(message);
+            }
+            if(type == LORA_MSG)
+            {
+                send_msg_to_ws(message);
             }
             send_msg_to_mqtt(message);
         }
+        delete param;
         vTaskDelay(50/portTICK_PERIOD_MS);
     }
 }
