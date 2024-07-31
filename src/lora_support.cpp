@@ -156,6 +156,7 @@ void LoRa_sendRaw(void* param) {
                 }
                 if(retry > 3)
                 {
+                    show_alert("Packet failed.");
                     break;
                 }
                 vTaskDelay(50/portTICK_PERIOD_MS);
