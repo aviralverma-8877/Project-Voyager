@@ -150,7 +150,8 @@ void scan_ssid(void* args)
     }
     String return_value;
     serializeJson(doc, return_value);
-    
-    send_to_ws(return_value);
+    TaskParameters* taskParams = new TaskParameters();
+    taskParams->data=return_value;
+    xTaskCreate(send_to_ws, "send_to_ws", 6000, (void*) taskParams, 1, NULL);
     vTaskDelete(NULL);
 }

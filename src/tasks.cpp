@@ -104,7 +104,10 @@ void get_heap_info(void* params)
         String data;
         serializeJson(doc, data);
         doc.clear();
-        send_to_events(data.c_str(), "RAM_DATA");
+        EventParam* param = new EventParam();
+        param->data = data;
+        param->topic = "RAM_DATA";
+        xTaskCreate(send_to_events, "send_to_events", 6000, (void*)param, 1, NULL);
         vTaskDelay(1000/portTICK_PERIOD_MS);
     }
 }

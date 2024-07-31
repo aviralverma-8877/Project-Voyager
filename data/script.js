@@ -320,6 +320,7 @@ function init_events() {
     function (e) {
       if (e.target.readyState != EventSource.OPEN) {
         console.log("Events Disconnected");
+        init_events();
       }
     },
     false

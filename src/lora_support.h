@@ -24,8 +24,9 @@
     String data;
     };
 
-    struct AknParameters {
-    uint8_t result;
+    struct EventParam {
+        String data;
+        String topic;
     };
 
     extern CRC8 crc;
@@ -42,10 +43,10 @@
     void LoRa_rxMode();
     void LoRa_txMode();
     void LoRa_sendMessage(void *param);
-    void LoRa_sendAkn(void *param);
+    void LoRa_sendAkn(uint8_t result);
     void onReceive(int packetSize);
     void onTxDone();
-    void send_msg_to_events(void * parameters);
-    void send_msg_to_mqtt( void * parameters );
-    void send_msg_to_ws( void * parameter );
+    void send_msg_to_events(String data);
+    void send_msg_to_mqtt(String data);
+    void send_msg_to_ws(String data);
 #endif

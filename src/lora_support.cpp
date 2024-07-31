@@ -137,22 +137,31 @@ void LoRa_sendRaw(void* param) {
             AknRecieved = 2;
             LoRa_send(data, RAW_DATA);
             int time = millis();
+            int retry = 0;
             while(AknRecieved != 1)
             {
                 if(AknRecieved == 0)
                 {
                     AknRecieved = 2;
+                    retry += 1;
                     LoRa_send(data, RAW_DATA);
                 }
                 if(millis()-time > 5000)
                 {
                     time = millis();
                     AknRecieved = 2;
+                    retry += 1;
                     LoRa_send(data, RAW_DATA);
                 }
+                if(retry > 3)
+                {
+                    break;
+                }
+                vTaskDelay(50/portTICK_PERIOD_MS);
             }
         }
         free(params);
+        vTaskDelay(50/portTICK_PERIOD_MS);
     }
 }
 
@@ -171,28 +180,33 @@ void LoRa_sendMessage(void *param)  {
     AknRecieved = 2;
     LoRa_send(lora_payload, LORA_MSG);
     int time = millis();
+    int retry = 0;
     while(AknRecieved != 1)
     {
         if(AknRecieved == 0)
         {
             AknRecieved = 2;
+            retry += 1;
             LoRa_send(lora_payload, LORA_MSG);
         }
-        if((millis()-time) > 1000)
+        if((millis()-time) > 2000)
         {
             time = millis();
             AknRecieved = 2;
+            retry += 1;
             LoRa_send(lora_payload, LORA_MSG);
         }
+        if(retry > 3)
+        {
+            break;
+        }
+        vTaskDelay(50/portTICK_PERIOD_MS);
     }
     vTaskDelete(NULL);
 }
 
-void LoRa_sendAkn(void *param)
+void LoRa_sendAkn(uint8_t result)
 {
-    AknParameters* params = (AknParameters*)param;
-    uint8_t result = (uint8_t)params->result;
-    free(params);
     serial_print("SENT AKN: "+(String)result);
     while(!lora_available_for_write){}
     LoRa_txMode();
@@ -205,8 +219,6 @@ void LoRa_sendAkn(void *param)
     LoRa.endPacket(true);                 // finish packet and send it
     LoRa_rxMode();
     lora_available_for_write = true;
-    // serial_print("Akn Sent");
-    vTaskDelete(NULL);
 }
 
 void onReceive(int packetSize)
@@ -237,66 +249,58 @@ void onReceive(int packetSize)
         }
         if(checksum == get_checksum(message) && message.length() == size)
         {
-            AknParameters* akn_param = new AknParameters();
-            akn_param->result = 1; 
-            xTaskCreate(LoRa_sendAkn, "LoRa_sendAkn", 6000, (void*)akn_param, 1, NULL);
-
-            TaskParameters* taskParams = new TaskParameters();
-            taskParams->data=message;
+            LoRa_sendAkn(1);
             switch (type)
             {
                 case RAW_DATA:
-                    xTaskCreate(send_msg_to_events, "lora message to events", 6000, (void*)taskParams, 1, NULL);
+                    send_msg_to_events(message);
                     break;
                 case LORA_MSG:
-                    xTaskCreate(send_msg_to_ws, "lora message to ws", 6000, (void*)taskParams, 1, NULL);
+                    send_msg_to_ws(message);
                     break;
                 default:
                     break;                                
             }
-            xTaskCreate(send_msg_to_mqtt, "lora message to mqtt", 6000, (void*)taskParams, 1, NULL);
+            send_msg_to_mqtt(message);
         }
         else{
-            AknParameters* akn_param = new AknParameters();
-            akn_param->result = 0; 
-            xTaskCreate(LoRa_sendAkn, "LoRa_sendAkn", 6000, (void*)akn_param, 1, NULL);
+            LoRa_sendAkn(0);
         }
     }
 }
 
-void send_msg_to_mqtt( void * parameters )
+void send_msg_to_mqtt(String data)
 {
-    TaskParameters* params = (TaskParameters*)parameters;
     JsonDocument doc;
     doc["response_type"] = "lora_rx";
-    doc["lora_msg"] = (String)params->data;
-    free(params);
-    String data;
-    serializeJson(doc, data);
+    doc["lora_msg"] = data;
+    String val;
+    serializeJson(doc, val);
     doc.clear();
-    send_to_mqtt(data);
-    vTaskDelete(NULL);
+    TaskParameters* taskParams = new TaskParameters();
+    taskParams->data=val;
+    xTaskCreate(send_to_mqtt, "send_to_mqtt", 6000, (void*) taskParams, 1, NULL);
 }
 
-void send_msg_to_events(void * parameters)
+void send_msg_to_events(String data)
 {
-    TaskParameters* params = (TaskParameters*)parameters;
-    String data = (String)params->data;
-    send_to_events(data.c_str(), "RAW_DATA");
-    vTaskDelete(NULL);
+    EventParam* param = new EventParam();
+    param->data = data;
+    param->topic = "RAW_DATA";
+    xTaskCreate(send_to_events, "send_to_events", 6000, (void*)param, 1, NULL);
 }
 
-void send_msg_to_ws( void * parameters )
+void send_msg_to_ws(String data)
 {
-    TaskParameters* params = (TaskParameters*)parameters;
     JsonDocument doc;
     doc["response_type"] = "lora_rx";
-    doc["lora_msg"] = (String)params->data;
-    String data;
-    serializeJson(doc, data);
+    doc["lora_msg"] = data;
+    String val;
+    serializeJson(doc, val);
     doc.clear();
-    send_to_ws(data);
-    vTaskDelete(NULL);
+    TaskParameters* taskParams = new TaskParameters();
+    taskParams->data=val;
+    xTaskCreate(send_to_ws, "send_to_ws", 6000, (void*) taskParams, 1, NULL);
 }
 
 void onTxDone()
