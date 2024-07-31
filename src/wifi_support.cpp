@@ -154,5 +154,6 @@ void scan_ssid(void* args)
     TaskParameters* taskParams = new TaskParameters();
     taskParams->data=return_value;
     xTaskCreate(send_to_ws, "send_to_ws", 6000, (void*) taskParams, 1, NULL);
+    vTaskDelay(50/portTICK_PERIOD_MS);
     vTaskDelete(NULL);
 }

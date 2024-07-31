@@ -131,8 +131,8 @@ void LoRa_sendRaw(void* param) {
     while(true)
     {
         TaskParameters* params = new TaskParameters();
-        BaseType_t xTaskWokenByReceive = pdFALSE;
-        if( xQueueReceiveFromISR(send_packets, &(params) , &xTaskWokenByReceive))
+        BaseType_t xTaskWokenByReceive = pdTRUE;
+        if(xQueueReceiveFromISR(send_packets, &(params) , &xTaskWokenByReceive))
         {
             String data = (String)params->data;
             AknRecieved = 2;
