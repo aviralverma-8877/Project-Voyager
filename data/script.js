@@ -221,44 +221,43 @@ function lora() {
       $("#selected_lora_coding_rate").html(lora_config.CodingRate4);
 
       $("#sync_word").val(lora_config.SyncWord);
-      $.get(
-        "/config/pre_define_configs/config_list.json",
-        function (config_list) {
-          config_list.forEach((element) => {
-            $("#lora_config").append(
-              '<option value="' +
-                element.value +
-                '">' +
-                element.name +
-                "</option>"
-            );
-          });
-        }
-      );
+      $.get("/config/config_list.json", function (config_list) {
+        config_list.forEach((element) => {
+          $("#lora_config").append(
+            '<option value="' +
+              element.value +
+              '">' +
+              element.name +
+              "</option>"
+          );
+        });
+      });
     });
   });
 }
 
 function load_lora_config(val) {
-  $.get("/config/pre_define_configs/" + val, function (lora_config) {
-    generate_sync_word();
+  if (val != "") {
+    $.get("/config/" + val, function (lora_config) {
+      generate_sync_word();
 
-    $("#freq_range").val(lora_config.freq / 1000000);
-    $("#selected_lora_freq").html(lora_config.freq / 1000000);
+      $("#freq_range").val(lora_config.freq / 1000000);
+      $("#selected_lora_freq").html(lora_config.freq / 1000000);
 
-    $("#tx_power_range").val(lora_config.TxPower);
-    $("#selected_lora_tx_power").html(lora_config.TxPower);
+      $("#tx_power_range").val(lora_config.TxPower);
+      $("#selected_lora_tx_power").html(lora_config.TxPower);
 
-    $("#spreading_factor").val(lora_config.SpreadingFactor);
-    $("#selected_lora_spreading_factor").html(lora_config.SpreadingFactor);
+      $("#spreading_factor").val(lora_config.SpreadingFactor);
+      $("#selected_lora_spreading_factor").html(lora_config.SpreadingFactor);
 
-    $("#bandwidth").val(lora_config.SignalBandwidth);
+      $("#bandwidth").val(lora_config.SignalBandwidth);
 
-    $("#coding_rate").val(lora_config.CodingRate4);
-    $("#selected_lora_coding_rate").html(lora_config.CodingRate4);
+      $("#coding_rate").val(lora_config.CodingRate4);
+      $("#selected_lora_coding_rate").html(lora_config.CodingRate4);
 
-    $("#sync_word").val(lora_config.SyncWord);
-  });
+      $("#sync_word").val(lora_config.SyncWord);
+    });
+  }
 }
 
 function update() {
@@ -397,12 +396,10 @@ function init_events() {
       $("#heap_progress_bar").removeClass("bg-success");
       $("#heap_progress_bar").removeClass("bg-warning");
       $("#heap_progress_bar").removeClass("bg-danger");
-      if(heap_per < 30)
-        $("#heap_progress_bar").addClass("bg-success");
-      if(heap_per > 30 && heap_per < 70)
+      if (heap_per < 30) $("#heap_progress_bar").addClass("bg-success");
+      if (heap_per > 30 && heap_per < 70)
         $("#heap_progress_bar").addClass("bg-warning");
-      if(heap_per > 70)
-        $("#heap_progress_bar").addClass("bg-danger");
+      if (heap_per > 70) $("#heap_progress_bar").addClass("bg-danger");
       $("#heap_progress_bar").css("width", heap_per + "%");
     }
   });
