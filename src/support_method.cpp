@@ -48,9 +48,17 @@ void handle_operations(JsonDocument doc)
     {
         String msg = doc["data"];
         bool get_response = doc["get_response"];
-        TaskParameters* taskParams = new TaskParameters();
-        taskParams->data=msg;
-        xTaskCreate(LoRa_sendMessage, "LoRa_sendMessage", 12000, (void*)taskParams, 1, NULL);
+        JsonDocument doc;
+        doc["name"] = username;
+        doc["mac"] = WiFi.macAddress();
+        doc["data"] = msg;
+        String lora_payload;
+        serializeJson(doc, lora_payload);
+        doc.clear();
+        QueueParam* taskParams = new QueueParam();
+        taskParams->message=lora_payload;
+        taskParams->type = LORA_MSG;
+        xQueueSend(send_packets, &(taskParams), (TickType_t)2);
         if(get_response)
             show_alert("LoRa msg transmitted successfully");
     }
@@ -89,8 +97,9 @@ void handle_operations(JsonDocument doc)
     if(strcmp(request_type, "send_raw") == 0)
     {
         String val = doc["val"];
-        TaskParameters *packet = new TaskParameters();
-        packet->data = val;
+        QueueParam *packet = new QueueParam();
+        packet->message = val;
+        packet->type = RAW_DATA;
         xQueueSend(send_packets, &(packet), (TickType_t)2);
     }
     if(strcmp(request_type, "set_serial_mode")==0)

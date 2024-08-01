@@ -131,12 +131,13 @@ void LoRa_sendRaw(void* param) {
     serial_print("LoRa_sendRaw");
     while(true)
     {
-        TaskParameters* params = new TaskParameters();
+        QueueParam* params = new QueueParam();
         if(xQueueReceive(send_packets, &(params) , ( TickType_t )50))
         {
-            String data = (String)params->data;
+            String data = (String)params->message;
+            int type = (int)params->type;
             AknRecieved = 2;
-            LoRa_send(data, RAW_DATA);
+            LoRa_send(data, type);
             int time = millis();
             int retry = 0;
             while(AknRecieved != 1)
@@ -145,17 +146,18 @@ void LoRa_sendRaw(void* param) {
                 {
                     AknRecieved = 2;
                     retry += 1;
-                    LoRa_send(data, RAW_DATA);
+                    LoRa_send(data, type);
                 }
                 if(millis()-time > 5000)
                 {
                     time = millis();
                     AknRecieved = 2;
                     retry += 1;
-                    LoRa_send(data, RAW_DATA);
+                    LoRa_send(data, type);
                 }
                 if(retry > 3)
                 {
+                    show_alert("Packet failed.");
                     break;
                 }
                 vTaskDelay(50/portTICK_PERIOD_MS);
@@ -164,46 +166,6 @@ void LoRa_sendRaw(void* param) {
         delete params;
         vTaskDelay(50/portTICK_PERIOD_MS);
     }
-}
-
-void LoRa_sendMessage(void *param)  {
-    TaskParameters* params = (TaskParameters*)param;
-    String message = (String)params->data;
-    delete params;
-    serial_print("LoRa_sendMessage");
-    JsonDocument doc;
-    doc["name"] = username;
-    doc["mac"] = WiFi.macAddress();
-    doc["data"] = message;
-    String lora_payload;
-    serializeJson(doc, lora_payload);
-    doc.clear();
-    AknRecieved = 2;
-    LoRa_send(lora_payload, LORA_MSG);
-    int time = millis();
-    int retry = 0;
-    while(AknRecieved != 1)
-    {
-        if(AknRecieved == 0)
-        {
-            AknRecieved = 2;
-            retry += 1;
-            LoRa_send(lora_payload, LORA_MSG);
-        }
-        if((millis()-time) > 2000)
-        {
-            time = millis();
-            AknRecieved = 2;
-            retry += 1;
-            LoRa_send(lora_payload, LORA_MSG);
-        }
-        if(retry > 3)
-        {
-            break;
-        }
-        vTaskDelay(50/portTICK_PERIOD_MS);
-    }
-    vTaskDelete(NULL);
 }
 
 void LoRa_sendAkn(uint8_t result)
@@ -251,7 +213,7 @@ void onReceive(int packetSize)
         if(checksum == get_checksum(message) && message.length() == size)
         {
             LoRa_sendAkn(1);
-            RecvQueueParam* param = new RecvQueueParam();
+            QueueParam* param = new QueueParam();
             param->type = type;
             param->message = message;
             xQueueSend(recv_packets, &(param), (TickType_t)50);
@@ -266,7 +228,7 @@ void manage_recv_queue(void* param)
 {
     while(true)
     {
-        RecvQueueParam* param = new RecvQueueParam();
+        QueueParam* param = new QueueParam();
         bool result = xQueueReceive(recv_packets, &(param) , (TickType_t)50);
         if(result)
         {

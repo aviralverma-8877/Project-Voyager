@@ -24,7 +24,7 @@
     String data;
     };
 
-    struct RecvQueueParam {
+    struct QueueParam {
         int type;
         String message;
     };
@@ -42,7 +42,6 @@
     void config_lora();
     void LoRa_rxMode();
     void LoRa_txMode();
-    void LoRa_sendMessage(void *param);
     void manage_recv_queue(void* param);
     void LoRa_sendAkn(uint8_t result);
     void onReceive(int packetSize);

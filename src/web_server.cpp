@@ -6,8 +6,8 @@ QueueHandle_t recv_packets;
 
 void define_api()
 {
-  send_packets = xQueueCreate(20, sizeof(TaskParameters));
-  recv_packets = xQueueCreate(20, sizeof(RecvQueueParam));
+  send_packets = xQueueCreate(20, sizeof(QueueParam));
+  recv_packets = xQueueCreate(20, sizeof(QueueParam));
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
   {
     File index = SPIFFS.open("/index.html");
@@ -28,8 +28,9 @@ void define_api()
             {
               AsyncWebParameter * j = request->getParam(0);
               String data = j->value();
-              TaskParameters *packet = new TaskParameters();
-              packet->data = data;
+              QueueParam *packet = new QueueParam();
+              packet->message = data;
+              packet->type = RAW_DATA;
               xQueueSend(send_packets, &(packet), (TickType_t)2);
               request->send(200);
             });

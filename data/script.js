@@ -364,7 +364,7 @@ function init_events() {
   source.addEventListener(
     "message",
     function (e) {
-      console.log("message", e.data);
+      // console.log("message", e.data);
     },
     false
   );
@@ -376,7 +376,7 @@ function init_events() {
     if (last_packet == data) return;
     last_packet = data;
     if (data != "") {
-      console.log(data);
+      // console.log(data);
       file_data += data;
       $("#chunk_ratio").html(
         "(" + current_packet + " / " + total_packets + ") Received"
@@ -394,6 +394,15 @@ function init_events() {
       var free_heap = parseInt(data.free_heap);
       var heap_size = parseInt(data.heap_size);
       var heap_per = ((heap_size - free_heap) / heap_size) * 100;
+      $("#heap_progress_bar").removeClass("bg-success");
+      $("#heap_progress_bar").removeClass("bg-warning");
+      $("#heap_progress_bar").removeClass("bg-danger");
+      if(heap_per < 30)
+        $("#heap_progress_bar").addClass("bg-success");
+      if(heap_per > 30 && heap_per < 70)
+        $("#heap_progress_bar").addClass("bg-warning");
+      if(heap_per > 70)
+        $("#heap_progress_bar").addClass("bg-danger");
       $("#heap_progress_bar").css("width", heap_per + "%");
     }
   });
@@ -405,7 +414,7 @@ function init_socket() {
     "ws://" + window.location.hostname + ":" + window.location.port + "/ws"
   );
   Socket.onmessage = function (event) {
-    console.log(event.data);
+    // console.log(event.data);
     try {
       var data = JSON.parse(event.data);
       var response_type = data.response_type;
@@ -597,6 +606,7 @@ function file_broadcast() {
           }
         );
       } else {
+        stop_broadcast();
         tx_msg = { pack_type: "action", data: "disable_file_tx_mode" };
         Socket.send(
           JSON.stringify({
@@ -634,7 +644,7 @@ function file_broadcast() {
 function uploadChunk(chunk, passed_callback, failed_callback) {
   var _href = $("#data_url_download_link").attr("href");
   $("#data_url_download_link").attr("href", _href + chunk);
-  console.log(chunk);
+  // console.log(chunk);
   $.post("/send_raw", { data: chunk }, (timeout = 5))
     .done(function () {
       passed_callback();
