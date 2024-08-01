@@ -47,6 +47,7 @@ void define_api()
             });
   firmware_web_updater();
   server.serveStatic("/", SPIFFS, "/");
+  server.serveStatic("/pre_define_configs", SPIFFS, "/pre_define_configs");
   server.onNotFound([](AsyncWebServerRequest *request)
                     {
     serial_print("Not Found");

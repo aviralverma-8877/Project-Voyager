@@ -1,0 +1,10 @@
+[
+  {
+    "Name": "Long Range",
+    "Value": "long_lora_config.json"
+  },
+  {
+    "Name": "Short Range",
+    "Value": "short_lora_config.json"
+  }
+]

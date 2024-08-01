@@ -3,6 +3,14 @@
 </h1>
 <hr>
 <div class="mb-3">
+    <select
+        id="lora_config"
+        class="form-select"
+        aria-label="lora_config"
+        onchange="load_lora_config(this.value)"
+    ></select>
+</div>
+<div class="mb-3">
     <label for="freq_range" class="form-label">
         LoRa Frequency :
         <span id="selected_lora_freq"></span>
