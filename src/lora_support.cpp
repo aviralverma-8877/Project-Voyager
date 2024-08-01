@@ -262,7 +262,13 @@ void send_msg_to_mqtt(String data)
 
 void send_msg_to_events(String data)
 {
-    send_to_events(data, "RAW_DATA");
+    JsonDocument doc;
+    doc["millis"] = millis();
+    doc["data"] = data;
+    String value;
+    serializeJson(doc, value);
+    doc.clear();
+    send_to_events(value, "RAW_DATA");
 }
 
 void send_msg_to_ws(String data)
