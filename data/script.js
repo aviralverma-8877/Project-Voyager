@@ -368,7 +368,7 @@ function init_events() {
   );
 
   source.addEventListener("RAW_DATA", function (e) {
-    data = json.parse(e.data);
+    data = JSON.parse(e.data);
     if (lastEventTimestamp == data.millis) return;
     lastEventID = data.millis;
     var data = data.data;
