@@ -137,15 +137,24 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
     String raw_data = "voyager/"+mac+"/"+mqtt_topic_to_send_raw;
     if(strcmp(topic, raw_data.c_str()) == 0)
     {
-        TaskParameters *packet = new TaskParameters();
-        packet->data = msg;
+        QueueParam *packet = new QueueParam();
+        packet->message = msg;
+        packet->type = RAW_DATA;
         xQueueSend(send_packets, &(packet), (TickType_t)2);
     }
     else if(strcmp(topic, sub_topic.c_str()) == 0)
     {
-        TaskParameters* taskParams = new TaskParameters();
-        taskParams->data=msg;
-        xTaskCreate(LoRa_sendMessage, "LoRa_sendMessage", 12000, (void*)taskParams, 1, NULL);
+        JsonDocument doc;
+        doc["name"] = username;
+        doc["mac"] = WiFi.macAddress();
+        doc["data"] = msg;
+        String lora_payload;
+        serializeJson(doc, lora_payload);
+        doc.clear();
+        QueueParam* taskParams = new QueueParam();
+        taskParams->message=lora_payload;
+        taskParams->type = LORA_MSG;
+        xQueueSend(send_packets, &(taskParams), (TickType_t)2);
     }
 }
 
