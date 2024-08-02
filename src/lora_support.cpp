@@ -119,8 +119,7 @@ void LoRa_send(String data, uint8_t type)
     LoRa.write(get_checksum(data));
     for(int i=0; i<data.length(); i++)
     {
-        char r = data[i];
-        LoRa.write(r);
+        LoRa.write((char)data[i]);
     }
     LoRa.endPacket(true);
     LoRa_rxMode();
@@ -130,7 +129,7 @@ void LoRa_send(String data, uint8_t type)
 void LoRa_sendRaw(void* param) {
     serial_print("LoRa_sendRaw");
     int type, time, retry;
-    while(true)
+    while(uxQueueSpacesAvailable(send_packets) > 0 )
     {
         QueueParam* params = new QueueParam();
         if(xQueueReceive(send_packets, &(params) , ( TickType_t )50))
@@ -235,7 +234,7 @@ void onReceive(int packetSize)
 void manage_recv_queue(void* param)
 {
     int type;
-    while(true)
+    while( uxQueueSpacesAvailable( recv_packets ) > 0 )
     {
         QueueParam* param = new QueueParam();
         if(xQueueReceive(recv_packets, &(param) , (TickType_t)50))

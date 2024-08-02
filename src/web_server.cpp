@@ -6,8 +6,8 @@ QueueHandle_t recv_packets;
 
 void define_api()
 {
-  send_packets = xQueueCreate(50, sizeof(QueueParam));
-  recv_packets = xQueueCreate(50, sizeof(QueueParam));
+  send_packets = xQueueCreate(20, sizeof(QueueParam));
+  recv_packets = xQueueCreate(20, sizeof(QueueParam));
   server.serveStatic("/", SPIFFS, "/");
   server.on("/hostname", HTTP_GET, [](AsyncWebServerRequest *request)
             {
