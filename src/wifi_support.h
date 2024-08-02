@@ -14,6 +14,8 @@
     void config_wifi();
     String get_wifi_setting();
     void save_wifi_settings(String config);
+    void wifi_monitor(void* param);
+    void connect_wifi();
     void onWifiConnect(WiFiEvent_t event, WiFiEventInfo_t info);
     void onWifiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info);
     void setup_sta(const char* wifi_ssid, const char* wifi_pass);

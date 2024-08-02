@@ -4,6 +4,12 @@ WiFiBackup wifi_backup;
 
 void config_wifi()
 {
+    connect_wifi();
+    xTaskCreate(wifi_monitor, "wifi_monitor", 6000, NULL, 1, NULL);
+}
+
+void connect_wifi()
+{
     if (SPIFFS.exists("/config/wifi_config.json"))
     {
         String wifi_config;
@@ -32,6 +38,18 @@ void config_wifi()
     else
     {
         setup_ap("Voyager");
+    }
+}
+
+void wifi_monitor(void* param)
+{
+    while(true)
+    {
+        if(!WiFi.isConnected())
+        {
+            config_wifi();
+        }
+        vTaskDelay(1000/portTICK_PERIOD_MS);
     }
 }
 
