@@ -129,18 +129,17 @@ void LoRa_send(String data, uint8_t type)
 
 void LoRa_sendRaw(void* param) {
     serial_print("LoRa_sendRaw");
+    int type, time, retry;
     while(true)
     {
         QueueParam* params = new QueueParam();
         if(xQueueReceive(send_packets, &(params) , ( TickType_t )50))
         {
-            String data = (String)params->message;
-            int type = (int)params->type;
-            delete params;
+            type = (int)params->type;
             AknRecieved = 2;
-            LoRa_send(data, type);
-            int time = millis();
-            int retry = 0;
+            LoRa_send((String)params->message, type);
+            time = millis();
+            retry = 0;
             while(AknRecieved != 1)
             {
                 if(retry > 3)
@@ -152,17 +151,18 @@ void LoRa_sendRaw(void* param) {
                 {
                     retry += 1;
                     AknRecieved = 2;
-                    LoRa_send(data, type);
+                    LoRa_send((String)params->message, type);
                 }
                 if(millis()-time > 5000)
                 {
                     retry += 1;
                     time = millis();
                     AknRecieved = 2;
-                    LoRa_send(data, type);
+                    LoRa_send((String)params->message, type);
                 }
                 vTaskDelay(50/portTICK_PERIOD_MS);
             }
+            delete params;
         }
         else
         {
@@ -234,23 +234,23 @@ void onReceive(int packetSize)
 
 void manage_recv_queue(void* param)
 {
+    int type;
     while(true)
     {
         QueueParam* param = new QueueParam();
         if(xQueueReceive(recv_packets, &(param) , (TickType_t)50))
         {
-            int type = (int)param->type;
-            String message = (String)param->message;
-            delete param;
+            type = (int)param->type;
             if(type == RAW_DATA)
             {
-                send_msg_to_events(message);
+                send_msg_to_events((String)param->message);
             }
             if(type == LORA_MSG)
             {
-                send_msg_to_ws(message);
+                send_msg_to_ws((String)param->message);
             }
-            send_msg_to_mqtt(message, type);
+            send_msg_to_mqtt((String)param->message, type);
+            delete param;
         }
         else
         {
