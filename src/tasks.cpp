@@ -14,15 +14,15 @@ void wifi_connection_check()
 
 void ping_mqtt_timer(void *param)
 {
+    String mac, mqtt_ping;
+    JsonDocument doc;
     while(true)
     {
         if(mqttClient.connected())
         {
-            String mac = WiFi.macAddress();
-            JsonDocument doc;
+            mac = WiFi.macAddress();
             doc["mac"] = mac;
             doc["uname"] = username;
-            String mqtt_ping;
             serializeJson(doc, mqtt_ping);
             doc.clear();
             ping_mqtt(mqtt_ping);
@@ -94,14 +94,15 @@ void btn_intrupt(void *param)
 
 void get_heap_info(void* params)
 {
+    int free_heap, heap_size;
+    JsonDocument doc;
+    String data;
     while(true)
     {
-        int free_heap = ESP.getFreeHeap();
-        int heap_size = ESP.getHeapSize();
-        JsonDocument doc;
+        free_heap = ESP.getFreeHeap();
+        heap_size = ESP.getHeapSize();
         doc["free_heap"] = free_heap;
         doc["heap_size"] = heap_size;
-        String data;
         serializeJson(doc, data);
         doc.clear();
         send_to_events(data, "RAM_DATA");

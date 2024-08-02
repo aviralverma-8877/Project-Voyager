@@ -170,6 +170,10 @@ void LoRa_sendRaw(void* param) {
         }
         vTaskDelay(50/portTICK_PERIOD_MS);
     }
+    show_alert("Queue is full, Rebooting...");
+    vTaskDelay(100/portTICK_PERIOD_MS);
+    xTaskCreate(restart,"restart",6000,NULL,1,NULL);
+    vTaskDelete(NULL);
 }
 
 void LoRa_sendAkn(uint8_t result)
@@ -254,6 +258,10 @@ void manage_recv_queue(void* param)
         }
         vTaskDelay(50/portTICK_PERIOD_MS);
     }
+    show_alert("Queue is full, Rebooting...");
+    vTaskDelay(100/portTICK_PERIOD_MS);
+    xTaskCreate(restart,"restart",6000,NULL,1,NULL);
+    vTaskDelete(NULL);
 }
 
 void send_msg_to_mqtt(String data, int type)
