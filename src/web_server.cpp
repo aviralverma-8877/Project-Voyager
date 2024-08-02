@@ -8,6 +8,7 @@ void define_api()
 {
   send_packets = xQueueCreate(20, sizeof(QueueParam));
   recv_packets = xQueueCreate(20, sizeof(QueueParam));
+  server.serveStatic("/", SPIFFS, "/");
   server.on("/hostname", HTTP_GET, [](AsyncWebServerRequest *request)
             {
         serial_print("hostname");
@@ -35,19 +36,18 @@ void define_api()
               xTaskCreate(reset_device, "reset_devide", 6000, NULL, 1, NULL);
             });
   firmware_web_updater();
-  server.serveStatic("/", SPIFFS, "/");
   server.onNotFound([](AsyncWebServerRequest *request)
   {
-    File index = SPIFFS.open("/index.html");
-    if (index) {
-        serial_print("index");
-        request->send(SPIFFS, "/index.html", "text/html");
+    if (SPIFFS.exists("/index.html"))
+    {
+      serial_print("Redirected to /index.html");
+      request->redirect("/index.html");
     }
     else{
       serial_print("Redirected to /update");
       request->redirect("/update");
     }
-  });
+   });
   server.begin();
 }
 
