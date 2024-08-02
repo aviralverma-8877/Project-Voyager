@@ -26,7 +26,7 @@
     void onMqttUnsubscribe(uint16_t packetId);
     void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total);
     void onMqttPublish(uint16_t packetId);
-    void send_to_mqtt(String msg);
+    void send_to_mqtt(String msg, String topic);
     void save_mqtt_config(String value);
     String get_mqtt_config();
 #endif

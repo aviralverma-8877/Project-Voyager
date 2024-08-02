@@ -370,10 +370,9 @@ function init_events() {
   source.addEventListener("RAW_DATA", function (e) {
     data = JSON.parse(e.data);
     if (lastEventTimestamp == data.millis) return;
-    lastEventID = data.millis;
+    lastEventTimestamp = data.millis;
     var data = data.data;
     if (data != "") {
-      // console.log(data);
       file_data += data;
       $("#chunk_ratio").html(
         "(" + current_packet + " / " + total_packets + ") Received"

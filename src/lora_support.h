@@ -47,6 +47,6 @@
     void onReceive(int packetSize);
     void onTxDone();
     void send_msg_to_events(String data);
-    void send_msg_to_mqtt(String data);
+    void send_msg_to_mqtt(String data, int type);
     void send_msg_to_ws(String data);
 #endif

@@ -163,12 +163,10 @@ void onMqttPublish(uint16_t packetId) {
     mqttClient.clearQueue();
 }
 
-void send_to_mqtt(String msg)
+void send_to_mqtt(String msg, String topic)
 {
     if(mqtt_enabled)
     {
-        String mac = WiFi.macAddress();
-        String topic = "voyager/"+mac+"/"+mqtt_topic_to_publish;
         serial_print("Sending msg to mqtt");
         mqttClient.publish(topic.c_str(), 2, false, msg.c_str(), msg.length());
     }

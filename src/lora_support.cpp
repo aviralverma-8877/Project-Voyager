@@ -136,34 +136,38 @@ void LoRa_sendRaw(void* param) {
         {
             String data = (String)params->message;
             int type = (int)params->type;
+            delete params;
             AknRecieved = 2;
             LoRa_send(data, type);
             int time = millis();
             int retry = 0;
             while(AknRecieved != 1)
             {
-                if(AknRecieved == 0)
-                {
-                    AknRecieved = 2;
-                    retry += 1;
-                    LoRa_send(data, type);
-                }
-                if(millis()-time > 5000)
-                {
-                    time = millis();
-                    AknRecieved = 2;
-                    retry += 1;
-                    LoRa_send(data, type);
-                }
                 if(retry > 3)
                 {
                     show_alert("Packet failed.");
                     break;
                 }
+                if(AknRecieved == 0)
+                {
+                    retry += 1;
+                    AknRecieved = 2;
+                    LoRa_send(data, type);
+                }
+                if(millis()-time > 5000)
+                {
+                    retry += 1;
+                    time = millis();
+                    AknRecieved = 2;
+                    LoRa_send(data, type);
+                }
                 vTaskDelay(50/portTICK_PERIOD_MS);
             }
         }
-        delete params;
+        else
+        {
+            delete params;
+        }
         vTaskDelay(50/portTICK_PERIOD_MS);
     }
 }
@@ -229,11 +233,11 @@ void manage_recv_queue(void* param)
     while(true)
     {
         QueueParam* param = new QueueParam();
-        bool result = xQueueReceive(recv_packets, &(param) , (TickType_t)50);
-        if(result)
+        if(xQueueReceive(recv_packets, &(param) , (TickType_t)50))
         {
             int type = (int)param->type;
             String message = (String)param->message;
+            delete param;
             if(type == RAW_DATA)
             {
                 send_msg_to_events(message);
@@ -242,22 +246,31 @@ void manage_recv_queue(void* param)
             {
                 send_msg_to_ws(message);
             }
-            send_msg_to_mqtt(message);
+            send_msg_to_mqtt(message, type);
         }
-        delete param;
+        else
+        {
+            delete param;
+        }
         vTaskDelay(50/portTICK_PERIOD_MS);
     }
 }
 
-void send_msg_to_mqtt(String data)
+void send_msg_to_mqtt(String data, int type)
 {
     JsonDocument doc;
     doc["response_type"] = "lora_rx";
     doc["lora_msg"] = data;
     String val;
+    String mac = WiFi.macAddress();
+    String topic;
+    if(type == RAW_DATA)
+        topic = "voyager/"+mac+"/"+mqtt_topic_to_publish+"/RAW_DATA";
+    if(type == LORA_MSG)
+        topic = "voyager/"+mac+"/"+mqtt_topic_to_publish+"/LORA_MSG";
     serializeJson(doc, val);
     doc.clear();
-    send_to_mqtt(val);
+    send_to_mqtt(val, topic);
 }
 
 void send_msg_to_events(String data)
