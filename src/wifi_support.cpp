@@ -5,7 +5,6 @@ WiFiBackup wifi_backup;
 void config_wifi()
 {
     connect_wifi();
-    xTaskCreate(wifi_monitor, "wifi_monitor", 6000, NULL, 1, NULL);
 }
 
 void connect_wifi()
@@ -65,6 +64,7 @@ void onWifiConnect(WiFiEvent_t event, WiFiEventInfo_t info)
     display_buffer[2].msg = IP.toString();
     display_text_oled();
     setup_mqtt();
+    xTaskCreate(wifi_monitor, "wifi_monitor", 6000, NULL, 1, NULL);
 }
 
 void onWifiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info)
