@@ -165,6 +165,7 @@ void LoRa_sendRaw(void* param) {
         }
         else
         {
+            LoRa.flush();
             xQueueReset(send_packets);
             delete params;
         }
@@ -224,7 +225,7 @@ void onReceive(int packetSize)
             QueueParam* param = new QueueParam();
             param->type = type;
             param->message = message;
-            xQueueSend(recv_packets, &(param), (TickType_t)50);
+            xQueueSend(recv_packets, (void*)&param, (TickType_t)50);
         }
         else{
             LoRa_sendAkn(0);
@@ -254,6 +255,7 @@ void manage_recv_queue(void* param)
         }
         else
         {
+            LoRa.flush();
             xQueueReset(recv_packets);
             delete param;
         }

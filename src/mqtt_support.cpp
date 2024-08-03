@@ -140,7 +140,7 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
         QueueParam *packet = new QueueParam();
         packet->message = msg;
         packet->type = RAW_DATA;
-        xQueueSend(send_packets, &(packet), (TickType_t)2);
+        xQueueSend(send_packets, (void*)&packet, (TickType_t)2);
     }
     else if(strcmp(topic, sub_topic.c_str()) == 0)
     {
@@ -154,7 +154,7 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
         QueueParam* taskParams = new QueueParam();
         taskParams->message=lora_payload;
         taskParams->type = LORA_MSG;
-        xQueueSend(send_packets, &(taskParams), (TickType_t)2);
+        xQueueSend(send_packets, (void*)&taskParams, (TickType_t)2);
     }
 }
 

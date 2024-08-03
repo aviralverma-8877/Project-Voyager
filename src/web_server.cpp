@@ -20,7 +20,7 @@ void define_api()
               QueueParam *packet = new QueueParam();
               packet->message = data;
               packet->type = RAW_DATA;
-              xQueueSend(send_packets, &(packet), (TickType_t)2);
+              xQueueSend(send_packets, (void*)&packet, (TickType_t)2);
               request->send(200);
             });
   server.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request)
