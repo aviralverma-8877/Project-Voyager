@@ -132,7 +132,7 @@ void LoRa_sendRaw(void* param) {
     while(uxQueueSpacesAvailable(send_packets) > 0 )
     {
         QueueParam* params = new QueueParam();
-        if(xQueueReceive(send_packets, &(params) , ( TickType_t )50))
+        if(xQueueReceive(send_packets, &(params) , ( TickType_t )0))
         {
             type = (int)params->type;
             AknRecieved = 2;
@@ -165,6 +165,7 @@ void LoRa_sendRaw(void* param) {
         }
         else
         {
+            xQueueReset(send_packets);
             delete params;
         }
         vTaskDelay(50/portTICK_PERIOD_MS);
@@ -237,7 +238,7 @@ void manage_recv_queue(void* param)
     while( uxQueueSpacesAvailable( recv_packets ) > 0 )
     {
         QueueParam* param = new QueueParam();
-        if(xQueueReceive(recv_packets, &(param) , (TickType_t)50))
+        if(xQueueReceive(recv_packets, &(param) , (TickType_t)0))
         {
             type = (int)param->type;
             if(type == RAW_DATA)
@@ -253,6 +254,7 @@ void manage_recv_queue(void* param)
         }
         else
         {
+            xQueueReset(recv_packets);
             delete param;
         }
         vTaskDelay(50/portTICK_PERIOD_MS);
