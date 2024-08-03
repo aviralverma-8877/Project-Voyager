@@ -389,7 +389,8 @@ function init_events() {
     if (data != "") {
       var free_heap = parseInt(data.free_heap);
       var heap_size = parseInt(data.heap_size);
-      var heap_per = ((heap_size - free_heap) / heap_size) * 100;
+      var heap_per =  Math.round(((heap_size - free_heap) / heap_size) * 100);
+      $("#ram_ratio").html("<b>"+heap_per+"%</b> ("+free_heap+"/"+heap_size+")")
       $("#heap_progress_bar").removeClass("bg-success");
       $("#heap_progress_bar").removeClass("bg-warning");
       $("#heap_progress_bar").removeClass("bg-danger");
