@@ -131,7 +131,7 @@ void LoRa_sendRaw(void* param) {
     int type, time, retry;
     while(uxQueueSpacesAvailable(send_packets) > 0 )
     {
-        QueueParam* params = new QueueParam();
+        QueueParam* params = NULL;
         if(xQueueReceive(send_packets, &(params) , ( TickType_t )0))
         {
             type = (int)params->type;
@@ -161,14 +161,14 @@ void LoRa_sendRaw(void* param) {
                 }
                 vTaskDelay(50/portTICK_PERIOD_MS);
             }
-            delete params;
+
         }
         else
         {
             LoRa.flush();
             xQueueReset(send_packets);
-            delete params;
         }
+        delete params;
         vTaskDelay(50/portTICK_PERIOD_MS);
     }
     show_alert("Queue is full, Rebooting...");
@@ -238,27 +238,26 @@ void manage_recv_queue(void* param)
     int type;
     while( uxQueueSpacesAvailable( recv_packets ) > 0 )
     {
-        QueueParam* param = new QueueParam();
-        if(xQueueReceive(recv_packets, &(param) , (TickType_t)0))
+        QueueParam* params = NULL;
+        if(xQueueReceive(recv_packets, &(params) , (TickType_t)0))
         {
-            type = (int)param->type;
+            type = (int)params->type;
             if(type == RAW_DATA)
             {
-                send_msg_to_events((String)param->message);
+                send_msg_to_events((String)params->message);
             }
             if(type == LORA_MSG)
             {
-                send_msg_to_ws((String)param->message);
+                send_msg_to_ws((String)params->message);
             }
-            send_msg_to_mqtt((String)param->message, type);
-            delete param;
+            send_msg_to_mqtt((String)params->message, type);
         }
         else
         {
             LoRa.flush();
             xQueueReset(recv_packets);
-            delete param;
         }
+        delete params;
         vTaskDelay(50/portTICK_PERIOD_MS);
     }
     show_alert("Queue is full, Rebooting...");
