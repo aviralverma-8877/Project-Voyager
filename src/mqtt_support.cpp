@@ -160,7 +160,6 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
 
 void onMqttPublish(uint16_t packetId) {
     serial_print("MQTT message published.");
-    mqttClient.clearQueue();
 }
 
 void send_to_mqtt(String msg, String topic)
