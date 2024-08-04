@@ -198,6 +198,55 @@ function save_lora_config() {
   });
 }
 
+function update_lora_config_from_file()
+{
+  const file = $("#LoraConfigFile").prop("files")[0];
+  const reader = new FileReader();
+  reader.readAsText(file);
+  reader.onload = function (e) {
+    try{
+      lora_config = JSON.parse(reader.result);
+      $("#LoraConfigFile").val('');
+      set_lora_config(lora_config);
+      alert("Settings applied.<br>Press save to apply.")
+    }
+    catch(e){
+      alert("Invalid file input.")
+    }
+  }
+}
+
+function download_lora_config() {
+  $.get("/config/lora_config.json", function (lora_config) {
+    freq = $("#freq_range").val();
+    tx_power = $("#tx_power_range").val();
+    s_fact = $("#spreading_factor").val();
+    bandwidth = $("#bandwidth").val();
+    coding_rate = $("#coding_rate").val();
+    sync_word = $("#sync_word").val();
+
+    lora_config["freq"] = parseInt(freq * 1000000);
+    lora_config["TxPower"] = parseInt(tx_power);
+    lora_config["SpreadingFactor"] = parseInt(s_fact);
+    lora_config["SignalBandwidth"] = parseInt(bandwidth);
+    lora_config["CodingRate4"] = parseInt(coding_rate);
+    lora_config["SyncWord"] = parseInt(sync_word);
+    JSONToFile(lora_config,"project_voyager_lora_config.json")
+  });
+}
+
+const JSONToFile = (obj, filename) => {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], {
+    type: 'application/json',
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 function lora() {
   $(".nav-link").removeClass("active");
   $("#navbar-lora").addClass("active");
@@ -236,26 +285,31 @@ function lora() {
   });
 }
 
+function set_lora_config(lora_config)
+{
+  generate_sync_word();
+
+  $("#freq_range").val(lora_config.freq / 1000000);
+  $("#selected_lora_freq").html(lora_config.freq / 1000000);
+
+  $("#tx_power_range").val(lora_config.TxPower);
+  $("#selected_lora_tx_power").html(lora_config.TxPower);
+
+  $("#spreading_factor").val(lora_config.SpreadingFactor);
+  $("#selected_lora_spreading_factor").html(lora_config.SpreadingFactor);
+
+  $("#bandwidth").val(lora_config.SignalBandwidth);
+
+  $("#coding_rate").val(lora_config.CodingRate4);
+  $("#selected_lora_coding_rate").html(lora_config.CodingRate4);
+
+  $("#sync_word").val(lora_config.SyncWord);
+}
+
 function load_lora_config(val) {
   if (val != "") {
     $.get("/config/" + val, function (lora_config) {
-      generate_sync_word();
-
-      $("#freq_range").val(lora_config.freq / 1000000);
-      $("#selected_lora_freq").html(lora_config.freq / 1000000);
-
-      $("#tx_power_range").val(lora_config.TxPower);
-      $("#selected_lora_tx_power").html(lora_config.TxPower);
-
-      $("#spreading_factor").val(lora_config.SpreadingFactor);
-      $("#selected_lora_spreading_factor").html(lora_config.SpreadingFactor);
-
-      $("#bandwidth").val(lora_config.SignalBandwidth);
-
-      $("#coding_rate").val(lora_config.CodingRate4);
-      $("#selected_lora_coding_rate").html(lora_config.CodingRate4);
-
-      $("#sync_word").val(lora_config.SyncWord);
+      set_lora_config(lora_config);
     });
   }
 }

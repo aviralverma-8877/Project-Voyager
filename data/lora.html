@@ -16,6 +16,17 @@
     </select>
 </div>
 <div class="mb-3">
+    <h5>
+        Load setting file.
+    </h5>
+    <input
+        type="file"
+        class="form-control"
+        onchange="update_lora_config_from_file()"
+        id="LoraConfigFile"
+    >
+</div>
+<div class="mb-3">
     <label for="freq_range" class="form-label">
         LoRa Frequency :
         <span id="selected_lora_freq"></span>
@@ -100,4 +111,5 @@
 </div>
 <div class="mb-3">
     <button class="btn btn-primary" onclick="save_lora_config()">Save</button>
+    <button class="btn btn-primary" onclick="download_lora_config()">Download Setting</button>
 </div>
