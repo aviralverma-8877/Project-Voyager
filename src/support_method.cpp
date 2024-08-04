@@ -58,7 +58,7 @@ void handle_operations(JsonDocument doc)
         QueueParam* taskParams = new QueueParam();
         taskParams->message=lora_payload;
         taskParams->type = LORA_MSG;
-        xQueueSend(send_packets, &(taskParams), (TickType_t)2);
+        xQueueSend(send_packets, (void*)&taskParams, (TickType_t)2);
         if(get_response)
             show_alert("LoRa msg transmitted successfully");
     }
@@ -100,7 +100,7 @@ void handle_operations(JsonDocument doc)
         QueueParam *packet = new QueueParam();
         packet->message = val;
         packet->type = RAW_DATA;
-        xQueueSend(send_packets, &(packet), (TickType_t)2);
+        xQueueSend(send_packets, (void*)packet, (TickType_t)2);
     }
     if(strcmp(request_type, "set_serial_mode")==0)
     {
