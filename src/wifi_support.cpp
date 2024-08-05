@@ -160,7 +160,7 @@ void scan_ssid(void* args)
     JsonDocument doc;
     doc["response_type"] = "wifi_scan";
     JsonArray array = doc["SSID"].to<JsonArray>();
-    for (int i = 0; i < n; ++i) {
+    for (int i = 0; i < n; i++) {
         JsonDocument r;
         r["ssid"] = WiFi.SSID(i);
         r["rssi"] = WiFi.RSSI(i);

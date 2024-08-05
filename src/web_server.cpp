@@ -10,31 +10,32 @@ void define_api()
   recv_packets = xQueueCreate(20, sizeof(QueueParam*));
   server.serveStatic("/", SPIFFS, "/");
   server.on("/hostname", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-        serial_print("hostname");
-        request->send(200, "text/plain", hostname); });
+  {
+    serial_print("hostname");
+    request->send(200, "text/plain", hostname);
+  });
   server.on("/send_raw", HTTP_POST, [](AsyncWebServerRequest *request)
-            {
-              AsyncWebParameter * j = request->getParam(0);
-              String data = j->value();
-              QueueParam *packet = new QueueParam();
-              packet->message = data;
-              packet->type = RAW_DATA;
-              xQueueSend(send_packets, (void*)&packet, (TickType_t)2);
-              request->send(200);
-            });
+  {
+    AsyncWebParameter * j = request->getParam(0);
+    String data = j->value();
+    QueueParam *packet = new QueueParam();
+    packet->message = data;
+    packet->type = RAW_DATA;
+    xQueueSend(send_packets, (void*)&packet, (TickType_t)2);
+    request->send(200);
+  });
   server.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-              serial_print("/config/lora_serial.json");
-              request->send(200, "Restarting device ....");
-              xTaskCreate(restart, "restart", 6000, NULL, 1, NULL);
-            });
+  {
+    serial_print("/config/lora_serial.json");
+    request->send(200, "Restarting device ....");
+    xTaskCreate(restart, "restart", 6000, NULL, 1, NULL);
+  });
   server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-              serial_print("/config/lora_serial.json");
-              request->send(200, "Resetting device ....");
-              xTaskCreate(reset_device, "reset_devide", 6000, NULL, 1, NULL);
-            });
+  {
+    serial_print("/config/lora_serial.json");
+    request->send(200, "Resetting device ....");
+    xTaskCreate(reset_device, "reset_devide", 6000, NULL, 1, NULL);
+  });
   firmware_web_updater();
   server.onNotFound([](AsyncWebServerRequest *request)
   {

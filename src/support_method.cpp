@@ -340,7 +340,6 @@ void serial_print(String msg)
 void setupTasks()
 {
     xTaskCreate(btn_intrupt, "btn_intrupt", 6000, NULL, 1, NULL);
-    xTaskCreate(led_nortifier, "led_nortifier", 6000, NULL, 1, NULL);
     xTaskCreate(get_heap_info, "get_heap_info", 6000, NULL, 1, NULL);
 }
 

@@ -13,7 +13,7 @@
     void ping_mqtt_timer(void *param);
     void wifi_connection_check();
     void init_isr(int btn);
-    void led_nortifier(void *param);
+    void led_nortifier();
     void btn_intrupt(void *param);
     void transmit_beacon();
     void get_heap_info(void* params);

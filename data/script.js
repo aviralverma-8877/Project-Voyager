@@ -2,30 +2,6 @@ var hostname_url;
 var loading_alert;
 var promptModal;
 var alertModel;
-var wakeLock = null;
-const canWakeLock = function(){
-   return 'wakeLock' in navigator;
-}
- 
-const setWakeLock = function () {
-    if (!canWakeLock()) {
-        console.error('Your browser is not support WakeLock API!');
-        return;
-    }
-    if (wakeLock) {
-        return;
-    }
-    navigator.wakeLock.request('screen').then(result => {
-        wakeLock = result;
-        console.log('Wake Lock is actived!');
-        wakeLock.addEventListener('release', () => {
-            wakeLock = null;
-            console.log('Wake Lock is released!');
-        });
-    }).catch((err) => {
-        console.error(`Wake Lock is faild：${err.message}`);
-    });
-};
  
 $(document).ready(function () {
   init_socket();
@@ -34,7 +10,6 @@ $(document).ready(function () {
   promptModal = new bootstrap.Modal($("#promptModal"), {});
   alertModel = new bootstrap.Modal($("#alertModal"), {});
   loading_alert = new bootstrap.Modal($("#loadingModal"), {});
-  setWakeLock();
   $("#loading_model_body").html("Connecting...");
   loading_alert.show();
 });

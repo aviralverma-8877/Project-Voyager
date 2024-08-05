@@ -123,6 +123,7 @@ void LoRa_send(String data, uint8_t type)
     }
     LoRa.endPacket(true);
     LoRa_rxMode();
+    led_nortifier();
     lora_available_for_write = true;
 }
 
@@ -241,6 +242,7 @@ void manage_recv_queue(void* param)
         QueueParam* params = NULL;
         if(xQueueReceive(recv_packets, &(params) , (TickType_t)0))
         {
+            led_nortifier();
             type = (int)params->type;
             if(type == RAW_DATA)
             {

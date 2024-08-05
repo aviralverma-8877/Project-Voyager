@@ -32,22 +32,20 @@ void ping_mqtt_timer(void *param)
     vTaskDelete(NULL);
 }
 
-void led_nortifier(void *param)
+void led_nortifier()
 {
-    while(notify)
+    if(digitalRead(LED))
     {
-        if(digitalRead(LED))
-        {
-            digitalWrite(LED, LOW);
-            vTaskDelay(NOTIFY_LED_DELAY/portTICK_PERIOD_MS);
-        }
-        else
-        {
-            digitalWrite(LED, HIGH);
-            vTaskDelay(NOTIFY_LED_DELAY/portTICK_PERIOD_MS);
-        }
+        digitalWrite(LED, LOW);
+        vTaskDelay(NOTIFY_LED_DELAY/portTICK_PERIOD_MS);
+        digitalWrite(LED, HIGH);
     }
-    vTaskDelete(NULL);
+    else
+    {
+        digitalWrite(LED, HIGH);
+        vTaskDelay(NOTIFY_LED_DELAY/portTICK_PERIOD_MS);
+        digitalWrite(LED, LOW);
+    }
 }
 
 void btn_intrupt(void *param)
