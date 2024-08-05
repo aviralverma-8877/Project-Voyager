@@ -136,11 +136,11 @@ function mqtt() {
   $.get("mqtt.html", function (data) {
     $("#main_content").html(data);
     $.get("/config/mqtt_config.json", function (data) {
-      $("#mqtt_enabled").attr("checked", data.mqtt_eanbled);
+      $("#mqtt_enabled").attr("checked", data.mqtt_enabled);
       $("#mqtt_host").val(data.host);
       $("#mqtt_port").val(data.port);
       $("#mqtt_auth").attr("checked", data.auth);
-      set_mqtt_enabled(data.mqtt_eanbled);
+      set_mqtt_enabled(data.mqtt_enabled);
       set_mqtt_auth(data.auth);
       if (data.auth) {
         $("#mqtt_uname").val(data.username);
@@ -158,7 +158,7 @@ function save_mqtt() {
   uname = $("#mqtt_uname").val();
   pass = $("#mqtt_password").val();
   $.get("/config/mqtt_config.json", function (data) {
-    data.mqtt_eanbled = enable;
+    data.mqtt_enabled = enable;
     data.host = host;
     data.port = port;
     data.auth = auth;
@@ -198,22 +198,20 @@ function save_lora_config() {
   });
 }
 
-function update_lora_config_from_file()
-{
+function update_lora_config_from_file() {
   const file = $("#LoraConfigFile").prop("files")[0];
   const reader = new FileReader();
   reader.readAsText(file);
   reader.onload = function (e) {
-    try{
+    try {
       lora_config = JSON.parse(reader.result);
-      $("#LoraConfigFile").val('');
+      $("#LoraConfigFile").val("");
       set_lora_config(lora_config);
-      alert("Settings applied.<br>Press save to apply.")
+      alert("Settings applied.<br>Press save to apply.");
+    } catch (e) {
+      alert("Invalid file input.");
     }
-    catch(e){
-      alert("Invalid file input.")
-    }
-  }
+  };
 }
 
 function download_lora_config() {
@@ -231,16 +229,16 @@ function download_lora_config() {
     lora_config["SignalBandwidth"] = parseInt(bandwidth);
     lora_config["CodingRate4"] = parseInt(coding_rate);
     lora_config["SyncWord"] = parseInt(sync_word);
-    JSONToFile(lora_config,"project_voyager_lora_config.json")
+    JSONToFile(lora_config, "project_voyager_lora_config.json");
   });
 }
 
 const JSONToFile = (obj, filename) => {
   const blob = new Blob([JSON.stringify(obj, null, 2)], {
-    type: 'application/json',
+    type: "application/json",
   });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const a = document.createElement("a");
   a.href = url;
   a.download = `${filename}.json`;
   a.click();
@@ -285,8 +283,7 @@ function lora() {
   });
 }
 
-function set_lora_config(lora_config)
-{
+function set_lora_config(lora_config) {
   generate_sync_word();
 
   $("#freq_range").val(lora_config.freq / 1000000);
@@ -443,8 +440,10 @@ function init_events() {
     if (data != "") {
       var free_heap = parseInt(data.free_heap);
       var heap_size = parseInt(data.heap_size);
-      var heap_per =  Math.round(((heap_size - free_heap) / heap_size) * 100);
-      $("#ram_ratio").html("<b>"+heap_per+"%</b> ("+free_heap+"/"+heap_size+")")
+      var heap_per = Math.round(((heap_size - free_heap) / heap_size) * 100);
+      $("#ram_ratio").html(
+        "<b>" + heap_per + "%</b> (" + free_heap + "/" + heap_size + ")"
+      );
       $("#heap_progress_bar").removeClass("bg-success");
       $("#heap_progress_bar").removeClass("bg-warning");
       $("#heap_progress_bar").removeClass("bg-danger");

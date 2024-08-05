@@ -1,5 +1,5 @@
 {
-  "mqtt_eanbled": false,
+  "mqtt_enabled": false,
   "host": "",
   "port": 1883,
   "auth": false,

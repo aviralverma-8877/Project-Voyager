@@ -13,7 +13,8 @@ void setup_mqtt()
     JsonDocument doc;
     deserializeJson(doc, mqtt_config);
     doc.shrinkToFit();
-    mqtt_enabled = doc["mqtt_eanbled"];
+    mqtt_enabled = doc["mqtt_enabled"];
+    serial_print("MQTT Enabled: "+(String)mqtt_enabled);
     if(mqtt_enabled)
     {
         serial_print("Setting up mqtt");

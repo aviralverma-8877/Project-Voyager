@@ -271,6 +271,7 @@ void send_msg_to_mqtt(String data, int type)
     JsonDocument doc;
     doc["response_type"] = "lora_rx";
     doc["lora_msg"] = data;
+    doc.shrinkToFit();
     String val;
     String mac = WiFi.macAddress();
     String topic;
