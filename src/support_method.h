@@ -28,6 +28,7 @@
     void config_gpios();
     void serial_print(String msg);
     void setupTasks();
+    void stop_transmission();
     void stop_nortify_led();
     void nortify_led();
     void show_alert(String msg);

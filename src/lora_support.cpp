@@ -145,6 +145,7 @@ void LoRa_sendRaw(void* param) {
                 if(retry > 3)
                 {
                     show_alert("Packet failed.");
+                    stop_transmission();
                     break;
                 }
                 if(AknRecieved == 0)
@@ -173,6 +174,7 @@ void LoRa_sendRaw(void* param) {
         vTaskDelay(50/portTICK_PERIOD_MS);
     }
     show_alert("Queue is full, Rebooting...");
+    stop_transmission();
     vTaskDelay(100/portTICK_PERIOD_MS);
     xTaskCreate(restart,"restart",6000,NULL,1,NULL);
     vTaskDelete(NULL);
@@ -263,6 +265,7 @@ void manage_recv_queue(void* param)
         vTaskDelay(50/portTICK_PERIOD_MS);
     }
     show_alert("Queue is full, Rebooting...");
+    stop_transmission();
     vTaskDelay(100/portTICK_PERIOD_MS);
     xTaskCreate(restart,"restart",6000,NULL,1,NULL);
     vTaskDelete(NULL);

@@ -469,6 +469,10 @@ function init_socket() {
       var response_type = data.response_type;
       //console.log("Web socket message recieved...");
       // console.log(data);
+      if (response_type == "stop_transmission")
+      {
+        stop_file_transfer_mode();
+      }
       if (response_type == "wifi_scan") {
         $("#wifi_scan_btn").html("Scan SSID");
         $("#wifi_scan_btn").attr("onclick", "scan_ssid()");

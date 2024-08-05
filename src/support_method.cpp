@@ -225,6 +225,16 @@ void get_username()
     }
 }
 
+void stop_transmission()
+{
+    JsonDocument doc;
+    doc["response_type"] = "stop_transmission";
+    String return_value;
+    serializeJson(doc, return_value);
+    doc.clear();
+    send_to_ws(return_value);
+}
+
 void save_username(String uname)
 {
     serial_print("Saving username");
