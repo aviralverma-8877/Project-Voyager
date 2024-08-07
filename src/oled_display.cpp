@@ -27,17 +27,25 @@ void clear_oled_display()
 void display_text_oled()
 {
     clear_oled_display();
+    int size = 2;
+    int dist = 16;
+    int row = 0;
     for(int i=0; i<6; i++)
     {
-        int row = (i*10);
         String msg = display_buffer[i].msg;
-        display.setTextSize(1);      // Normal 1:1 pixel scale
+        if(i == 1)
+        {
+            size = 1;
+            dist = 10;
+        }
+        display.setTextSize(size);
         display.setTextColor(SSD1306_WHITE); // Draw white text
         display.setCursor(0, row);     // Start at top-left corner
         display.cp437(false); 
         display.write(msg.c_str());
-        display.display();
+        row += dist;
     }
+    display.display();
 }
 
 void show_splash()
