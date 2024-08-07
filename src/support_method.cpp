@@ -202,6 +202,7 @@ void get_lora_serial()
     }
 }
 
+// Update username flag with username value
 void get_username()
 {
     serial_print("get_username");
@@ -236,6 +237,7 @@ void get_username()
     }
 }
 
+//Send stop transmission comamnd to client
 void stop_transmission()
 {
     JsonDocument doc;
@@ -267,6 +269,7 @@ void save_username(String uname)
     username = uname;
 }
 
+//Reset ESP32
 void reset_device(void *param)
 {
     show_alert("Device reset successfully,\nPlease reconfigure the device by connecting to the AP.\nRebooting Now.");
