@@ -61,7 +61,13 @@ void onWifiConnect(WiFiEvent_t event, WiFiEventInfo_t info)
         display_buffer[1].msg = "WiFi Type : AP";
     else if (WiFi.getMode() == WIFI_MODE_STA)
         display_buffer[1].msg = "WiFi Type : STA";
-    display_buffer[2].msg = IP.toString();
+    String wifi_config = get_wifi_setting();
+    JsonDocument wifi_conf;
+    deserializeJson(wifi_conf, wifi_config);
+    wifi_conf.shrinkToFit();
+    const char* ssid = wifi_conf["wifi_ssid"];
+    display_buffer[2].msg = ssid;
+    display_buffer[3].msg = IP.toString();
     display_text_oled();
     setup_mqtt();
     xTaskCreate(wifi_monitor, "wifi_monitor", 6000, NULL, 1, NULL);
