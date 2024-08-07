@@ -144,7 +144,6 @@ void LoRa_sendRaw(void* param) {
             {
                 if(retry > 3)
                 {
-                    show_alert("Packet failed.");
                     stop_transmission();
                     break;
                 }
@@ -163,7 +162,17 @@ void LoRa_sendRaw(void* param) {
                 }
                 vTaskDelay(50/portTICK_PERIOD_MS);
             }
-
+            JsonDocument doc;
+            doc["akn"] = AknRecieved;
+            doc["username"] = username;
+            doc.shrinkToFit();
+            String return_res;
+            serializeJson(doc, return_res);
+            doc.clear();
+            int return_code = 200;
+            if(AknRecieved != 1)
+                return_code = 422;
+            params->request->send(return_code, "text/json", return_res);
         }
         else
         {
@@ -228,6 +237,7 @@ void onReceive(int packetSize)
             QueueParam* param = new QueueParam();
             param->type = type;
             param->message = message;
+            param->request = NULL;
             xQueueSend(recv_packets, (void*)&param, (TickType_t)50);
         }
         else{

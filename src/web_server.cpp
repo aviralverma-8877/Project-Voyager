@@ -21,8 +21,25 @@ void define_api()
     QueueParam *packet = new QueueParam();
     packet->message = data;
     packet->type = RAW_DATA;
+    packet->request = request;
     xQueueSend(send_packets, (void*)&packet, (TickType_t)2);
-    request->send(200);
+  });
+  server.on("/lora_transmit", HTTP_POST, [](AsyncWebServerRequest *request)
+  {
+    AsyncWebParameter * j = request->getParam(0);
+    String data = j->value();
+    JsonDocument doc;
+    doc["name"] = username;
+    doc["mac"] = WiFi.macAddress();
+    doc["data"] = data;
+    String lora_payload;
+    serializeJson(doc, lora_payload);
+    doc.clear();
+    QueueParam* taskParams = new QueueParam();
+    taskParams->message=lora_payload;
+    taskParams->type = LORA_MSG;
+    taskParams->request = request;
+    xQueueSend(send_packets, (void*)&taskParams, (TickType_t)2);
   });
   server.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request)
   {

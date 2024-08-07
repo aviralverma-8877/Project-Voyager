@@ -2,7 +2,7 @@ var hostname_url;
 var loading_alert;
 var promptModal;
 var alertModel;
- 
+
 $(document).ready(function () {
   init_socket();
   init_events();
@@ -39,18 +39,24 @@ function get_username() {
 function send_lora(msg) {
   if (msg != "") {
     tx_msg = { pack_type: "msg", data: msg };
-    Socket.send(
-      JSON.stringify({
-        "request-type": "lora_transmit",
-        data: JSON.stringify(tx_msg),
-        get_response: false,
-      })
-    );
     $("#lora_msg").val("");
     $("#lora_msg").attr("readonly", true);
-    setTimeout(function () {
-      $("#lora_msg").attr("readonly", false);
-    }, 1000);
+    $.post("/lora_transmit", { data: JSON.stringify(tx_msg) }, (timeout = 5))
+      .done(function (data) {
+        $("#lora_msg").attr("readonly", false);
+        if (data.akn == 1) {
+          $("#lora_rx_msg").prepend(
+            "<li class='list-group-item'>" +
+              data.username +
+              " : " +
+              msg +
+              "</li>"
+          );
+        }
+      })
+      .fail(function (data) {
+        $("#lora_msg").attr("readonly", false);
+      });
   }
 }
 
@@ -469,8 +475,7 @@ function init_socket() {
       var response_type = data.response_type;
       //console.log("Web socket message recieved...");
       // console.log(data);
-      if (response_type == "stop_transmission")
-      {
+      if (response_type == "stop_transmission") {
         stop_file_transfer_mode();
       }
       if (response_type == "wifi_scan") {
@@ -502,9 +507,6 @@ function init_socket() {
         var uname = data.name;
         var data = JSON.parse(data.data);
         var pack_type = data["pack_type"];
-        if (pack_type == "beacon") {
-          //console.log("beacon from " + mac);
-        }
         if (pack_type == "msg") {
           msg = data["data"];
           $("#lora_rx_msg").prepend(
@@ -614,12 +616,18 @@ function file_broadcast() {
       alert("packet size should be between 1-200");
       return;
     }
-    if (waitTime < 500) {
-      alert("Wait time should be greater than 500ms");
+    if (waitTime < 0) {
+      alert("Wait time should be greater than 0ms");
       return;
     }
     const total_chunk = Math.floor(dataURL.length / chunkSize);
-    const time_estimate = Math.abs(total_chunk * (waitTime / 1000));
+    var time_estimate;
+    if (waitTime == 0) {
+      time_estimate = Math.abs(total_chunk * (50 / 1000));
+    } else {
+      time_estimate = Math.abs(total_chunk * (waitTime / 1000));
+    }
+
     var h = Math.floor(time_estimate / 3600);
     var m = Math.floor((time_estimate % 3600) / 60);
     var s = Math.floor((time_estimate % 3600) % 60);
@@ -648,26 +656,35 @@ function file_broadcast() {
             }, waitTime);
           },
           () => {
+            stop_broadcast();
             tx_msg = { pack_type: "action", data: "disable_file_tx_mode" };
-            Socket.send(
-              JSON.stringify({
-                "request-type": "lora_transmit",
-                data: JSON.stringify(tx_msg),
-                get_response: false,
+            $.post(
+              "/lora_transmit",
+              { data: JSON.stringify(tx_msg) },
+              (timeout = 5)
+            )
+              .done(function (data) {
+                if (data.akn == 1) {
+                  stop_broadcast();
+                }
               })
-            );
+              .fail(function (data) {});
           }
         );
       } else {
         stop_broadcast();
         tx_msg = { pack_type: "action", data: "disable_file_tx_mode" };
-        Socket.send(
-          JSON.stringify({
-            "request-type": "lora_transmit",
-            data: JSON.stringify(tx_msg),
-            get_response: false,
+        $.post(
+          "/lora_transmit",
+          { data: JSON.stringify(tx_msg) },
+          (timeout = 5)
+        )
+          .done(function (data) {
+            if (data.akn == 1) {
+              stop_broadcast();
+            }
           })
-        );
+          .fail(function (data) {});
       }
     }
     setTimeout(() => {
@@ -676,17 +693,16 @@ function file_broadcast() {
         data: "enable_file_tx_mode",
         total_packets: total_chunk,
       };
-      Socket.send(
-        JSON.stringify({
-          "request-type": "lora_transmit",
-          data: JSON.stringify(tx_msg),
-          get_response: false,
+      $.post("/lora_transmit", { data: JSON.stringify(tx_msg) }, (timeout = 5))
+        .done(function (data) {
+          if (data.akn == 1) {
+            setTimeout(() => {
+              transmission = true;
+              loop(0);
+            }, 2000);
+          }
         })
-      );
-      setTimeout(() => {
-        transmission = true;
-        loop(0);
-      }, 2000);
+        .fail(function (data) {});
     }, 2000);
   };
   reader.onerror = function (e) {

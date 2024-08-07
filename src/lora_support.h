@@ -27,6 +27,7 @@
     struct QueueParam {
         int type;
         String message;
+        AsyncWebServerRequest *request;
     };
 
     extern CRC8 crc;

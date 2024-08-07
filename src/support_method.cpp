@@ -47,24 +47,6 @@ void handle_operations(JsonDocument doc)
     {
         xTaskCreate(restart, "Restart", 6000, NULL, 1, NULL);
     }
-    if(strcmp(request_type, "lora_transmit") == 0)
-    {
-        String msg = doc["data"];
-        bool get_response = doc["get_response"];
-        JsonDocument doc;
-        doc["name"] = username;
-        doc["mac"] = WiFi.macAddress();
-        doc["data"] = msg;
-        String lora_payload;
-        serializeJson(doc, lora_payload);
-        doc.clear();
-        QueueParam* taskParams = new QueueParam();
-        taskParams->message=lora_payload;
-        taskParams->type = LORA_MSG;
-        xQueueSend(send_packets, (void*)&taskParams, (TickType_t)2);
-        if(get_response)
-            show_alert("LoRa msg transmitted successfully");
-    }
     if(strcmp(request_type, "set_username") == 0)
     {
         String val = doc["val"];
@@ -96,14 +78,6 @@ void handle_operations(JsonDocument doc)
         serial_print("saving lora config");
         serial_print(val);
         save_lora_config(val);
-    }
-    if(strcmp(request_type, "send_raw") == 0)
-    {
-        String val = doc["val"];
-        QueueParam *packet = new QueueParam();
-        packet->message = val;
-        packet->type = RAW_DATA;
-        xQueueSend(send_packets, (void*)packet, (TickType_t)2);
     }
     if(strcmp(request_type, "set_serial_mode")==0)
     {
@@ -377,16 +351,4 @@ void nortify_led()
 {
     serial_print("Nortify");
     notify = true;
-}
-
-String device_becon()
-{
-    String packet_type = "beacon";
-    JsonDocument doc;
-    doc["project"] = username;
-    doc["pack_type"] = packet_type;
-    String return_string;
-    serializeJson(doc, return_string);
-    doc.clear();
-    return return_string;
 }
