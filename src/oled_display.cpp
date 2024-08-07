@@ -28,7 +28,7 @@ void display_text_oled()
 {
     clear_oled_display();
     int size = 2;
-    int dist = 16;
+    int dist = 20;
     int row = 0;
     for(int i=0; i<6; i++)
     {
@@ -36,7 +36,7 @@ void display_text_oled()
         if(i == 1)
         {
             size = 1;
-            dist = 10;
+            dist = 12;
         }
         display.setTextSize(size);
         display.setTextColor(SSD1306_WHITE); // Draw white text
