@@ -5,6 +5,9 @@ String username;
 String hostname;
 DNSServer dnsServer;
 
+// This is main method to handle web-socket input
+// It accepts input as JsonDocument which should have the key request-type.
+// Based on the request type corresponding operations will be performed on the ESP32.
 void handle_operations(JsonDocument doc)
 {
     const char* request_type = doc["request-type"];
@@ -126,6 +129,9 @@ void handle_operations(JsonDocument doc)
     }
 }
 
+// Method to save LoRa to Serial configration.
+// This method should be called using xTaskCreate.
+// It will save current value of lora_serial global variable to /config/lora_serial.json
 void save_lora_serial_config(void* param)
 {
     JsonDocument doc;
@@ -145,6 +151,8 @@ void save_lora_serial_config(void* param)
     vTaskDelete(NULL);
 }
 
+// Loop to catch any input to Serial input and send it to lora.
+// This meathod will only be enabled if lora_serial flag is true.
 void serial_to_lora(void* param)
 {
     Serial.flush();
@@ -168,6 +176,9 @@ void serial_to_lora(void* param)
     vTaskDelete(NULL);
 }
 
+// Method to fetch the flag lora_serial.
+// This method will not return any value,
+// rather update the value in lora_serial flag.
 void get_lora_serial()
 {
     if (SPIFFS.exists("/config/lora_serial.json"))
