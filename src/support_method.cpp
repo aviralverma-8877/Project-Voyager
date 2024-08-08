@@ -82,14 +82,7 @@ void handle_operations(JsonDocument doc)
     if(strcmp(request_type, "set_serial_mode")==0)
     {
         lora_serial = doc["value"];
-        if(lora_serial)
-        {
-            xTaskCreate(save_lora_serial_config, "save_lora_serial_config", 6000, NULL, 1, NULL);
-        }
-        else
-        {
-            xTaskCreate(save_lora_serial_config, "save_lora_serial_config", 6000, NULL, 1, NULL);
-        }
+        xTaskCreate(save_lora_serial_config, "save_lora_serial_config", 6000, NULL, 1, NULL);
     }
     if(strcmp(request_type, "get_serial_mode")==0)
     {
@@ -129,25 +122,28 @@ void save_lora_serial_config(void* param)
 // This meathod will only be enabled if lora_serial flag is true.
 void serial_to_lora(void* param)
 {
-    Serial.flush();
     while(true){
         if(lora_serial)
         {
             if(Serial.available())
             {
-                LoRa_txMode();
-                LoRa.beginPacket();
+                String data;
                 while(Serial.available())
                 {
-                    LoRa.write(Serial.read());
+                    data += (char)Serial.read();
                 }
-                LoRa.endPacket(true);
-                LoRa_rxMode();
+                if(data.length() <= 200)
+                {
+                    QueueParam *packet = new QueueParam();
+                    packet->message = data;
+                    packet->type = LORA_SERIAL;
+                    packet->request = NULL;
+                    xQueueSend(send_packets, (void*)&packet, (TickType_t)2);
+                }
             }
         }
         vTaskDelay(50/portTICK_PERIOD_MS);
     }
-    vTaskDelete(NULL);
 }
 
 // Method to fetch the flag lora_serial.

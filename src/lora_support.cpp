@@ -162,17 +162,20 @@ void LoRa_sendRaw(void* param) {
                 }
                 vTaskDelay(50/portTICK_PERIOD_MS);
             }
-            JsonDocument doc;
-            doc["akn"] = AknRecieved;
-            doc["username"] = username;
-            doc.shrinkToFit();
-            String return_res;
-            serializeJson(doc, return_res);
-            doc.clear();
-            int return_code = 200;
-            if(AknRecieved != 1)
-                return_code = 422;
-            params->request->send(return_code, "text/json", return_res);
+            if( params->request != NULL)
+            {
+                JsonDocument doc;
+                doc["akn"] = AknRecieved;
+                doc["username"] = username;
+                doc.shrinkToFit();
+                String return_res;
+                serializeJson(doc, return_res);
+                doc.clear();
+                int return_code = 200;
+                if(AknRecieved != 1)
+                    return_code = 422;
+                params->request->send(return_code, "text/json", return_res);
+            }
         }
         else
         {
@@ -207,42 +210,32 @@ void LoRa_sendAkn(uint8_t result)
 
 void onReceive(int packetSize)
 {
-    if(lora_serial)
+    String message;
+    int size = (int)LoRa.read();
+    int type = (int)LoRa.read();
+    uint8_t checksum = (uint8_t)LoRa.read();
+    if(type == REC_AKNG)
     {
-        for (int i=0; i<packetSize; i++)
-        {
-            Serial.write(LoRa.read());
-        }        
+        uint8_t result = (uint8_t)LoRa.read();
+        serial_print("REC AKN: "+(String)result);
+        AknRecieved=result;
+        return;
     }
-    else
+    for (int i=0; i<size; i++)
     {
-        String message;
-        int size = (int)LoRa.read();
-        int type = (int)LoRa.read();
-        uint8_t checksum = (uint8_t)LoRa.read();
-        if(type == REC_AKNG)
-        {
-            uint8_t result = (uint8_t)LoRa.read();
-            serial_print("REC AKN: "+(String)result);
-            AknRecieved=result;
-            return;
-        }
-        for (int i=0; i<size; i++)
-        {
-            message += (char)LoRa.read();
-        }
-        if(checksum == get_checksum(message) && message.length() == size)
-        {
-            LoRa_sendAkn(1);
-            QueueParam* param = new QueueParam();
-            param->type = type;
-            param->message = message;
-            param->request = NULL;
-            xQueueSend(recv_packets, (void*)&param, (TickType_t)50);
-        }
-        else{
-            LoRa_sendAkn(0);
-        }
+        message += (char)LoRa.read();
+    }
+    if(checksum == get_checksum(message) && message.length() == size)
+    {
+        LoRa_sendAkn(1);
+        QueueParam* param = new QueueParam();
+        param->type = type;
+        param->message = message;
+        param->request = NULL;
+        xQueueSend(recv_packets, (void*)&param, (TickType_t)50);
+    }
+    else{
+        LoRa_sendAkn(0);
     }
 }
 
@@ -263,6 +256,10 @@ void manage_recv_queue(void* param)
             if(type == LORA_MSG)
             {
                 send_msg_to_ws((String)params->message);
+            }
+            if(type == LORA_SERIAL)
+            {
+                send_msg_to_serial((String)params->message);
             }
             send_msg_to_mqtt((String)params->message, type);
         }
@@ -321,6 +318,10 @@ void send_msg_to_ws(String data)
     send_to_ws(val);
 }
 
+void send_msg_to_serial(String data)
+{
+    Serial.print(data);
+}
 void onTxDone()
 {
     serial_print("LORA packet transmitted");

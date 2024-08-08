@@ -17,7 +17,6 @@ void setup() {
     serial_print("SPIFFS Mount Failed");
     return;
   }
-  get_lora_serial();
   get_username();
   config_gpios();
   init_oled();
@@ -32,6 +31,7 @@ void setup() {
   define_api();  
 
   config_lora();
+  get_lora_serial();
   setupTasks();
   serial_print("config done");
 }
