@@ -527,6 +527,10 @@ function init_socket() {
           } else if (action == "disable_file_tx_mode") {
             stop_file_transfer_mode();
           }
+          else if (action == "sos")
+          {
+            alert("User "+uname+" has sent a SOS request.");
+          }
         }
       }
       if (response_type == "set_uname") {

@@ -337,12 +337,6 @@ void setupTasks()
     xTaskCreate(get_heap_info, "get_heap_info", 6000, NULL, 1, NULL);
 }
 
-void stop_nortify_led()
-{
-    notify = false;
-    digitalWrite(LED, LOW);
-}
-
 void nortify_led()
 {
     serial_print("Nortify");

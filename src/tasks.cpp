@@ -58,7 +58,27 @@ void btn_intrupt(void *param)
             {
                 btn_1_pressed = true;
                 serial_print("BUTTON 1 Pressed");
-                stop_nortify_led();
+                JsonDocument doc;
+                doc["name"] = username;
+                doc["mac"] = WiFi.macAddress();
+
+                JsonDocument msg;
+                msg["pack_type"] = "action";
+                msg["data"] = "sos";
+                msg.shrinkToFit();
+                String msg_string;
+                serializeJson(msg, msg_string);
+                msg.clear();
+
+                doc["data"] = msg_string;
+                String lora_payload;
+                serializeJson(doc, lora_payload);
+                doc.clear();
+                QueueParam* taskParams = new QueueParam();
+                taskParams->message=lora_payload;
+                taskParams->type = LORA_MSG;
+                taskParams->request = NULL;
+                xQueueSend(send_packets, (void*)&taskParams, (TickType_t)2);
             }
         }
         else
