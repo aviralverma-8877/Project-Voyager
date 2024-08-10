@@ -41,7 +41,7 @@ function send_lora(msg) {
     tx_msg = { pack_type: "msg", data: msg };
     $("#lora_msg").val("");
     $("#lora_msg").attr("readonly", true);
-    $.post("/lora_transmit", { data: JSON.stringify(tx_msg) }, (timeout = 5))
+    $.post("/lora_transmit", { data: JSON.stringify(tx_msg) }, (timeout = 20))
       .done(function (data) {
         $("#lora_msg").attr("readonly", false);
         if (data.akn == 1) {
@@ -665,7 +665,7 @@ function file_broadcast() {
             $.post(
               "/lora_transmit",
               { data: JSON.stringify(tx_msg) },
-              (timeout = 5)
+              (timeout = 20)
             )
               .done(function (data) {
                 if (data.akn == 1) {
@@ -681,7 +681,7 @@ function file_broadcast() {
         $.post(
           "/lora_transmit",
           { data: JSON.stringify(tx_msg) },
-          (timeout = 5)
+          (timeout = 20)
         )
           .done(function (data) {
             if (data.akn == 1) {
@@ -697,7 +697,7 @@ function file_broadcast() {
         data: "enable_file_tx_mode",
         total_packets: total_chunk,
       };
-      $.post("/lora_transmit", { data: JSON.stringify(tx_msg) }, (timeout = 5))
+      $.post("/lora_transmit", { data: JSON.stringify(tx_msg) }, (timeout = 20))
         .done(function (data) {
           if (data.akn == 1) {
             setTimeout(() => {
@@ -718,7 +718,7 @@ function uploadChunk(chunk, passed_callback, failed_callback) {
   var _href = $("#data_url_download_link").attr("href");
   $("#data_url_download_link").attr("href", _href + chunk);
   // console.log(chunk);
-  $.post("/send_raw", { data: chunk }, (timeout = 5))
+  $.post("/send_raw", { data: chunk }, (timeout = 20))
     .done(function () {
       passed_callback();
     })

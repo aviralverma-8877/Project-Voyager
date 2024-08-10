@@ -142,11 +142,6 @@ void LoRa_sendRaw(void* param) {
             retry = 0;
             while(AknRecieved != 1)
             {
-                if(retry > 3)
-                {
-                    stop_transmission();
-                    break;
-                }
                 if(AknRecieved == 0)
                 {
                     retry += 1;
@@ -156,11 +151,19 @@ void LoRa_sendRaw(void* param) {
                 if(millis()-time > 5000)
                 {
                     retry += 1;
-                    time = millis();
-                    AknRecieved = 2;
-                    LoRa_send((String)params->message, type);
+                    if(retry > 3)
+                    {
+                        show_alert("Transmission Failed");
+                        stop_transmission();
+                        break;
+                    }
+                    else
+                    {
+                        time = millis();
+                        AknRecieved = 2;
+                        LoRa_send((String)params->message, type);
+                    }
                 }
-                vTaskDelay(50/portTICK_PERIOD_MS);
             }
             if( params->request != NULL)
             {
