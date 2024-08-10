@@ -397,6 +397,7 @@ function update_wifi_ssid(ssid) {
 var total_packets = 0;
 var current_packet = 0;
 var file_data = "";
+var file_name = "";
 var lastEventTimestamp = 0;
 function init_events() {
   var source = new EventSource("/rawEvents");
@@ -432,13 +433,19 @@ function init_events() {
     var data = data.data;
     if (data != "") {
       file_data += data;
+      file_size_string = get_string_size(file_data);
       $("#chunk_ratio").html(
-        "(" + current_packet + " / " + total_packets + ") Received"
+        "(" +
+          current_packet +
+          " / " +
+          total_packets +
+          ") " +
+          file_size_string +
+          " Received"
       );
       current_packet += 1;
       var percent = (current_packet / total_packets) * 100;
       $("#file_upload_progress_bar").css("width", percent + "%");
-      $("#data_url_download_link").attr("href", file_data);
     }
   });
 
@@ -461,6 +468,20 @@ function init_events() {
       $("#heap_progress_bar").css("width", heap_per + "%");
     }
   });
+}
+
+function get_string_size(stringdata) {
+  const byteSize = (str) => new Blob([str]).size;
+  var file_size = byteSize(stringdata);
+  var file_size_string;
+  if (file_size / 1024 < 1) {
+    file_size_string = file_size.toFixed(2) + " Bytes";
+  } else if (file_size / 1024 / 1024 < 1) {
+    file_size_string = (file_size / 1204).toFixed(2) + " KB";
+  } else {
+    file_size_string = (file_size / 1204 / 1024).toFixed(2) + " MB";
+  }
+  return file_size_string;
 }
 
 function init_socket() {
@@ -517,19 +538,24 @@ function init_socket() {
           action = data["data"];
           if (action == "enable_file_tx_mode") {
             total_packets = data["total_packets"];
+            file_size = data["size"];
+            file_name = data["name"];
             current_packet = 0;
             $("#file_upload_progress_bar").addClass("bg-success");
             $("#chunk_ratio").html(
-              "Total " + total_packets + " file chunks will be recieved."
+              "Total " +
+                total_packets +
+                " file chunks will be recieved. (Total Size: " +
+                file_size +
+                ", File Name: " +
+                file_name +
+                ")"
             );
-            file_data = "";
             start_file_transfer_mode();
           } else if (action == "disable_file_tx_mode") {
             stop_file_transfer_mode();
-          }
-          else if (action == "sos")
-          {
-            alert("User "+uname+" has sent a SOS request.");
+          } else if (action == "sos") {
+            alert("User " + uname + " has sent a SOS request.");
           }
         }
       }
@@ -606,6 +632,33 @@ function stop_broadcast() {
   stop_file_transfer_mode();
 }
 
+function dataURItoBlob(dataURI) {
+  var byteString = atob(dataURI.split(",")[1]);
+
+  var mimeString = dataURI.split(",")[0].split(":")[1].split(";")[0];
+
+  var ab = new ArrayBuffer(byteString.length);
+  var ia = new Uint8Array(ab);
+  for (var i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i);
+  }
+  return new Blob([ab], { type: mimeString });
+}
+
+const downloadFile = () => {
+  if (file_transfer_mode) {
+    alert("File transfer in progress.");
+    return;
+  }
+  const link = document.createElement("a");
+  const file = dataURItoBlob(file_data);
+  link.href = URL.createObjectURL(file);
+  if (file_name == "") link.download = "Voyager_Download";
+  else link.download = file_name;
+  link.click();
+  URL.revokeObjectURL(link.href);
+};
+
 function file_broadcast() {
   if (transmission) return;
   const file = $("#broadcastFile").prop("files")[0];
@@ -615,15 +668,17 @@ function file_broadcast() {
     const dataURL = reader.result;
     const chunkSize = parseInt($("#chunk_size").val());
     const waitTime = parseInt($("#wait_time").val());
-    $("#data_url_download_link").attr("href", "");
+    file_data = "";
+    f_name = file.name;
     if (chunkSize > 200 || chunkSize < 0) {
       alert("packet size should be between 1-200");
       return;
     }
-    if (waitTime < 0) {
-      alert("Wait time should be greater than 0ms");
+    if (waitTime < 500) {
+      alert("Wait time should be greater than 500 ms");
       return;
     }
+    file_size_string = get_string_size(dataURL);
     const total_chunk = Math.floor(dataURL.length / chunkSize);
     var time_estimate;
     if (waitTime == 0) {
@@ -638,7 +693,9 @@ function file_broadcast() {
     $("#chunk_ratio").html(
       "Total " +
         total_chunk +
-        " file chunks will be transmitted. Estimated time " +
+        " file chunks will be transmitted. Total Size " +
+        file_size_string +
+        ". Estimated time " +
         h +
         ":" +
         m +
@@ -696,6 +753,8 @@ function file_broadcast() {
         pack_type: "action",
         data: "enable_file_tx_mode",
         total_packets: total_chunk,
+        size: file_size_string,
+        name: f_name,
       };
       $.post("/lora_transmit", { data: JSON.stringify(tx_msg) }, (timeout = 20))
         .done(function (data) {
@@ -715,8 +774,7 @@ function file_broadcast() {
 }
 
 function uploadChunk(chunk, passed_callback, failed_callback) {
-  var _href = $("#data_url_download_link").attr("href");
-  $("#data_url_download_link").attr("href", _href + chunk);
+  file_data += chunk;
   // console.log(chunk);
   $.post("/send_raw", { data: chunk }, (timeout = 20))
     .done(function () {
@@ -729,10 +787,11 @@ function uploadChunk(chunk, passed_callback, failed_callback) {
 
 var file_transfer_mode = false;
 function start_file_transfer_mode() {
-  $("#data_url_download_link").attr("href", "");
+  file_data = "";
   file_transfer_mode = true;
 }
 function stop_file_transfer_mode() {
+  if (transmission) alert("Transmission Stopped/finished.");
   transmission = false;
   file_transfer_mode = false;
 }
