@@ -540,16 +540,20 @@ function init_socket() {
             total_packets = data["total_packets"];
             file_size = data["size"];
             file_name = data["name"];
+            time = data["time"];
             current_packet = 0;
             $("#file_upload_progress_bar").addClass("bg-success");
-            $("#chunk_ratio").html(
+            $("#rec_info").html(
               "Total " +
                 total_packets +
-                " file chunks will be recieved. (Total Size: " +
+                " file chunks will be recieved." +
+                "<br />Total Size: <b>" +
                 file_size +
-                ", File Name: " +
+                "</b><br />File Name: <b>" +
                 file_name +
-                ")"
+                "</b><br />Estimated min time <b>" +
+                time +
+                "</b>"
             );
             start_file_transfer_mode();
           } else if (action == "disable_file_tx_mode") {
@@ -669,7 +673,7 @@ function file_broadcast() {
     const chunkSize = parseInt($("#chunk_size").val());
     const waitTime = parseInt($("#wait_time").val());
     file_data = "";
-    f_name = file.name;
+    file_name = file.name;
     if (chunkSize > 200 || chunkSize < 0) {
       alert("packet size should be between 1-200");
       return;
@@ -691,17 +695,19 @@ function file_broadcast() {
     var m = Math.floor((time_estimate % 3600) / 60);
     var s = Math.floor((time_estimate % 3600) % 60);
     $("#chunk_ratio").html(
-      "Total " +
+      "Total <b>" +
         total_chunk +
-        " file chunks will be transmitted. Total Size " +
+        "</b> file chunks will be transmitted.<br>" +
+        "Total Size <b>" +
         file_size_string +
-        ". Estimated time " +
+        "</b>.<br>" +
+        "Estimated min time <b>" +
         h +
         ":" +
         m +
         ":" +
         s +
-        "."
+        "</b>."
     );
     $("#file_upload_progress_bar").removeClass("bg-success");
     function loop(s) {
@@ -754,11 +760,13 @@ function file_broadcast() {
         data: "enable_file_tx_mode",
         total_packets: total_chunk,
         size: file_size_string,
-        name: f_name,
+        name: file_name,
+        time: h + ":" + m + ":" + s,
       };
       $.post("/lora_transmit", { data: JSON.stringify(tx_msg) }, (timeout = 20))
         .done(function (data) {
           if (data.akn == 1) {
+            start_file_transfer_mode();
             setTimeout(() => {
               transmission = true;
               loop(0);
