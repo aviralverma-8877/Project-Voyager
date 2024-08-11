@@ -650,7 +650,7 @@ function dataURItoBlob(dataURI) {
 }
 
 const downloadFile = () => {
-  if (file_transfer_mode) {
+  if (transmission) {
     alert("File transfer in progress.");
     return;
   }
@@ -768,7 +768,6 @@ function file_broadcast() {
           if (data.akn == 1) {
             start_file_transfer_mode();
             setTimeout(() => {
-              transmission = true;
               loop(0);
             }, 2000);
           }
@@ -793,13 +792,11 @@ function uploadChunk(chunk, passed_callback, failed_callback) {
     });
 }
 
-var file_transfer_mode = false;
 function start_file_transfer_mode() {
+  transmission = true;
   file_data = "";
-  file_transfer_mode = true;
 }
 function stop_file_transfer_mode() {
   if (transmission) alert("Transmission Stopped/finished.");
   transmission = false;
-  file_transfer_mode = false;
 }
