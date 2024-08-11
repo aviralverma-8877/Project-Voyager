@@ -340,7 +340,7 @@ function alert(msg) {
 
 function reset() {
   $("#promptModalLabel").html("Device Reset");
-  $("#prompt_body").html("Are you sure you want to reset the device");
+  $("#prompt_body").html("Are you sure you want to reset the device ?");
   promptModal.show();
   $("#promptModelProceed").click(function () {
     promptModal.hide();
@@ -384,17 +384,24 @@ function wifi_connect() {
 }
 
 function wifi_ap_mode() {
-  Socket.send(
-    JSON.stringify({
-      "request-type": "wifi_ap_mode",
-    })
+  $("#promptModalLabel").html("Access Point");
+  $("#prompt_body").html(
+    "Are you sure you want to switch to access point mode ?"
   );
-  alert(
-    'Switched to AP mode.<br />Connect the wifi to "Voyager" access point.'
-  );
-  setTimeout(function () {
-    window.location.replace(hostname_url);
-  }, 10000);
+  promptModal.show();
+  $("#promptModelProceed").click(function () {
+    Socket.send(
+      JSON.stringify({
+        "request-type": "wifi_ap_mode",
+      })
+    );
+    alert(
+      'Switched to AP mode.<br />Connect the wifi to "Voyager" access point.'
+    );
+    setTimeout(function () {
+      window.location.replace(hostname_url);
+    }, 10000);
+  });
 }
 
 function set_username(val) {
