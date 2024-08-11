@@ -23,7 +23,7 @@ void handle_operations(JsonDocument doc)
         const char * psk = doc["wifi_pass"];
         serial_print(psk);
         // Reading wifi config
-        String wifi_config = get_wifi_setting();
+        String wifi_config = get_wifi_setting("/config/wifi_config.json");
         // modifying wifi config
         serial_print(wifi_config);
         JsonDocument wifi_conf;
@@ -36,6 +36,12 @@ void handle_operations(JsonDocument doc)
         wifi_conf.clear();
         serial_print(wifi_config);
         // writing wifi config
+        save_wifi_settings(wifi_config);
+        restart(NULL);
+    }
+    if(strcmp(request_type, "wifi_ap_mode") == 0)
+    {
+        String wifi_config = get_wifi_setting("/config/wifi__default.json");
         save_wifi_settings(wifi_config);
         restart(NULL);
     }

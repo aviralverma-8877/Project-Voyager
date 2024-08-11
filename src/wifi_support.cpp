@@ -12,7 +12,7 @@ void connect_wifi()
     if (SPIFFS.exists("/config/wifi_config.json"))
     {
         String wifi_config;
-        wifi_config = get_wifi_setting();
+        wifi_config = get_wifi_setting("/config/wifi_config.json");
         serial_print(wifi_config);
         JsonDocument doc;
         deserializeJson(doc, wifi_config);
@@ -61,7 +61,7 @@ void onWifiConnect(WiFiEvent_t event, WiFiEventInfo_t info)
         display_buffer[1].msg = "WiFi Type : AP";
     else if (WiFi.getMode() == WIFI_MODE_STA)
         display_buffer[1].msg = "WiFi Type : STA";
-    String wifi_config = get_wifi_setting();
+    String wifi_config = get_wifi_setting("/config/wifi_config.json");
     JsonDocument wifi_conf;
     deserializeJson(wifi_conf, wifi_config);
     wifi_conf.shrinkToFit();
@@ -82,11 +82,11 @@ void onWifiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info)
     config_wifi();
 }
 
-String get_wifi_setting()
+String get_wifi_setting(String wifi_config)
 {
-    if (SPIFFS.exists("/config/wifi_config.json"))
+    if (SPIFFS.exists(wifi_config))
     {
-        File file = SPIFFS.open("/config/wifi_config.json");
+        File file = SPIFFS.open(wifi_config);
         if(!file){
             setup_ap("Voyager");
             return "";

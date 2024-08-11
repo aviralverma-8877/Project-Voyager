@@ -345,6 +345,9 @@ function reset() {
   $("#promptModelProceed").click(function () {
     promptModal.hide();
     Socket.send(JSON.stringify({ "request-type": "reset_device" }));
+    setTimeout(function () {
+      window.location.replace(hostname_url);
+    }, 10000);
   });
 }
 
@@ -374,6 +377,20 @@ function wifi_connect() {
       wifi_ssid: ssid,
       wifi_pass: psk,
     })
+  );
+  setTimeout(function () {
+    window.location.replace(hostname_url);
+  }, 10000);
+}
+
+function wifi_ap_mode() {
+  Socket.send(
+    JSON.stringify({
+      "request-type": "wifi_ap_mode",
+    })
+  );
+  alert(
+    'Switched to AP mode.<br />Connect the wifi to "Voyager" access point.'
   );
   setTimeout(function () {
     window.location.replace(hostname_url);
