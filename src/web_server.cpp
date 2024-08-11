@@ -91,6 +91,7 @@ void firmware_web_updater()
         }\
     }\
     </script>\
+    <fieldset class=\"lora_transmission\">\
     <form method='POST' action='/update_flash' enctype='multipart/form-data'>\
       <div class='form-group mx-sm-3 mb-2'>\
         <label class='sr-only' for='firmare_file'><h5>firmware.bin</h5></label>\
@@ -104,7 +105,7 @@ void firmware_web_updater()
         <input id='spiff_file' type='file' class='form-control row' placeholder='spiffs.bin' name='update'>\
       </div>\
       <input class='btn btn-primary mb-2' type='submit' value='Update'>\
-    </form>"); });
+    </form></fieldset>"); });
 
   server.on("/update_flash", HTTP_POST, [](AsyncWebServerRequest *request)
             {

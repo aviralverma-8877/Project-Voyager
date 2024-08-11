@@ -82,9 +82,11 @@ function dashboard() {
   $("#navbar-dashboard").addClass("active");
   $.get("dashboard.html", function (data) {
     $("#main_content").html(data);
+    var block_input_status = transmission;
     $.get("/config/lora_serial.json", function (config) {
       $("#lora_to_serial").attr("checked", config.lora_serial);
-      config_lora_to_serial_fields(config.lora_serial);
+      block_input_status = block_input_status || config.lora_serial;
+      block_inputs(block_input_status);
       setTimeout(function () {
         get_username();
         set_sync_word();
@@ -96,8 +98,10 @@ function dashboard() {
 function file_transfer() {
   $.get("file_transfer.html", function (data) {
     $("#main_content").html(data);
+    var block_input_status = transmission;
     $.get("/config/lora_serial.json", function (config) {
-      config_lora_to_serial_fields(config.lora_serial);
+      block_input_status = block_input_status || config.lora_serial;
+      block_inputs(block_input_status);
     });
   });
 }
@@ -107,6 +111,7 @@ function wifi() {
   $("#navbar-wifi").addClass("active");
   $.get("wifi.html", function (data) {
     $("#main_content").html(data);
+    block_inputs(transmission);
     $.get("/config/wifi_config.json", function (data) {
       $("#wifi_ssid_name").html(data.wifi_ssid);
     });
@@ -257,6 +262,7 @@ function lora() {
   $("#navbar-lora").addClass("active");
   $.get("lora.html", function (data) {
     $("#main_content").html(data);
+    block_inputs(transmission);
     $.get("/config/lora_config.json", function (lora_config) {
       generate_sync_word();
 
@@ -323,6 +329,7 @@ function update() {
   $("#navbar-update").addClass("active");
   $.get("update", function (data) {
     $("#main_content").html(data);
+    block_inputs(transmission);
   });
 }
 
@@ -594,16 +601,16 @@ function init_socket() {
   };
 }
 
-function config_lora_to_serial_fields(val) {
+function block_inputs(val) {
   if (val) {
-    $(".lora_transmittion").attr("disabled", "true");
+    $(".lora_transmission").attr("disabled", "true");
   } else {
-    $(".lora_transmittion").removeAttr("disabled");
+    $(".lora_transmission").removeAttr("disabled");
   }
 }
 
 function set_lora_to_serial(val) {
-  config_lora_to_serial_fields(val);
+  block_inputs(val);
   Socket.send(
     JSON.stringify({
       "request-type": "set_serial_mode",
@@ -795,8 +802,10 @@ function uploadChunk(chunk, passed_callback, failed_callback) {
 function start_file_transfer_mode() {
   transmission = true;
   file_data = "";
+  block_inputs(transmission);
 }
 function stop_file_transfer_mode() {
   if (transmission) alert("Transmission Stopped/finished.");
   transmission = false;
+  block_inputs(transmission);
 }
