@@ -16,7 +16,7 @@
     extern String username;
     extern String hostname;
     extern DNSServer dnsServer;
-
+    extern TaskHandle_t debug_handler;
     void serial_to_lora(void* param);
     void get_lora_serial();
     void get_username();
@@ -27,6 +27,7 @@
     void restart(void *param);
     void config_gpios();
     void serial_print(String msg);
+    void debugger_print(void *param);
     void setupTasks();
     void stop_transmission();
     void nortify_led();

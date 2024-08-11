@@ -41,7 +41,7 @@ function send_lora(msg) {
     tx_msg = { pack_type: "msg", data: msg };
     $("#lora_msg").val("");
     $("#lora_msg").attr("readonly", true);
-    $.post("/lora_transmit", { data: JSON.stringify(tx_msg) }, (timeout = 20))
+    $.post("/lora_transmit", { data: JSON.stringify(tx_msg) })
       .done(function (data) {
         $("#lora_msg").attr("readonly", false);
         if (data.akn == 1) {
@@ -430,6 +430,7 @@ var current_packet = 0;
 var file_data = "";
 var file_name = "";
 var lastEventTimestamp = 0;
+var lastDebugEventTimestamp = 0;
 function init_events() {
   var source = new EventSource("/rawEvents");
   source.addEventListener(
@@ -444,7 +445,6 @@ function init_events() {
     function (e) {
       if (e.target.readyState != EventSource.OPEN) {
         console.log("Events Disconnected");
-        init_events();
       }
     },
     false
@@ -497,6 +497,17 @@ function init_events() {
         $("#heap_progress_bar").addClass("bg-warning");
       if (heap_per > 70) $("#heap_progress_bar").addClass("bg-danger");
       $("#heap_progress_bar").css("width", heap_per + "%");
+    }
+  });
+  source.addEventListener("DEBUG", function (e) {
+    var data = JSON.parse(e.data);
+    if (lastDebugEventTimestamp == data.millis) return;
+    lastDebugEventTimestamp = data.millis;
+    data = data.data;
+    if (data != "") {
+      const d = new Date();
+      let time = d.getTime();
+      $("#debug_textarea").prepend(time + " > " + data + "\n");
     }
   });
 }
@@ -743,46 +754,37 @@ function file_broadcast() {
     $("#file_upload_progress_bar").removeClass("bg-success");
     function loop(s) {
       if (s < dataURL.length && transmission) {
-        uploadChunk(
-          dataURL.slice(s, s + chunkSize),
-          () => {
-            s += chunkSize;
-            var percent = Math.abs((s / dataURL.length) * 100);
-            $("#file_upload_progress_bar").css("width", percent + "%");
-            setTimeout(() => {
-              loop(s);
-            }, waitTime);
-          },
-          () => {
-            stop_broadcast();
-            tx_msg = { pack_type: "action", data: "disable_file_tx_mode" };
-            $.post(
-              "/lora_transmit",
-              { data: JSON.stringify(tx_msg) },
-              (timeout = 20)
-            )
-              .done(function (data) {
-                if (data.akn == 1) {
-                  stop_broadcast();
-                }
-              })
-              .fail(function (data) {});
-          }
-        );
-      } else {
-        stop_broadcast();
-        tx_msg = { pack_type: "action", data: "disable_file_tx_mode" };
-        $.post(
-          "/lora_transmit",
-          { data: JSON.stringify(tx_msg) },
-          (timeout = 20)
-        )
-          .done(function (data) {
-            if (data.akn == 1) {
-              stop_broadcast();
+        function passed_callback() {
+          s += chunkSize;
+          var percent = Math.abs((s / dataURL.length) * 100);
+          $("#file_upload_progress_bar").css("width", percent + "%");
+          setTimeout(() => {
+            loop(s);
+          }, waitTime);
+        }
+        function failed_callback() {
+          stop_broadcast();
+          tx_msg = { pack_type: "action", data: "disable_file_tx_mode" };
+          $.post("/lora_transmit", { data: JSON.stringify(tx_msg) })
+            .done(function (data) {
+              if (data.akn == 1) {
+                stop_broadcast();
+              }
+            })
+            .fail(function (data) {});
+        }
+        var retry = 0;
+        uploadChunk(dataURL.slice(s, s + chunkSize), passed_callback, () => {
+          setTimeout(() => {
+            if (retry < 4) {
+              retry++;
+              passed_callback();
+            } else {
+              failed_callback();
             }
-          })
-          .fail(function (data) {});
+          }, 1000);
+        });
+      } else {
       }
     }
     setTimeout(() => {
@@ -794,7 +796,7 @@ function file_broadcast() {
         name: file_name,
         time: h + ":" + m + ":" + s,
       };
-      $.post("/lora_transmit", { data: JSON.stringify(tx_msg) }, (timeout = 20))
+      $.post("/lora_transmit", { data: JSON.stringify(tx_msg) })
         .done(function (data) {
           if (data.akn == 1) {
             start_file_transfer_mode();
@@ -814,7 +816,7 @@ function file_broadcast() {
 function uploadChunk(chunk, passed_callback, failed_callback) {
   file_data += chunk;
   // console.log(chunk);
-  $.post("/send_raw", { data: chunk }, (timeout = 20))
+  $.post("/send_raw", { data: chunk })
     .done(function () {
       passed_callback();
     })

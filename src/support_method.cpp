@@ -4,6 +4,7 @@ bool lora_serial = false;
 String username;
 String hostname;
 DNSServer dnsServer;
+TaskHandle_t debug_handler = NULL;
 
 // This is main method to handle web-socket input
 // It accepts input as JsonDocument which should have the key request-type.
@@ -332,16 +333,51 @@ void config_gpios()
 
 void serial_print(String msg)
 {
-    if(DEBUGGING && !lora_serial)
+    if(debug_handler != NULL)
     {
-        Serial.println("\n"+msg);
+        DebugQueueParam *payload = new DebugQueueParam();
+        payload->message = msg;
+        xQueueSend(debug_msg, (void*)&payload, (TickType_t)2);
     }
+}
+
+void debugger_print(void *param)
+{
+    while( uxQueueSpacesAvailable( debug_msg ) > 0 )
+    {
+        DebugQueueParam* params = NULL;
+        if(xQueueReceive(debug_msg, &(params) , (TickType_t)0))
+        {
+            String msg = (String)params->message;
+            if(DEBUGGING && !lora_serial)
+            {
+                Serial.println("\n"+msg);
+            }
+            if(ws_connected)
+            {
+                JsonDocument doc;
+                doc["millis"] = millis();
+                doc["data"] = msg;
+                doc.shrinkToFit();
+                String payload;
+                serializeJson(doc, payload);
+                doc.clear();
+                send_to_events(payload, "DEBUG");
+            }
+            delete params;
+        }
+    }
+    show_alert("Queue is full, Rebooting...");
+    vTaskDelay(100/portTICK_PERIOD_MS);
+    xTaskCreate(restart,"restart",6000,NULL,1,NULL);
+    vTaskDelete(NULL);
 }
 
 void setupTasks()
 {
     xTaskCreate(btn_intrupt, "btn_intrupt", 6000, NULL, 1, NULL);
     xTaskCreate(get_heap_info, "get_heap_info", 6000, NULL, 1, NULL);
+    xTaskCreate(debugger_print, "debugger_print", 6000, NULL, 1, &debug_handler);
 }
 
 void nortify_led()

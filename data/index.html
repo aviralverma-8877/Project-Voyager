@@ -143,6 +143,19 @@
                 <button class="btn btn-primary" onclick="downloadFile()">Download</button>
             </div>
             <hr>
+            <div class="mb-3 form-group">
+                <label for="debug_textarea">
+                    <b>Debugger:</b>
+                </label>
+                <textarea
+                    class="form-control fw-bold"
+                    id="debug_textarea"
+                    rows="10"
+                    style="font-size:10"
+                    readonly
+                ></textarea>
+            </div>
+            <hr>
             <div class="mb-3 mw-10">
                 <h5>LoRa recieved messages:</h5>
                 <ul class="list-group" id="lora_rx_msg"></ul>

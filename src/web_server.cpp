@@ -3,11 +3,13 @@
 AsyncWebServer server(80);
 QueueHandle_t send_packets;
 QueueHandle_t recv_packets;
+QueueHandle_t debug_msg;
 
 void define_api()
 {
   send_packets = xQueueCreate(20, sizeof(QueueParam*));
   recv_packets = xQueueCreate(20, sizeof(QueueParam*));
+  debug_msg = xQueueCreate(20, sizeof(DebugQueueParam*));
   server.serveStatic("/", SPIFFS, "/");
   server.on("/hostname", HTTP_GET, [](AsyncWebServerRequest *request)
   {

@@ -145,6 +145,7 @@ void LoRa_sendRaw(void* param) {
                 if(AknRecieved == 0)
                 {
                     retry += 1;
+                    serial_print("Retry: "+(String)retry);
                     AknRecieved = 2;
                     LoRa_send((String)params->message, type);
                 }
@@ -159,6 +160,7 @@ void LoRa_sendRaw(void* param) {
                     }
                     else
                     {
+                        serial_print("Retry: "+(String)retry);
                         time = millis();
                         AknRecieved = 2;
                         LoRa_send((String)params->message, type);
@@ -228,6 +230,7 @@ void onReceive(int packetSize)
     {
         message += (char)LoRa.read();
     }
+    serial_print(message);
     if(checksum == get_checksum(message) && message.length() == size)
     {
         LoRa_sendAkn(1);

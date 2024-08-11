@@ -29,7 +29,9 @@
         String message;
         AsyncWebServerRequest *request;
     };
-
+    struct DebugQueueParam {
+        String message;
+    };
     extern CRC8 crc;
     extern bool lora_available_for_write;
     extern uint8_t AknRecieved;
