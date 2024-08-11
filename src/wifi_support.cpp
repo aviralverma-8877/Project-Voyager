@@ -146,6 +146,10 @@ void setup_sta(const char* wifi_ssid, const char* wifi_pass)
 void setup_ap(const char* wifi_ssid)
 {
     serial_print("Configuring Access Point.");
+    const IPAddress localIP(192, 168, 4, 1);
+    const IPAddress gatewayIP(192, 168, 4, 1);
+    const IPAddress subnetMask(255, 255, 255, 0);
+    WiFi.softAPConfig(localIP, gatewayIP, subnetMask);
     WiFi.softAP(wifi_ssid);
     IPAddress IP = WiFi.softAPIP();
     serial_print(IP.toString());

@@ -307,6 +307,7 @@ void setup_dns()
     serial_print("Soft AP IP.");
     serial_print(WiFi.softAPIP().toString());
     dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+    dnsServer.setTTL(3600);
     dnsServer.start(53, "*", WiFi.softAPIP());
     xTaskCreate(dns_request_process, "DNS Request Handler", 6000, NULL, 1, NULL);
 }
@@ -316,7 +317,7 @@ void dns_request_process(void *parameter)
     for(;;)
     {
         dnsServer.processNextRequest();
-        vTaskDelay(10/portTICK_PERIOD_MS);
+        vTaskDelay(30/portTICK_PERIOD_MS);
     }
     vTaskDelete(NULL);
 }
