@@ -788,6 +788,15 @@ function file_broadcast() {
           }, 1000);
         });
       } else {
+        stop_broadcast();
+        tx_msg = { pack_type: "action", data: "disable_file_tx_mode" };
+        $.post("/lora_transmit", { data: JSON.stringify(tx_msg) })
+          .done(function (data) {
+            if (data.akn == 1) {
+              stop_broadcast();
+            }
+          })
+          .fail(function (data) {});
       }
     }
     setTimeout(() => {
