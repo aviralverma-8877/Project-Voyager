@@ -16,6 +16,11 @@ void define_api()
     serial_print("hostname");
     request->send(200, "text/plain", hostname);
   });
+  server.on("/username", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    serial_print("username");
+    request->send(200, "text/plain", username);
+  });
   server.on("/send_raw", HTTP_POST, [](AsyncWebServerRequest *request)
   {
     AsyncWebParameter * j = request->getParam(0);

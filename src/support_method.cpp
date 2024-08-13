@@ -42,7 +42,12 @@ void handle_operations(JsonDocument doc)
     }
     if(strcmp(request_type, "wifi_ap_mode") == 0)
     {
-        String wifi_config = get_wifi_setting("/config/wifi__default.json");
+        String wifi_config = get_wifi_setting("/config/wifi_default.json");
+        JsonDocument doc;
+        deserializeJson(doc, wifi_config);
+        doc["wifi_ssid"] = username;
+        serializeJson(doc, wifi_config);
+        doc.clear();
         save_wifi_settings(wifi_config);
         restart(NULL);
     }

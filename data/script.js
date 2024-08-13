@@ -393,17 +393,20 @@ function wifi_ap_mode() {
   );
   promptModal.show();
   $("#promptModelProceed").click(function () {
-    Socket.send(
-      JSON.stringify({
-        "request-type": "wifi_ap_mode",
-      })
-    );
-    alert(
-      'Switched to AP mode.<br />Connect the wifi to "Voyager" access point.'
-    );
-    setTimeout(function () {
-      window.location.replace(hostname_url);
-    }, 10000);
+    promptModal.hide();
+    $.get("/username",function(username){
+      Socket.send(
+        JSON.stringify({
+          "request-type": "wifi_ap_mode",
+        })
+      );
+      alert(
+        'Switched to AP mode.<br />Connect the wifi to "'+username+'" access point.'
+      );
+      setTimeout(function () {
+        window.location.replace(hostname_url);
+      }, 10000);
+    })
   });
 }
 
