@@ -12,6 +12,9 @@ $(document).ready(function () {
   loading_alert = new bootstrap.Modal($("#loadingModal"), {});
   $("#loading_model_body").html("Connecting...");
   loading_alert.show();
+  window.onbeforeunload = function () {
+    return "Are you sure you want to leave?";
+  };
 });
 
 $("#myModal").on("shown.bs.modal", function () {
