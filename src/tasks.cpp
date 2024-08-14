@@ -4,14 +4,6 @@ bool notify = false;
 bool btn_1_pressed = false;
 bool btn_2_pressed = false;
 
-void wifi_connection_check()
-{
-    if(WiFi.status() != WL_CONNECTED)
-    {
-        config_wifi();
-    }
-}
-
 void ping_mqtt_timer(void *param)
 {
     String mac, mqtt_ping;

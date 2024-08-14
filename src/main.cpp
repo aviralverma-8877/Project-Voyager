@@ -26,7 +26,7 @@ void setup() {
   //WiFi.onEvent(onWifiConnect, SYSTEM_EVENT_STA_GOT_IP);
   //WiFi.onEvent(onWifiDisconnect, SYSTEM_EVENT_STA_DISCONNECTED);
   config_wifi();
-
+  WiFi_setup_done = true;
   initWebSocket();
   define_api();  
 

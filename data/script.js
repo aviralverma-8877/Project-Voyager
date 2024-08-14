@@ -553,17 +553,32 @@ function init_socket() {
         var ssid_list = data.SSID;
         var output = "";
         for (wifi_ssid in ssid_list) {
-          wifi_ssid = ssid_list[wifi_ssid];
-          quality = 2 * (wifi_ssid.rssi + 100);
+          var wifi_ssid = ssid_list[wifi_ssid];
+          var quality = 2 * (wifi_ssid.rssi + 100);
+          var cl = ""
+          if(quality >= 80)
+          {
+            cl = "list-group-item-success"
+          }
+          else if(quality >= 60)
+          {
+            cl = "list-group-item-primary"
+          }
+          else if(quality >= 40)
+          {
+            cl = "list-group-item-warning"
+          }
+          else if(quality < 40)
+          {
+            cl = "list-group-item-danger"
+          }
           output +=
-            '<li class="list-group-item d-flex justify-content-between align-items-center">\
+            '<li class="list-group-item '+cl+' d-flex justify-content-between align-items-center">\
             <a href="#wifi_password" onclick="update_wifi_ssid(\'' +
             wifi_ssid.ssid +
             "')\">" +
             wifi_ssid.ssid +
-            " (" +
-            quality +
-            " %)</a></li>";
+            "</a></li>";
         }
         $("#wifi_ssid_list").html(output);
       }

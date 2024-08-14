@@ -1,6 +1,7 @@
 #include<wifi_support.h>
 
 WiFiBackup wifi_backup;
+bool WiFi_setup_done = false;
 
 void config_wifi()
 {
@@ -44,7 +45,7 @@ void wifi_monitor(void* param)
 {
     while(true)
     {
-        if(!WiFi.isConnected())
+        if(WiFi_setup_done && !WiFi.isConnected())
         {
             config_wifi();
         }
@@ -79,7 +80,8 @@ void onWifiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info)
     display_buffer[1].msg = "WiFi Disconnected";
     display_buffer[2].msg = "Retrying";
     display_text_oled();
-    config_wifi();
+    if(WiFi_setup_done)
+        config_wifi();
 }
 
 String get_wifi_setting(String wifi_config)
@@ -130,15 +132,24 @@ void setup_sta(const char* wifi_ssid, const char* wifi_pass)
 {
     serial_print("Connecting WiFi.");
     WiFi.begin(wifi_ssid, wifi_pass);
-    int count = 0;
+    vTaskDelay(1000/portTICK_PERIOD_MS);
+    int count = 60;
     while (WiFi.status() != WL_CONNECTED) {
-        if(count > 120)
+        if(count == 0)
         {
-            ESP.restart();
+            String wifi_config = get_wifi_setting("/config/wifi_default.json");
+            JsonDocument doc;
+            deserializeJson(doc, wifi_config);
+            doc["wifi_ssid"] = username;
+            serializeJson(doc, wifi_config);
+            doc.clear();
+            save_wifi_settings(wifi_config);
+            restart(NULL);
         }
-        vTaskDelay(500/portTICK_PERIOD_MS);
-        serial_print(".");
-        count++;
+        vTaskDelay(1000/portTICK_PERIOD_MS);
+        display_buffer[3].msg = "AP mode in "+(String)count;
+        display_text_oled();
+        count--;
     }
     setup_mdns();
 }

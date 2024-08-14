@@ -11,6 +11,7 @@
         bool backup_done = false;
     };
     extern WiFiBackup wifi_backup;
+    extern bool WiFi_setup_done;
     void config_wifi();
     String get_wifi_setting(String wifi_config);
     void save_wifi_settings(String config);

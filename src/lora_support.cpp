@@ -54,6 +54,7 @@ void save_lora_config(String value)
         LoRa.setSyncWord(SyncWord);
         doc.clear();
         show_alert("LoRa config saved successfully");
+        restart(NULL);
     }
 }
 
