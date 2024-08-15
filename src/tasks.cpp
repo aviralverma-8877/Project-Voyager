@@ -24,6 +24,19 @@ void ping_mqtt_timer(void *param)
     vTaskDelete(NULL);
 }
 
+void async_led_notifier(void *param)
+{
+    while(true)
+    {
+        if(notify)
+        {
+            led_nortifier();
+        }
+        notify = false;
+        vTaskDelay(1/portTICK_PERIOD_MS);
+    }
+}
+
 void led_nortifier()
 {
     if(digitalRead(LED))

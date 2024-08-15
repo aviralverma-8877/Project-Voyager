@@ -12,6 +12,7 @@
 
     void ping_mqtt_timer(void *param);
     void init_isr(int btn);
+    void async_led_notifier(void *param);
     void led_nortifier();
     void btn_intrupt(void *param);
     void transmit_beacon();

@@ -12,6 +12,7 @@
     #include <wifi_support.h>
     #include <lora_support.h>
     #include "SPIFFS.h"
+    #define INTERRUPT_ATTR IRAM_ATTR
     extern bool lora_serial;
     extern String username;
     extern String hostname;
@@ -30,7 +31,6 @@
     void debugger_print(void *param);
     void setupTasks();
     void stop_transmission();
-    void nortify_led();
     void show_alert(String msg);
     void handle_operations(JsonDocument doc);
     void reset_device(void *param);

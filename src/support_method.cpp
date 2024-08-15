@@ -139,23 +139,20 @@ void serial_to_lora(void* param)
         {
             if(Serial.available())
             {
-                String data;
+                led_nortifier();
+                LoRa_txMode();
+                LoRa.beginPacket();
                 while(Serial.available())
                 {
-                    data += (char)Serial.read();
+                    LoRa.write((uint8_t)Serial.read());
                 }
-                if(data.length() <= 200)
-                {
-                    QueueParam *packet = new QueueParam();
-                    packet->message = data;
-                    packet->type = LORA_SERIAL;
-                    packet->request = NULL;
-                    xQueueSend(send_packets, (void*)&packet, (TickType_t)2);
-                }
+                LoRa.endPacket(true);
+                LoRa_rxMode();
             }
         }
         vTaskDelay(50/portTICK_PERIOD_MS);
     }
+    vTaskDelete(NULL);
 }
 
 // Method to fetch the flag lora_serial.
@@ -383,10 +380,5 @@ void setupTasks()
     xTaskCreatePinnedToCore(btn_intrupt, "btn_intrupt", 6000, NULL, 1, NULL,1);
     xTaskCreatePinnedToCore(get_heap_info, "get_heap_info", 6000, NULL, 1, NULL,1);
     xTaskCreatePinnedToCore(debugger_print, "debugger_print", 6000, NULL, 1, &debug_handler, 1);
-}
-
-void nortify_led()
-{
-    serial_print("Nortify");
-    notify = true;
+    xTaskCreatePinnedToCore(async_led_notifier, "async_led_notifier", 6000, NULL, 1, &debug_handler, 1);
 }

@@ -215,6 +215,13 @@ void LoRa_sendAkn(uint8_t result)
 
 void onReceive(int packetSize)
 {
+    if(lora_serial)
+    {
+        led_nortifier();
+        for (int i=0; i<packetSize; i++)
+            Serial.write(LoRa.read());
+        return;
+    }
     String message;
     int size = (int)LoRa.read();
     int type = (int)LoRa.read();
