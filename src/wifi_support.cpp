@@ -3,9 +3,11 @@
 WiFiBackup wifi_backup;
 bool WiFi_setup_done = false;
 
-void config_wifi()
+void config_wifi(void *param)
 {
     connect_wifi();
+    WiFi_setup_done = true;
+    vTaskDelete(NULL);
 }
 
 void connect_wifi()
@@ -47,7 +49,7 @@ void wifi_monitor(void* param)
     {
         if(WiFi_setup_done && !WiFi.isConnected())
         {
-            config_wifi();
+            connect_wifi();
         }
         vTaskDelay(1000/portTICK_PERIOD_MS);
     }
@@ -71,7 +73,7 @@ void onWifiConnect(WiFiEvent_t event, WiFiEventInfo_t info)
     display_buffer[3].msg = IP.toString();
     display_text_oled();
     setup_mqtt();
-    xTaskCreate(wifi_monitor, "wifi_monitor", 6000, NULL, 1, NULL);
+    xTaskCreatePinnedToCore(wifi_monitor, "wifi_monitor", 6000, NULL, 1, NULL,1);
 }
 
 void onWifiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info)
@@ -81,7 +83,7 @@ void onWifiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info)
     display_buffer[2].msg = "Retrying";
     display_text_oled();
     if(WiFi_setup_done)
-        config_wifi();
+        connect_wifi();
 }
 
 String get_wifi_setting(String wifi_config)
@@ -125,7 +127,7 @@ void save_wifi_settings(String config)
         serial_print("WiFi Config saved");
     }
     file.close();
-    xTaskCreate(restart, "Restart", 6000, NULL, 1, NULL);
+    xTaskCreatePinnedToCore(restart, "Restart", 6000, NULL, 1, NULL,1);
 }
 
 void setup_sta(const char* wifi_ssid, const char* wifi_pass)
@@ -146,9 +148,9 @@ void setup_sta(const char* wifi_ssid, const char* wifi_pass)
             save_wifi_settings(wifi_config);
             restart(NULL);
         }
-        vTaskDelay(1000/portTICK_PERIOD_MS);
         display_buffer[3].msg = "AP mode in "+(String)count;
         display_text_oled();
+        vTaskDelay(1000/portTICK_PERIOD_MS);
         count--;
     }
     setup_mdns();

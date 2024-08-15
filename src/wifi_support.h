@@ -12,7 +12,7 @@
     };
     extern WiFiBackup wifi_backup;
     extern bool WiFi_setup_done;
-    void config_wifi();
+    void config_wifi(void *param);
     String get_wifi_setting(String wifi_config);
     void save_wifi_settings(String config);
     void wifi_monitor(void* param);

@@ -17,8 +17,8 @@ void config_lora()
     LoRa.onReceive(onReceive);
     LoRa.onTxDone(onTxDone);
     LoRa_rxMode();
-    xTaskCreate(LoRa_sendRaw,"LoRa_sendRaw", 6000, NULL, 1, NULL);
-    xTaskCreate(manage_recv_queue,"manage_recv_queue", 6000, NULL, 1, NULL);
+    xTaskCreatePinnedToCore(LoRa_sendRaw,"LoRa_sendRaw", 6000, NULL, 1, NULL,1);
+    xTaskCreatePinnedToCore(manage_recv_queue,"manage_recv_queue", 6000, NULL, 1, NULL,1);
 }
 
 void save_lora_config(String value)
@@ -54,7 +54,6 @@ void save_lora_config(String value)
         LoRa.setSyncWord(SyncWord);
         doc.clear();
         show_alert("LoRa config saved successfully");
-        restart(NULL);
     }
 }
 
@@ -194,7 +193,7 @@ void LoRa_sendRaw(void* param) {
     show_alert("Queue is full, Rebooting...");
     stop_transmission();
     vTaskDelay(100/portTICK_PERIOD_MS);
-    xTaskCreate(restart,"restart",6000,NULL,1,NULL);
+    xTaskCreatePinnedToCore(restart,"restart",6000,NULL,1,NULL,1);
     vTaskDelete(NULL);
 }
 
@@ -281,7 +280,7 @@ void manage_recv_queue(void* param)
     show_alert("Queue is full, Rebooting...");
     stop_transmission();
     vTaskDelay(100/portTICK_PERIOD_MS);
-    xTaskCreate(restart,"restart",6000,NULL,1,NULL);
+    xTaskCreatePinnedToCore(restart,"restart",6000,NULL,1,NULL,1);
     vTaskDelete(NULL);
 }
 
