@@ -154,7 +154,7 @@ void serial_to_lora(void* param)
         else{
             Serial.flush();
         }
-        vTaskDelay(50/portTICK_PERIOD_MS);
+        vTaskDelay(500/portTICK_PERIOD_MS);
     }
     vTaskDelete(NULL);
 }
