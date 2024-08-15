@@ -150,6 +150,9 @@ void serial_to_lora(void* param)
                 LoRa_rxMode();
             }
         }
+        else{
+            Serial.flush();
+        }
         vTaskDelay(50/portTICK_PERIOD_MS);
     }
     vTaskDelete(NULL);
