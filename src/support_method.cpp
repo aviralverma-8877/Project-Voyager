@@ -134,6 +134,7 @@ void save_lora_serial_config(void* param)
 // This meathod will only be enabled if lora_serial flag is true.
 void serial_to_lora(void* param)
 {
+    Serial.flush();
     while(true){
         if(lora_serial)
         {
