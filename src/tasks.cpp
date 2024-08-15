@@ -50,10 +50,6 @@ void btn_intrupt(void *param)
             {
                 btn_1_pressed = true;
                 serial_print("BUTTON 1 Pressed");
-                JsonDocument doc;
-                doc["name"] = username;
-                doc["mac"] = WiFi.macAddress();
-
                 JsonDocument msg;
                 msg["pack_type"] = "action";
                 msg["data"] = "sos";
@@ -62,7 +58,11 @@ void btn_intrupt(void *param)
                 serializeJson(msg, msg_string);
                 msg.clear();
 
+                JsonDocument doc;
+                doc["name"] = username;
+                doc["mac"] = WiFi.macAddress();
                 doc["data"] = msg_string;
+                doc.shrinkToFit();
                 String lora_payload;
                 serializeJson(doc, lora_payload);
                 doc.clear();
