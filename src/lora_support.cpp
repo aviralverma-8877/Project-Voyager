@@ -270,10 +270,6 @@ void manage_recv_queue(void* param)
             {
                 send_msg_to_ws((String)params->message);
             }
-            if(type == LORA_SERIAL)
-            {
-                send_msg_to_serial((String)params->message);
-            }
             send_msg_to_mqtt((String)params->message, type);
         }
         else
@@ -329,11 +325,6 @@ void send_msg_to_ws(String data)
     serializeJson(doc, val);
     doc.clear();
     send_to_ws(val);
-}
-
-void send_msg_to_serial(String data)
-{
-    Serial.print(data);
 }
 void onTxDone()
 {
