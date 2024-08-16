@@ -15,7 +15,7 @@ void handle_operations(JsonDocument doc)
     if(strcmp(request_type, "wifi_ssid_scan") == 0)
     {
         String json_string;
-        xTaskCreate(scan_ssid, "scan_wifi", 6000, NULL, 1, NULL);
+        xTaskCreatePinnedToCore(scan_ssid, "scan_wifi", 6000, NULL, 1, NULL,1);
     }
     if(strcmp(request_type, "connect_wifi") == 0)
     {
@@ -53,11 +53,11 @@ void handle_operations(JsonDocument doc)
     }
     if(strcmp(request_type, "reset_device") == 0)
     {
-        xTaskCreate(reset_device, "reset_device", 6000, NULL, 1, NULL);
+        xTaskCreatePinnedToCore(reset_device, "reset_device", 6000, NULL, 1, NULL,1);
     }
     if(strcmp(request_type, "restart_device") == 0)
     {
-        xTaskCreate(restart, "Restart", 6000, NULL, 1, NULL);
+        xTaskCreatePinnedToCore(restart, "Restart", 6000, NULL, 1, NULL,1);
     }
     if(strcmp(request_type, "set_username") == 0)
     {
@@ -94,7 +94,7 @@ void handle_operations(JsonDocument doc)
     if(strcmp(request_type, "set_serial_mode")==0)
     {
         lora_serial = doc["value"];
-        xTaskCreate(save_lora_serial_config, "save_lora_serial_config", 6000, NULL, 1, NULL);
+        xTaskCreatePinnedToCore(save_lora_serial_config, "save_lora_serial_config", 6000, NULL, 1, NULL,1);
     }
     if(strcmp(request_type, "get_serial_mode")==0)
     {
@@ -109,7 +109,7 @@ void handle_operations(JsonDocument doc)
 }
 
 // Method to save LoRa to Serial configration.
-// This method should be called using xTaskCreate.
+// This method should be called using xTaskCreatePinnedToCore.
 // It will save current value of lora_serial global variable to /config/lora_serial.json
 void save_lora_serial_config(void* param)
 {
@@ -134,28 +134,29 @@ void save_lora_serial_config(void* param)
 // This meathod will only be enabled if lora_serial flag is true.
 void serial_to_lora(void* param)
 {
+    Serial.flush();
     while(true){
         if(lora_serial)
         {
             if(Serial.available())
             {
-                String data;
+                led_nortifier();
+                LoRa_txMode();
+                LoRa.beginPacket();
                 while(Serial.available())
                 {
-                    data += (char)Serial.read();
+                    LoRa.write((uint8_t)Serial.read());
                 }
-                if(data.length() <= 200)
-                {
-                    QueueParam *packet = new QueueParam();
-                    packet->message = data;
-                    packet->type = LORA_SERIAL;
-                    packet->request = NULL;
-                    xQueueSend(send_packets, (void*)&packet, (TickType_t)2);
-                }
+                LoRa.endPacket(true);
+                LoRa_rxMode();
             }
         }
-        vTaskDelay(50/portTICK_PERIOD_MS);
+        else{
+            Serial.flush();
+        }
+        vTaskDelay(500/portTICK_PERIOD_MS);
     }
+    vTaskDelete(NULL);
 }
 
 // Method to fetch the flag lora_serial.
@@ -180,7 +181,7 @@ void get_lora_serial()
         doc.shrinkToFit();
         lora_serial = doc["lora_serial"];
         doc.clear();
-        xTaskCreate(serial_to_lora, "serial_to_lora", 6000, NULL, 1, NULL);
+        xTaskCreatePinnedToCore(serial_to_lora, "serial_to_lora", 6000, NULL, 1, NULL,1);
     }
 }
 
@@ -315,7 +316,7 @@ void setup_dns()
     dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
     dnsServer.setTTL(3600);
     dnsServer.start(53, "*", WiFi.softAPIP());
-    xTaskCreate(dns_request_process, "DNS Request Handler", 6000, NULL, 1, NULL);
+    xTaskCreatePinnedToCore(dns_request_process, "DNS Request Handler", 6000, NULL, 1, NULL,1);
 }
 
 void dns_request_process(void *parameter)
@@ -374,19 +375,14 @@ void debugger_print(void *param)
     }
     show_alert("Queue is full, Rebooting...");
     vTaskDelay(100/portTICK_PERIOD_MS);
-    xTaskCreate(restart,"restart",6000,NULL,1,NULL);
+    xTaskCreatePinnedToCore(restart,"restart",6000,NULL,1,NULL,1);
     vTaskDelete(NULL);
 }
 
 void setupTasks()
 {
-    xTaskCreate(btn_intrupt, "btn_intrupt", 6000, NULL, 1, NULL);
-    xTaskCreate(get_heap_info, "get_heap_info", 6000, NULL, 1, NULL);
-    xTaskCreate(debugger_print, "debugger_print", 6000, NULL, 1, &debug_handler);
-}
-
-void nortify_led()
-{
-    serial_print("Nortify");
-    notify = true;
+    xTaskCreatePinnedToCore(btn_intrupt, "btn_intrupt", 6000, NULL, 1, NULL,1);
+    xTaskCreatePinnedToCore(get_heap_info, "get_heap_info", 6000, NULL, 1, NULL,1);
+    xTaskCreatePinnedToCore(debugger_print, "debugger_print", 6000, NULL, 1, &debug_handler, 1);
+    xTaskCreatePinnedToCore(async_led_notifier, "async_led_notifier", 6000, NULL, 1, &debug_handler, 1);
 }

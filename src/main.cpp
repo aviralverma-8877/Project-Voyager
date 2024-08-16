@@ -17,21 +17,21 @@ void setup() {
     serial_print("SPIFFS Mount Failed");
     return;
   }
+  get_lora_serial();
   get_username();
   config_gpios();
   init_oled();
-
-  WiFi.onEvent(onWifiConnect, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
-  WiFi.onEvent(onWifiDisconnect, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
-  //WiFi.onEvent(onWifiConnect, SYSTEM_EVENT_STA_GOT_IP);
-  //WiFi.onEvent(onWifiDisconnect, SYSTEM_EVENT_STA_DISCONNECTED);
-  config_wifi();
-  WiFi_setup_done = true;
-  initWebSocket();
-  define_api();  
+  send_packets = xQueueCreate(20, sizeof(QueueParam*));
+  recv_packets = xQueueCreate(20, sizeof(QueueParam*));
+  debug_msg = xQueueCreate(20, sizeof(DebugQueueParam*));
+  // WiFi.onEvent(onWifiConnect, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
+  // WiFi.onEvent(onWifiDisconnect, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+  WiFi.onEvent(onWifiConnect, SYSTEM_EVENT_STA_GOT_IP);
+  WiFi.onEvent(onWifiDisconnect, SYSTEM_EVENT_STA_DISCONNECTED);
+  xTaskCreatePinnedToCore(config_wifi, "config_wifi", 6000, NULL, 2, NULL, 1);
+  xTaskCreatePinnedToCore(define_api, "define_api", 6000, NULL, 2, NULL, 1);
 
   config_lora();
-  get_lora_serial();
   setupTasks();
   serial_print("config done");
 }

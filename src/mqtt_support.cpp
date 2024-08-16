@@ -57,7 +57,7 @@ void setup_mqtt()
         }
         mqttClient.setServer(host, port);
         connectToMqtt(NULL);
-        xTaskCreate(ping_mqtt_timer, "ping_mqtt_timer", 6000, NULL, 0, NULL);
+        xTaskCreatePinnedToCore(ping_mqtt_timer, "ping_mqtt_timer", 6000, NULL, 0, NULL,1);
     }
 }
 
@@ -114,7 +114,7 @@ void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
         break;
     }
     if (WiFi.isConnected()) {
-        xTaskCreate(connectToMqtt, "connectToMqtt", 6000, NULL, 1, NULL);
+        xTaskCreatePinnedToCore(connectToMqtt, "connectToMqtt", 6000, NULL, 1, NULL,1);
     }
 }
 

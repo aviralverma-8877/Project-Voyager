@@ -1,15 +1,13 @@
 #include <web_server.h>
 
+bool web_server_setup_done = false;
 AsyncWebServer server(80);
 QueueHandle_t send_packets;
 QueueHandle_t recv_packets;
 QueueHandle_t debug_msg;
 
-void define_api()
+void define_api(void *param)
 {
-  send_packets = xQueueCreate(20, sizeof(QueueParam*));
-  recv_packets = xQueueCreate(20, sizeof(QueueParam*));
-  debug_msg = xQueueCreate(20, sizeof(DebugQueueParam*));
   server.serveStatic("/", SPIFFS, "/");
   server.on("/hostname", HTTP_GET, [](AsyncWebServerRequest *request)
   {
@@ -52,13 +50,13 @@ void define_api()
   {
     serial_print("/config/lora_serial.json");
     request->send(200, "Restarting device ....");
-    xTaskCreate(restart, "restart", 6000, NULL, 1, NULL);
+    xTaskCreatePinnedToCore(restart, "restart", 6000, NULL, 1, NULL,1);
   });
   server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request)
   {
     serial_print("/config/lora_serial.json");
     request->send(200, "Resetting device ....");
-    xTaskCreate(reset_device, "reset_devide", 6000, NULL, 1, NULL);
+    xTaskCreatePinnedToCore(reset_device, "reset_devide", 6000, NULL, 1, NULL,1);
   });
   firmware_web_updater();
   server.onNotFound([](AsyncWebServerRequest *request)
@@ -73,7 +71,9 @@ void define_api()
       request->redirect("/update");
     }
    });
+  initWebSocket();
   server.begin();
+  vTaskDelete(NULL);
 }
 
 void firmware_web_updater()
@@ -147,7 +147,7 @@ void firmware_web_updater()
       if(Update.end(true)){
         if(DEBUG)
           Serial.printf("Update Success: %uB\n", index+len);
-        xTaskCreate(restart, "Restart", 6000, NULL, 1, NULL);
+        xTaskCreatePinnedToCore(restart, "Restart", 6000, NULL, 1, NULL,1);
       } else {
         if(DEBUG)
           Update.printError(Serial);
