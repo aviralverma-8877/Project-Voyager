@@ -24,6 +24,19 @@ void ping_mqtt_timer(void *param)
     vTaskDelete(NULL);
 }
 
+void async_led_notifier(void *param)
+{
+    while(true)
+    {
+        if(notify)
+        {
+            led_nortifier();
+        }
+        notify = false;
+        vTaskDelay(1/portTICK_PERIOD_MS);
+    }
+}
+
 void led_nortifier()
 {
     if(digitalRead(LED))
@@ -50,10 +63,6 @@ void btn_intrupt(void *param)
             {
                 btn_1_pressed = true;
                 serial_print("BUTTON 1 Pressed");
-                JsonDocument doc;
-                doc["name"] = username;
-                doc["mac"] = WiFi.macAddress();
-
                 JsonDocument msg;
                 msg["pack_type"] = "action";
                 msg["data"] = "sos";
@@ -62,7 +71,11 @@ void btn_intrupt(void *param)
                 serializeJson(msg, msg_string);
                 msg.clear();
 
+                JsonDocument doc;
+                doc["name"] = username;
+                doc["mac"] = WiFi.macAddress();
                 doc["data"] = msg_string;
+                doc.shrinkToFit();
                 String lora_payload;
                 serializeJson(doc, lora_payload);
                 doc.clear();

@@ -20,5 +20,5 @@
     extern QueueHandle_t debug_msg;
     extern AsyncWebServer server;
     void firmware_web_updater();
-    void define_api();
+    void define_api(void *param);
 #endif

@@ -13,7 +13,7 @@ void init_oled()
     if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) 
     {
         serial_print("SSD1306 allocation failed");
-        for(;;); // Don't proceed, loop forever
+        for(;;)vTaskDelay(1000/portTICK_PERIOD_MS); // Don't proceed, loop forever
     }
     display.clearDisplay();
     show_splash();

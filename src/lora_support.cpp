@@ -17,8 +17,8 @@ void config_lora()
     LoRa.onReceive(onReceive);
     LoRa.onTxDone(onTxDone);
     LoRa_rxMode();
-    xTaskCreate(LoRa_sendRaw,"LoRa_sendRaw", 6000, NULL, 1, NULL);
-    xTaskCreate(manage_recv_queue,"manage_recv_queue", 6000, NULL, 1, NULL);
+    xTaskCreatePinnedToCore(LoRa_sendRaw,"LoRa_sendRaw", 6000, NULL, 1, NULL,1);
+    xTaskCreatePinnedToCore(manage_recv_queue,"manage_recv_queue", 6000, NULL, 1, NULL,1);
 }
 
 void save_lora_config(String value)
@@ -54,7 +54,6 @@ void save_lora_config(String value)
         LoRa.setSyncWord(SyncWord);
         doc.clear();
         show_alert("LoRa config saved successfully");
-        restart(NULL);
     }
 }
 
@@ -194,7 +193,7 @@ void LoRa_sendRaw(void* param) {
     show_alert("Queue is full, Rebooting...");
     stop_transmission();
     vTaskDelay(100/portTICK_PERIOD_MS);
-    xTaskCreate(restart,"restart",6000,NULL,1,NULL);
+    xTaskCreatePinnedToCore(restart,"restart",6000,NULL,1,NULL,1);
     vTaskDelete(NULL);
 }
 
@@ -216,6 +215,13 @@ void LoRa_sendAkn(uint8_t result)
 
 void onReceive(int packetSize)
 {
+    if(lora_serial)
+    {
+        led_nortifier();
+        for (int i=0; i<packetSize; i++)
+            Serial.write(LoRa.read());
+        return;
+    }
     String message;
     int size = (int)LoRa.read();
     int type = (int)LoRa.read();
@@ -264,10 +270,6 @@ void manage_recv_queue(void* param)
             {
                 send_msg_to_ws((String)params->message);
             }
-            if(type == LORA_SERIAL)
-            {
-                send_msg_to_serial((String)params->message);
-            }
             send_msg_to_mqtt((String)params->message, type);
         }
         else
@@ -281,7 +283,7 @@ void manage_recv_queue(void* param)
     show_alert("Queue is full, Rebooting...");
     stop_transmission();
     vTaskDelay(100/portTICK_PERIOD_MS);
-    xTaskCreate(restart,"restart",6000,NULL,1,NULL);
+    xTaskCreatePinnedToCore(restart,"restart",6000,NULL,1,NULL,1);
     vTaskDelete(NULL);
 }
 
@@ -323,11 +325,6 @@ void send_msg_to_ws(String data)
     serializeJson(doc, val);
     doc.clear();
     send_to_ws(val);
-}
-
-void send_msg_to_serial(String data)
-{
-    Serial.print(data);
 }
 void onTxDone()
 {
