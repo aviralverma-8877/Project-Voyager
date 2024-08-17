@@ -23,7 +23,7 @@ void connect_wifi()
         const char* wifi_pass = doc["wifi_pass"];
         
         WiFi.disconnect(true);
-        // WiFi.setTxPower(WIFI_POWER_19_5dBm);
+        WiFi.setTxPower(WIFI_POWER_19_5dBm);
         if(strcmp(mode, "AP") == 0)
         {
             serial_print("AP Mode");
