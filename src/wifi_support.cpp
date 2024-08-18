@@ -24,8 +24,7 @@ void connect_wifi()
         const char* wifi_ssid = doc["wifi_ssid"];
         const char* wifi_pass = doc["wifi_pass"];
         
-        WiFi.disconnect(true);
-        WiFi.setTxPower(WIFI_POWER_19_5dBm);
+        WiFi.disconnect(true, true);
         if(strcmp(mode, "AP") == 0)
         {
             serial_print("AP Mode");
@@ -136,7 +135,7 @@ void setup_sta(const char* wifi_ssid, const char* wifi_pass)
     WiFi.begin(wifi_ssid, wifi_pass);
     vTaskDelay(1000/portTICK_PERIOD_MS);
     int count = 60;
-    while (WiFi.status() != WL_CONNECTED) {
+    while (!WiFi.isConnected()) {
         if(count == 0)
         {
             String wifi_config = get_wifi_setting("/config/wifi_default.json");
