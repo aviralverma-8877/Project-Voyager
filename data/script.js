@@ -469,6 +469,12 @@ function init_events() {
     lastEventTimestamp = data.millis;
     var data = data.data;
     if (data != "") {
+      Socket.send(
+        JSON.stringify({
+          "request-type": "send_akn",
+          akn: 1,
+        })
+      );
       file_data += data;
       file_size_string = get_string_size(file_data);
       $("#chunk_ratio").html(
@@ -588,6 +594,12 @@ function init_socket() {
       }
       if (response_type == "lora_rx") {
         data = JSON.parse(data.lora_msg);
+        Socket.send(
+          JSON.stringify({
+            "request-type": "send_akn",
+            akn: 1,
+          })
+        );
         var uname = data.name;
         var data = JSON.parse(data.data);
         var pack_type = data["pack_type"];

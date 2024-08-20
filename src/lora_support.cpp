@@ -240,7 +240,6 @@ void onReceive(int packetSize)
     serial_print(message);
     if(checksum == get_checksum(message) && message.length() == size)
     {
-        LoRa_sendAkn(1);
         QueueParam* param = new QueueParam();
         param->type = type;
         param->message = message;

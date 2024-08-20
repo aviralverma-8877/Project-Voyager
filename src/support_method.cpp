@@ -16,6 +16,7 @@ void handle_operations(JsonDocument doc)
     {
         String json_string;
         xTaskCreatePinnedToCore(scan_ssid, "scan_wifi", 6000, NULL, 1, NULL,1);
+        return;
     }
     if(strcmp(request_type, "connect_wifi") == 0)
     {
@@ -39,6 +40,7 @@ void handle_operations(JsonDocument doc)
         // writing wifi config
         save_wifi_settings(wifi_config);
         restart(NULL);
+        return;
     }
     if(strcmp(request_type, "wifi_ap_mode") == 0)
     {
@@ -50,14 +52,25 @@ void handle_operations(JsonDocument doc)
         doc.clear();
         save_wifi_settings(wifi_config);
         restart(NULL);
+        return;
+    }
+    if(strcmp(request_type, "send_akn") == 0)
+    {
+        serial_print("send_akn");
+        uint8_t akn = doc["akn"];
+        LoRa_sendAkn(akn);
+        doc.clear();
+        return;
     }
     if(strcmp(request_type, "reset_device") == 0)
     {
         xTaskCreatePinnedToCore(reset_device, "reset_device", 6000, NULL, 1, NULL,1);
+        return;
     }
     if(strcmp(request_type, "restart_device") == 0)
     {
         xTaskCreatePinnedToCore(restart, "Restart", 6000, NULL, 1, NULL,1);
+        return;
     }
     if(strcmp(request_type, "set_username") == 0)
     {
@@ -65,6 +78,7 @@ void handle_operations(JsonDocument doc)
         serial_print("changing username");
         serial_print(val);
         save_username(val);
+        return;
     }
     if(strcmp(request_type, "get_username") == 0)
     {
@@ -76,6 +90,7 @@ void handle_operations(JsonDocument doc)
         serializeJson(doc, return_value);
         doc.clear();
         send_to_ws(return_value);
+        return;
     }
     if(strcmp(request_type, "set_mqtt_config") == 0)
     {
@@ -83,6 +98,7 @@ void handle_operations(JsonDocument doc)
         serial_print("saving mqtt config");
         serial_print(val);
         save_mqtt_config(val);
+        return;
     }
     if(strcmp(request_type, "set_lora_config") == 0)
     {
@@ -90,11 +106,13 @@ void handle_operations(JsonDocument doc)
         serial_print("saving lora config");
         serial_print(val);
         save_lora_config(val);
+        return;
     }
     if(strcmp(request_type, "set_serial_mode")==0)
     {
         lora_serial = doc["value"];
         xTaskCreatePinnedToCore(save_lora_serial_config, "save_lora_serial_config", 6000, NULL, 1, NULL,1);
+        return;
     }
     if(strcmp(request_type, "get_serial_mode")==0)
     {
@@ -105,6 +123,7 @@ void handle_operations(JsonDocument doc)
         serializeJson(doc, return_value);
         doc.clear();
         send_to_ws(return_value);
+        return;
     }
 }
 

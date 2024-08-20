@@ -9,6 +9,18 @@ QueueHandle_t debug_msg;
 void define_api(void *param)
 {
   server.serveStatic("/", SPIFFS, "/");
+  server.on("/send_akn", HTTP_POST, [](AsyncWebServerRequest *request)
+  {
+    serial_print("send_akn");
+    AsyncWebParameter * j = request->getParam(0);
+    String data = j->value();
+    JsonDocument doc;
+    deserializeJson(doc, data);
+    uint8_t akn = doc["akn"];
+    LoRa_sendAkn(akn);
+    doc.clear();
+    request->send(200);
+  });
   server.on("/hostname", HTTP_GET, [](AsyncWebServerRequest *request)
   {
     serial_print("hostname");
