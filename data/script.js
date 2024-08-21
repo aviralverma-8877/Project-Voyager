@@ -753,8 +753,8 @@ function file_broadcast() {
       alert("packet size should be between 1-200");
       return;
     }
-    if (waitTime < 500) {
-      alert("Wait time should be greater than 500 ms");
+    if (waitTime < 0) {
+      alert("Wait time should be greater than 0 ms");
       return;
     }
     file_size_string = get_string_size(dataURL);

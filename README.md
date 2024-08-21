@@ -8,3 +8,8 @@ This is an ongoing project with below objectives.
 
 Although Lora based communications are very slow, but this project will be usefull for sharing small documents such as,
 PDFs, Word Files or Excel sheels etc. without relying on any internet or third party network.
+
+## Flash instruction using esptools:
+```
+esptool.py write_flash 0x1000 bootloader.bin 0x8000 partitions.bin 0xE000 boot_app0.bin 0x10000 firmware.bin 0x290000 spiffs.bin
+```
