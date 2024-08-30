@@ -394,19 +394,21 @@ function wifi_ap_mode() {
   promptModal.show();
   $("#promptModelProceed").click(function () {
     promptModal.hide();
-    $.get("/username",function(username){
+    $.get("/username", function (username) {
       Socket.send(
         JSON.stringify({
           "request-type": "wifi_ap_mode",
         })
       );
       alert(
-        'Switched to AP mode.<br />Connect the wifi to "'+username+'" access point.'
+        'Switched to AP mode.<br />Connect the wifi to "' +
+          username +
+          '" access point.'
       );
       setTimeout(function () {
         window.location.replace(hostname_url);
       }, 10000);
-    })
+    });
   });
 }
 
@@ -561,25 +563,20 @@ function init_socket() {
         for (wifi_ssid in ssid_list) {
           var wifi_ssid = ssid_list[wifi_ssid];
           var quality = 2 * (wifi_ssid.rssi + 100);
-          var cl = ""
-          if(quality >= 80)
-          {
-            cl = "list-group-item-success"
-          }
-          else if(quality >= 60)
-          {
-            cl = "list-group-item-primary"
-          }
-          else if(quality >= 40)
-          {
-            cl = "list-group-item-warning"
-          }
-          else if(quality < 40)
-          {
-            cl = "list-group-item-danger"
+          var cl = "";
+          if (quality >= 80) {
+            cl = "list-group-item-success";
+          } else if (quality >= 60) {
+            cl = "list-group-item-primary";
+          } else if (quality >= 40) {
+            cl = "list-group-item-warning";
+          } else if (quality < 40) {
+            cl = "list-group-item-danger";
           }
           output +=
-            '<li class="list-group-item '+cl+' d-flex justify-content-between align-items-center">\
+            '<li class="list-group-item ' +
+            cl +
+            ' d-flex justify-content-between align-items-center">\
             <a href="#wifi_password" onclick="update_wifi_ssid(\'' +
             wifi_ssid.ssid +
             "')\">" +
@@ -753,8 +750,8 @@ function file_broadcast() {
       alert("packet size should be between 1-200");
       return;
     }
-    if (waitTime < 0) {
-      alert("Wait time should be greater than 0 ms");
+    if (waitTime < 10) {
+      alert("Wait time should be greater than 10 ms");
       return;
     }
     file_size_string = get_string_size(dataURL);

@@ -70,7 +70,7 @@ void define_api(void *param)
     request->send(200, "Resetting device ....");
     xTaskCreatePinnedToCore(reset_device, "reset_devide", 6000, NULL, 1, NULL,1);
   });
-  firmware_web_updater();
+  // firmware_web_updater();                //Feature has to be disabled for including BLE features
   server.onNotFound([](AsyncWebServerRequest *request)
   {
     if (SPIFFS.exists("/index.html"))
@@ -80,7 +80,8 @@ void define_api(void *param)
     }
     else{
       serial_print("Redirected to /update");
-      request->redirect("/update");
+      // request->redirect("/update");
+      request->send(200, "text/plain", "Missing SPIFFS.bin, Flash SPIFFS.bin to proceed");
     }
    });
   initWebSocket();

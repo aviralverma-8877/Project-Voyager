@@ -26,6 +26,7 @@ void clear_oled_display()
 
 void display_text_oled()
 {
+    serial_print("Displaying text on oled");
     clear_oled_display();
     int size = 2;
     int dist = 20;
