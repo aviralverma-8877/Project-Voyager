@@ -34,6 +34,7 @@
     void show_alert(String msg);
     void handle_operations(JsonDocument doc);
     void reset_device(void *param);
+    String get_device_mode();
     void save_lora_serial_config(void* param);
     #define DEBUGGING DEBUG
 #endif

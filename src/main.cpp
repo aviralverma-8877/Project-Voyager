@@ -12,6 +12,10 @@
 
 void setup() {
   Serial.begin(BAUD);
+  send_packets = xQueueCreate(20, sizeof(QueueParam*));
+  recv_packets = xQueueCreate(20, sizeof(QueueParam*));
+  debug_msg = xQueueCreate(20, sizeof(DebugQueueParam*));
+  xTaskCreatePinnedToCore(debugger_print, "debugger_print", 6000, NULL, 1, &debug_handler, 1);
   if (!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED))
   {
     serial_print("SPIFFS Mount Failed");
@@ -21,15 +25,19 @@ void setup() {
   get_username();
   config_gpios();
   init_oled();
-  send_packets = xQueueCreate(20, sizeof(QueueParam*));
-  recv_packets = xQueueCreate(20, sizeof(QueueParam*));
-  debug_msg = xQueueCreate(20, sizeof(DebugQueueParam*));
-  WiFi.onEvent(onWifiConnect, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
-  WiFi.onEvent(onWifiDisconnect, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
-  // WiFi.onEvent(onWifiConnect, SYSTEM_EVENT_STA_GOT_IP);
-  // WiFi.onEvent(onWifiDisconnect, SYSTEM_EVENT_STA_DISCONNECTED);
-  xTaskCreatePinnedToCore(config_wifi, "config_wifi", 6000, NULL, 2, NULL, 1);
-  xTaskCreatePinnedToCore(define_api, "define_api", 6000, NULL, 2, NULL, 1);
+  serial_print(get_device_mode());
+  if(strcmp(get_device_mode().c_str(),"WiFi") == 0)
+  {
+    // Config in WiFi mode.
+      WiFi.onEvent(onWifiConnect, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
+      WiFi.onEvent(onWifiDisconnect, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+      // WiFi.onEvent(onWifiConnect, SYSTEM_EVENT_STA_GOT_IP);
+      // WiFi.onEvent(onWifiDisconnect, SYSTEM_EVENT_STA_DISCONNECTED);
+
+      xTaskCreatePinnedToCore(config_wifi, "config_wifi", 6000, NULL, 2, NULL, 1);
+      xTaskCreatePinnedToCore(define_api, "define_api", 6000, NULL, 2, NULL, 1);
+  }
+  // Config for Bluetooth.
 
   config_lora();
   setupTasks();

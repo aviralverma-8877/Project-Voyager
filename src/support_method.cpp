@@ -398,10 +398,34 @@ void debugger_print(void *param)
     vTaskDelete(NULL);
 }
 
+String get_device_mode()
+{
+    serial_print("get_device_config");
+    if (SPIFFS.exists("/config/device_config.json"))
+    {
+        File file = SPIFFS.open("/config/device_config.json");
+        if(!file){
+            return "WiFi";
+        }
+        String device_config;
+        while(file.available()){
+            device_config += file.readString();
+        }
+        file.close();
+        serial_print("Reading device_mode");
+        JsonDocument doc;
+        deserializeJson(doc, device_config);
+        doc.shrinkToFit();
+        String device_mode = doc["device_mode"];
+        doc.clear();
+        return device_mode;
+    }
+    return "WiFi";
+}
+
 void setupTasks()
 {
     xTaskCreatePinnedToCore(btn_intrupt, "btn_intrupt", 6000, NULL, 1, NULL,1);
     xTaskCreatePinnedToCore(get_heap_info, "get_heap_info", 6000, NULL, 1, NULL,1);
-    xTaskCreatePinnedToCore(debugger_print, "debugger_print", 6000, NULL, 1, &debug_handler, 1);
     xTaskCreatePinnedToCore(async_led_notifier, "async_led_notifier", 6000, NULL, 1, &debug_handler, 1);
 }
