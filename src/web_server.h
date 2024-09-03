@@ -2,7 +2,12 @@
     #define web_server
     #include <Arduino.h>
     #include <WiFi.h>
-    #include <AsyncTCP.h>
+
+    #ifdef ESP32
+        #include <AsyncTCP.h>
+    #else
+        #include <ESPAsyncTCP.h>
+    #endif
     #include <ESPAsyncWebServer.h>
     #include <support_method.h>
     #include <Update.h>
