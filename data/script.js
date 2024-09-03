@@ -507,7 +507,7 @@ function init_events() {
       $("#heap_progress_bar").removeClass("bg-warning");
       $("#heap_progress_bar").removeClass("bg-danger");
       if (heap_per < 30) $("#heap_progress_bar").addClass("bg-success");
-      if (heap_per > 30 && heap_per < 70)
+      if (heap_per > 30 && heap_per <= 70)
         $("#heap_progress_bar").addClass("bg-warning");
       if (heap_per > 70) $("#heap_progress_bar").addClass("bg-danger");
       $("#heap_progress_bar").css("width", heap_per + "%");
