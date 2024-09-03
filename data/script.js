@@ -757,8 +757,8 @@ function file_broadcast() {
     file_size_string = get_string_size(dataURL);
     const total_chunk = Math.floor(dataURL.length / chunkSize);
     var time_estimate;
-    if (waitTime == 0) {
-      time_estimate = Math.abs(total_chunk * (50 / 1000));
+    if (waitTime < 500) {
+      time_estimate = Math.abs(total_chunk * (500 / 1000));
     } else {
       time_estimate = Math.abs(total_chunk * (waitTime / 1000));
     }
