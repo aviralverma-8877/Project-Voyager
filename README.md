@@ -11,5 +11,5 @@ PDFs, Word Files or Excel sheels etc. without relying on any internet or third p
 
 ## Flash instruction using esptools:
 ```
-esptool.py write_flash 0x1000 bootloader.bin 0x8000 partitions.bin 0xE000 boot_app0.bin 0x10000 firmware.bin 0x290000 spiffs.bin
+esptool.py write_flash 0x1000 bootloader.bin 0x8000 partitions.bin 0xE000 boot_app0.bin 0x10000 firmware.bin 0x310000 spiffs.bin
 ```
