@@ -75,7 +75,8 @@ void define_api(void *param)
   {
     if (SPIFFS.exists("/index.html"))
     {
-      request->send(SPIFFS, "/index.html");
+      serial_print("Redirected to /index.html");
+      request->redirect("/index.html");
     }
     else{
       serial_print("Redirected to /update");
