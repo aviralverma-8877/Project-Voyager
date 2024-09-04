@@ -8,7 +8,7 @@ QueueHandle_t debug_msg;
 
 void define_api(void *param)
 {
-  server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");;
+  server.serveStatic("/", SPIFFS, "/");
   server.on("/send_akn", HTTP_POST, [](AsyncWebServerRequest *request)
   {
     serial_print("send_akn");
@@ -70,7 +70,7 @@ void define_api(void *param)
     request->send(200, "Resetting device ....");
     xTaskCreatePinnedToCore(reset_device, "reset_devide", 6000, NULL, 1, NULL,1);
   });
-  // firmware_web_updater();                //Feature has to be disabled for including BLE features
+  firmware_web_updater();                //Feature has to be disabled for including BLE features
   server.onNotFound([](AsyncWebServerRequest *request)
   {
     if (SPIFFS.exists("/index.html"))
@@ -78,7 +78,8 @@ void define_api(void *param)
       request->send(SPIFFS, "/index.html");
     }
     else{
-      request->send(200, "text/plain", "Missing SPIFFS.bin, Flash SPIFFS.bin to proceed");
+      serial_print("Redirected to /update");
+      request->redirect("/update");
     }
    });
   initWebSocket();
