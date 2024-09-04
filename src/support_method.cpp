@@ -340,6 +340,7 @@ void setup_dns()
 
 void dns_request_process(void *parameter)
 {
+    serial_print("DNS Request loop started.");
     for(;;)
     {
         dnsServer.processNextRequest();
