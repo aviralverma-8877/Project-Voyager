@@ -91,7 +91,6 @@ String get_wifi_setting(String wifi_config)
     {
         File file = SPIFFS.open(wifi_config);
         if(!file){
-            serial_print("File Not found: "+wifi_config);
             setup_ap("Voyager");
             return "";
         }
@@ -120,7 +119,6 @@ void save_wifi_settings(String config)
     wifi_backup.backup_done = true;
     File file = SPIFFS.open("/config/wifi_config.json", FILE_WRITE);
     if(!file){
-        serial_print("File Not found: /config/wifi_config.json");
         Serial.println("No wifi config file present");
         return;
     }

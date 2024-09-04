@@ -189,13 +189,12 @@ void save_mqtt_config(String value)
 {
     if (SPIFFS.exists("/config/mqtt_config.json"))
     {
-    File file = SPIFFS.open("/config/mqtt_config.json", FILE_WRITE);
-    if(!file){
-        serial_print("File Not found: /config/mqtt_config.json");
-        return;
-    }
-    if(file.print(value)){
-        serial_print("MQTT config saved");
+        File file = SPIFFS.open("/config/mqtt_config.json", FILE_WRITE);
+        if(!file){
+            return;
+        }
+        if(file.print(value)){
+            serial_print("MQTT config saved");
         }
     }
 }
@@ -206,7 +205,6 @@ String get_mqtt_config()
     {
         File file = SPIFFS.open("/config/mqtt_config.json");
         if(!file){
-            serial_print("File Not found: /config/mqtt_config.json");
             return "";
         }
         String mqtt_config;

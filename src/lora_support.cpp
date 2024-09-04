@@ -25,36 +25,35 @@ void save_lora_config(String value)
 {
     if (SPIFFS.exists("/config/lora_config.json"))
     {
-    File file = SPIFFS.open("/config/lora_config.json", FILE_WRITE);
-    if(!file){
-        serial_print("File Not found: /config/lora_config.json");
-        return;
-    }
-    if(file.print(value)){
-        serial_print("LoRa config saved");
-    }
-    JsonDocument doc;
-    deserializeJson(doc, value);
-    doc.shrinkToFit();
-    int lora_freq = doc["freq"];
-    LoRa.setFrequency(lora_freq);
+        File file = SPIFFS.open("/config/lora_config.json", FILE_WRITE);
+        if(!file){
+            return;
+        }
+        if(file.print(value)){
+            serial_print("LoRa config saved");
+        }
+        JsonDocument doc;
+        deserializeJson(doc, value);
+        doc.shrinkToFit();
+        int lora_freq = doc["freq"];
+        LoRa.setFrequency(lora_freq);
 
-    int TxPower = doc["TxPower"];
-    LoRa.setTxPower(TxPower);
+        int TxPower = doc["TxPower"];
+        LoRa.setTxPower(TxPower);
 
-    int SpreadingFactor = doc["SpreadingFactor"];
-    LoRa.setSpreadingFactor(SpreadingFactor);
+        int SpreadingFactor = doc["SpreadingFactor"];
+        LoRa.setSpreadingFactor(SpreadingFactor);
 
-    int SignalBandwidth = doc["SignalBandwidth"];
-    LoRa.setSignalBandwidth(SignalBandwidth);
+        int SignalBandwidth = doc["SignalBandwidth"];
+        LoRa.setSignalBandwidth(SignalBandwidth);
 
-    int CodingRate = doc["CodingRate4"];
-    LoRa.setCodingRate4(CodingRate);
+        int CodingRate = doc["CodingRate4"];
+        LoRa.setCodingRate4(CodingRate);
 
-    int SyncWord = doc["SyncWord"];
-    LoRa.setSyncWord(SyncWord);
-    doc.clear();
-    show_alert("LoRa config saved successfully");
+        int SyncWord = doc["SyncWord"];
+        LoRa.setSyncWord(SyncWord);
+        doc.clear();
+        show_alert("LoRa config saved successfully");
     }
 }
 
@@ -64,7 +63,6 @@ void set_lora_parameters()
     {
         File file = SPIFFS.open("/config/lora_config.json");
         if(!file){
-            serial_print("File Not found: /config/lora_config.json");
             return;
         }
         String lora_config;

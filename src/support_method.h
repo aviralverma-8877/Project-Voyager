@@ -11,10 +11,8 @@
     #include <lora_support.h>
     #include <wifi_support.h>
     #include <lora_support.h>
-    // #include "SPIFFS.h"
-    #include <LITTLEFS.h>
+    #include "SPIFFS.h"
     #define INTERRUPT_ATTR IRAM_ATTR
-    #define SPIFFS LittleFS
     extern bool lora_serial;
     extern String username;
     extern String hostname;
