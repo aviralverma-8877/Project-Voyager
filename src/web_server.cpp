@@ -8,7 +8,7 @@ QueueHandle_t debug_msg;
 
 void define_api(void *param)
 {
-  server.serveStatic("/", SPIFFS, "/");
+  server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");;
   server.on("/send_akn", HTTP_POST, [](AsyncWebServerRequest *request)
   {
     serial_print("send_akn");
@@ -75,12 +75,9 @@ void define_api(void *param)
   {
     if (SPIFFS.exists("/index.html"))
     {
-      serial_print("Redirected to /index.html");
-      request->redirect("/index.html");
+      request->send(SPIFFS, "/index.html");
     }
     else{
-      serial_print("Redirected to /update");
-      // request->redirect("/update");
       request->send(200, "text/plain", "Missing SPIFFS.bin, Flash SPIFFS.bin to proceed");
     }
    });
