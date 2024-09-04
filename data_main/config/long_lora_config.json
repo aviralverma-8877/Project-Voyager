@@ -1,0 +1,8 @@
+{
+  "freq": 510000000,
+  "TxPower": 10,
+  "SpreadingFactor": 8,
+  "SignalBandwidth": 125000,
+  "CodingRate4": 7,
+  "SyncWord": 52
+}

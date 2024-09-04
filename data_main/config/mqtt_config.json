@@ -1,0 +1,12 @@
+{
+  "mqtt_enabled": false,
+  "host": "",
+  "port": 1883,
+  "auth": false,
+  "username": "",
+  "password": "",
+  "raw_data": "send_raw",
+  "pub_topic": "lora_rx",
+  "sub_topic": "lora_tx",
+  "ping_topic": "ping"
+}
