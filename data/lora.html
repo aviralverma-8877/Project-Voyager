@@ -1,1 +1,117 @@
-<h1>LoRa Configuration</h1><hr><fieldset class="lora_transmission"><div class="mb-3"><h5>Default LoRa configs. </h5><select id="lora_config" class="form-select" aria-label="lora_config" onchange="load_lora_config(this.value)" ><option value="">Default configs</option></select></div><div class="mb-3"><h5>Load setting file. </h5><input type="file" class="form-control" onchange="update_lora_config_from_file()" id="LoraConfigFile" ></div><div class="mb-3"><label for="freq_range" class="form-label">LoRa Frequency : <span id="selected_lora_freq"></span></label><input type="range" class="form-range" min="410" max="525" step="0.5" value="410" id="freq_range" onchange="set_freq_range(this.value)" ></div><div class="mb-3"><label for="tx_power_range" class="form-label">LoRa Tx Power : <span id="selected_lora_tx_power"></span></label><input type="range" class="form-range" min="0" max="14" step="1" value="0" id="tx_power_range" onchange="set_tx_power(this.value)" ></div><div class="mb-3"><label for="spreading_factor" class="form-label">LoRa Spreading Factor : <span id="selected_lora_spreading_factor"></span></label><input type="range" class="form-range" min="6" max="12" step="1" value="6" id="spreading_factor" onchange="set_spreading_factor(this.value)" ></div><div class="mb-3"><label for="bandwidth" class="form-label">LoRa Bandwidth</label><select id="bandwidth" class="form-select" aria-label="Bandwidth"><option value="7800">7.8E3</option><option value="10400">10.4E3</option><option value="15600">15.6E3</option><option value="20800">20.8E3</option><option value="31250">31.25E3</option><option value="41700">41.7E3</option><option value="62500">62.5E3</option><option value="125000">125E3</option><option value="250000">250E3</option><option value="500000" selected>500E3</option></select></div><div class="mb-3"><label for="coding_rate" class="form-label">LoRa Coding Rate : <span id="selected_lora_coding_rate"></span></label><input type="range" class="form-range" min="5" max="8" step="1" value="5" id="coding_rate" onchange="set_coding_rate(this.value)" ></div><div class="mb-3"><h5 for="sync_word">Sync Word:</h5><select class="form-control" id="sync_word"></select></div><div class="mb-3"><button class="btn btn-primary" onclick="save_lora_config()">Save</button><button class="btn btn-primary" onclick="download_lora_config()">Download Setting</button></div></fieldset>
+<h1>
+    LoRa Configuration
+</h1>
+<hr>
+<fieldset class="lora_transmission">
+    <div class="mb-3">
+        <h5>
+            Default LoRa configs.
+        </h5>
+        <select
+            id="lora_config"
+            class="form-select"
+            aria-label="lora_config"
+            onchange="load_lora_config(this.value)"
+        >
+            <option value="">Default configs</option>
+        </select>
+    </div>
+    <div class="mb-3">
+        <h5>
+            Load setting file.
+        </h5>
+        <input
+            type="file"
+            class="form-control"
+            onchange="update_lora_config_from_file()"
+            id="LoraConfigFile"
+        >
+    </div>
+    <div class="mb-3">
+        <label for="freq_range" class="form-label">
+            LoRa Frequency :
+            <span id="selected_lora_freq"></span>
+        </label>
+        <input
+            type="range"
+            class="form-range"
+            min="410"
+            max="525"
+            step="0.5"
+            value="410"
+            id="freq_range"
+            onchange="set_freq_range(this.value)"
+        >
+    </div>
+    <div class="mb-3">
+        <label for="tx_power_range" class="form-label">
+            LoRa Tx Power :
+            <span id="selected_lora_tx_power"></span>
+        </label>
+        <input
+            type="range"
+            class="form-range"
+            min="0"
+            max="14"
+            step="1"
+            value="0"
+            id="tx_power_range"
+            onchange="set_tx_power(this.value)"
+        >
+    </div>
+    <div class="mb-3">
+        <label for="spreading_factor" class="form-label">
+            LoRa Spreading Factor :
+            <span id="selected_lora_spreading_factor"></span>
+        </label>
+        <input
+            type="range"
+            class="form-range"
+            min="6"
+            max="12"
+            step="1"
+            value="6"
+            id="spreading_factor"
+            onchange="set_spreading_factor(this.value)"
+        >
+    </div>
+    <div class="mb-3">
+        <label for="bandwidth" class="form-label">LoRa Bandwidth</label>
+        <select id="bandwidth" class="form-select" aria-label="Bandwidth">
+            <option value="7800">7.8E3</option>
+            <option value="10400">10.4E3</option>
+            <option value="15600">15.6E3</option>
+            <option value="20800">20.8E3</option>
+            <option value="31250">31.25E3</option>
+            <option value="41700">41.7E3</option>
+            <option value="62500">62.5E3</option>
+            <option value="125000">125E3</option>
+            <option value="250000">250E3</option>
+            <option value="500000" selected>500E3</option>
+        </select>
+    </div>
+    <div class="mb-3">
+        <label for="coding_rate" class="form-label">
+            LoRa Coding Rate :
+            <span id="selected_lora_coding_rate"></span>
+        </label>
+        <input
+            type="range"
+            class="form-range"
+            min="5"
+            max="8"
+            step="1"
+            value="5"
+            id="coding_rate"
+            onchange="set_coding_rate(this.value)"
+        >
+    </div>
+    <div class="mb-3">
+        <h5 for="sync_word">Sync Word:</h5>
+        <select class="form-control" id="sync_word"></select>
+    </div>
+    <div class="mb-3">
+        <button class="btn btn-primary" onclick="save_lora_config()">Save</button>
+        <button class="btn btn-primary" onclick="download_lora_config()">Download Setting</button>
+    </div>
+</fieldset>
