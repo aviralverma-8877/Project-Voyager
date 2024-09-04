@@ -12,7 +12,8 @@
     #include <support_method.h>
     #include <Update.h>
     #include "FS.h"
-    #include "SPIFFS.h"
+    // #include "SPIFFS.h"
+    #include <LITTLEFS.h>
     #include "freertos/FreeRTOS.h"
     #include "freertos/task.h"
     #include "freertos/queue.h"

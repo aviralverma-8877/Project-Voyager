@@ -187,6 +187,7 @@ void get_lora_serial()
     {
         File file = SPIFFS.open("/config/lora_serial.json");
         if(!file){
+            serial_print("File Not found: /config/lora_serial.json");
             lora_serial = false;
             return;
         }
@@ -212,6 +213,7 @@ void get_username()
     {
         File file = SPIFFS.open("/config/user_data.json");
         if(!file){
+            serial_print("File Not found: /config/user_data.json");
             username = WiFi.macAddress();
             return;
         }
@@ -261,6 +263,7 @@ void save_username(String uname)
     doc.clear();
     File file = SPIFFS.open("/config/user_data.json", FILE_WRITE);
     if(!file){
+        serial_print("File Not found: /config/user_data.json");
         Serial.println("No username file present.");
         return;
     }
@@ -405,6 +408,7 @@ String get_device_mode()
     {
         File file = SPIFFS.open("/config/device_config.json");
         if(!file){
+            serial_print("File Not found: /config/device_config.json");
             return "WiFi";
         }
         String device_config;

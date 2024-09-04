@@ -8,7 +8,8 @@
 #include <web_server.h>
 #include <web_sockets.h>
 #include "FS.h"
-#include "SPIFFS.h"
+// #include "SPIFFS.h"
+#include <LITTLEFS.h>
 // put function declarations here:
 
 void setup() {

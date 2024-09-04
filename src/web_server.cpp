@@ -8,7 +8,7 @@ QueueHandle_t debug_msg;
 
 void define_api(void *param)
 {
-  server.serveStatic("/", SPIFFS, "/").setCacheControl("max-age=31536000");
+  server.serveStatic("/", SPIFFS, "/");
   server.on("/send_akn", HTTP_POST, [](AsyncWebServerRequest *request)
   {
     serial_print("send_akn");
