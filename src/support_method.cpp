@@ -343,7 +343,7 @@ void dns_request_process(void *parameter)
     for(;;)
     {
         dnsServer.processNextRequest();
-        vTaskDelay(30/portTICK_PERIOD_MS);
+        vTaskDelay(150/portTICK_PERIOD_MS);
     }
     vTaskDelete(NULL);
 }
