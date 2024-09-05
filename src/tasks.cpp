@@ -108,6 +108,7 @@ void get_heap_info(void* params)
         serializeJson(doc, data);
         doc.clear();
         // Send BLE
+        serial_print(data);
         vTaskDelay(1000/portTICK_PERIOD_MS);
     }
 }
