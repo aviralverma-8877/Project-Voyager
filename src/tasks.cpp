@@ -96,7 +96,7 @@ void btn_intrupt(void *param)
 
 void get_heap_info(void* params)
 {
-    int free_heap, heap_size;
+    int free_heap, heap_size, ram_usage;
     JsonDocument doc;
     String data;
     while(true)
@@ -108,7 +108,10 @@ void get_heap_info(void* params)
         serializeJson(doc, data);
         doc.clear();
         // Send BLE
-        serial_print(data);
+        ram_usage = ((heap_size-free_heap)*100)/heap_size;
+        display_buffer[1].msg = "Used RAM %";
+        display_buffer[2].msg = (String)ram_usage;
+        display_text_oled();
         vTaskDelay(1000/portTICK_PERIOD_MS);
     }
 }
