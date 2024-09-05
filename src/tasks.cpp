@@ -4,25 +4,6 @@ bool notify = false;
 bool btn_1_pressed = false;
 bool btn_2_pressed = false;
 
-void ping_mqtt_timer(void *param)
-{
-    String mac, mqtt_ping;
-    JsonDocument doc;
-    while(true)
-    {
-        if(mqttClient.connected())
-        {
-            mac = WiFi.macAddress();
-            doc["mac"] = mac;
-            doc["uname"] = username;
-            serializeJson(doc, mqtt_ping);
-            doc.clear();
-            ping_mqtt(mqtt_ping);
-        }
-        vTaskDelay(MQTT_PING_TIME/portTICK_PERIOD_MS);
-    }
-    vTaskDelete(NULL);
-}
 
 void async_led_notifier(void *param)
 {
@@ -73,7 +54,6 @@ void btn_intrupt(void *param)
 
                 JsonDocument doc;
                 doc["name"] = username;
-                doc["mac"] = WiFi.macAddress();
                 doc["data"] = msg_string;
                 doc.shrinkToFit();
                 String lora_payload;
@@ -82,7 +62,6 @@ void btn_intrupt(void *param)
                 QueueParam* taskParams = new QueueParam();
                 taskParams->message=lora_payload;
                 taskParams->type = LORA_MSG;
-                taskParams->request = NULL;
                 xQueueSend(send_packets, (void*)&taskParams, (TickType_t)2);
             }
         }
@@ -128,7 +107,7 @@ void get_heap_info(void* params)
         doc["heap_size"] = heap_size;
         serializeJson(doc, data);
         doc.clear();
-        send_to_events(data, "RAM_DATA");
+        // Send BLE
         vTaskDelay(1000/portTICK_PERIOD_MS);
     }
 }

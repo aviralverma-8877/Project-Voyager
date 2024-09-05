@@ -167,20 +167,6 @@ void LoRa_sendRaw(void* param) {
                     }
                 }
             }
-            if( params->request != NULL)
-            {
-                JsonDocument doc;
-                doc["akn"] = AknRecieved;
-                doc["username"] = username;
-                doc.shrinkToFit();
-                String return_res;
-                serializeJson(doc, return_res);
-                doc.clear();
-                int return_code = 200;
-                if(AknRecieved != 1)
-                    return_code = 422;
-                params->request->send(return_code, "text/json", return_res);
-            }
         }
         else
         {
@@ -243,7 +229,6 @@ void onReceive(int packetSize)
         QueueParam* param = new QueueParam();
         param->type = type;
         param->message = message;
-        param->request = NULL;
         xQueueSend(recv_packets, (void*)&param, (TickType_t)50);
     }
     else{
@@ -263,13 +248,12 @@ void manage_recv_queue(void* param)
             type = (int)params->type;
             if(type == RAW_DATA)
             {
-                send_msg_to_events((String)params->message);
+                // Send BLE
             }
             if(type == LORA_MSG)
             {
-                send_msg_to_ws((String)params->message);
+                // Send BLE
             }
-            send_msg_to_mqtt((String)params->message, type);
         }
         else
         {
@@ -286,45 +270,6 @@ void manage_recv_queue(void* param)
     vTaskDelete(NULL);
 }
 
-void send_msg_to_mqtt(String data, int type)
-{
-    JsonDocument doc;
-    doc["response_type"] = "lora_rx";
-    doc["lora_msg"] = data;
-    doc.shrinkToFit();
-    String val;
-    String mac = WiFi.macAddress();
-    String topic;
-    if(type == RAW_DATA)
-        topic = "voyager/"+mac+"/"+mqtt_topic_to_publish+"/RAW_DATA";
-    if(type == LORA_MSG)
-        topic = "voyager/"+mac+"/"+mqtt_topic_to_publish+"/LORA_MSG";
-    serializeJson(doc, val);
-    doc.clear();
-    send_to_mqtt(val, topic);
-}
-
-void send_msg_to_events(String data)
-{
-    JsonDocument doc;
-    doc["millis"] = millis();
-    doc["data"] = data;
-    String value;
-    serializeJson(doc, value);
-    doc.clear();
-    send_to_events(value, "RAW_DATA");
-}
-
-void send_msg_to_ws(String data)
-{
-    JsonDocument doc;
-    doc["response_type"] = "lora_rx";
-    doc["lora_msg"] = data;
-    String val;
-    serializeJson(doc, val);
-    doc.clear();
-    send_to_ws(val);
-}
 void onTxDone()
 {
     serial_print("LORA packet transmitted");

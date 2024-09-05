@@ -1,9 +1,11 @@
 #include <support_method.h>
 
+QueueHandle_t send_packets;
+QueueHandle_t recv_packets;
+QueueHandle_t debug_msg;
 bool lora_serial = false;
 String username;
 String hostname;
-DNSServer dnsServer;
 TaskHandle_t debug_handler = NULL;
 
 // This is main method to handle web-socket input
@@ -12,48 +14,6 @@ TaskHandle_t debug_handler = NULL;
 void handle_operations(JsonDocument doc)
 {
     const char* request_type = doc["request-type"];
-    if(strcmp(request_type, "wifi_ssid_scan") == 0)
-    {
-        String json_string;
-        xTaskCreatePinnedToCore(scan_ssid, "scan_wifi", 6000, NULL, 1, NULL,1);
-        return;
-    }
-    if(strcmp(request_type, "connect_wifi") == 0)
-    {
-        const char * wifi_ssid = doc["wifi_ssid"];
-        serial_print(wifi_ssid);
-        const char * psk = doc["wifi_pass"];
-        serial_print(psk);
-        // Reading wifi config
-        String wifi_config = get_wifi_setting("/config/wifi_config.json");
-        // modifying wifi config
-        serial_print(wifi_config);
-        JsonDocument wifi_conf;
-        deserializeJson(wifi_conf, wifi_config);
-        wifi_conf.shrinkToFit();
-        wifi_conf["wifi_function"] = "STA";
-        wifi_conf["wifi_ssid"] = wifi_ssid;
-        wifi_conf["wifi_pass"] = psk;
-        serializeJsonPretty(wifi_conf, wifi_config);
-        wifi_conf.clear();
-        serial_print(wifi_config);
-        // writing wifi config
-        save_wifi_settings(wifi_config);
-        restart(NULL);
-        return;
-    }
-    if(strcmp(request_type, "wifi_ap_mode") == 0)
-    {
-        String wifi_config = get_wifi_setting("/config/wifi_default.json");
-        JsonDocument doc;
-        deserializeJson(doc, wifi_config);
-        doc["wifi_ssid"] = username;
-        serializeJson(doc, wifi_config);
-        doc.clear();
-        save_wifi_settings(wifi_config);
-        restart(NULL);
-        return;
-    }
     if(strcmp(request_type, "send_akn") == 0)
     {
         serial_print("send_akn");
@@ -89,15 +49,7 @@ void handle_operations(JsonDocument doc)
         String return_value;
         serializeJson(doc, return_value);
         doc.clear();
-        send_to_ws(return_value);
-        return;
-    }
-    if(strcmp(request_type, "set_mqtt_config") == 0)
-    {
-        String val = doc["val"];
-        serial_print("saving mqtt config");
-        serial_print(val);
-        save_mqtt_config(val);
+        // Send BLE
         return;
     }
     if(strcmp(request_type, "set_lora_config") == 0)
@@ -122,7 +74,7 @@ void handle_operations(JsonDocument doc)
         String return_value;
         serializeJson(doc, return_value);
         doc.clear();
-        send_to_ws(return_value);
+        // Send BLE
         return;
     }
 }
@@ -212,7 +164,7 @@ void get_username()
     {
         File file = SPIFFS.open("/config/user_data.json");
         if(!file){
-            username = WiFi.macAddress();
+            username = "Voyager";
             return;
         }
         String username_config;
@@ -228,7 +180,7 @@ void get_username()
         doc.clear();
         if(strcmp(uname, "")==0)
         {
-            username = WiFi.macAddress();
+            username = "Voyager";
             return;
         }
         else
@@ -247,7 +199,6 @@ void stop_transmission()
     String return_value;
     serializeJson(doc, return_value);
     doc.clear();
-    send_to_ws(return_value);
 }
 
 void save_username(String uname)
@@ -278,11 +229,6 @@ void reset_device(void *param)
     clear_oled_display();
     display_buffer[1].msg = "Resetting";
     display_text_oled();
-    serial_print("Stopping WiFi");
-    if (WiFi.status() == WL_CONNECTED)
-    {
-        WiFi.disconnect();
-    }
     serial_print("Formatting SPIFFS");
     bool formatted = SPIFFS.format();
     if (formatted)
@@ -304,7 +250,6 @@ void show_alert(String msg)
     String return_response;
     serializeJsonPretty(doc, return_response);
     doc.clear();
-    send_to_ws(return_response);
 }
 
 void restart(void *param)
@@ -312,41 +257,6 @@ void restart(void *param)
     vTaskDelay(500/portTICK_PERIOD_MS);
     serial_print("Restarting esp.");
     ESP.restart();
-}
-
-void setup_mdns()
-{
-    String mac = WiFi.macAddress();
-    mac.replace(":","_");
-    hostname = "project-voyager-"+mac;
-    WiFi.hostname(hostname);
-    serial_print("Device hostname: "+hostname);
-    if (MDNS.begin(hostname.c_str())) {
-        MDNS.addService("http", "tcp", 80); 
-        serial_print("Started mDNS service");
-    }
-}
-
-void setup_dns()
-{
-    serial_print("DNS service started.");
-    serial_print("Soft AP IP.");
-    serial_print(WiFi.softAPIP().toString());
-    dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
-    dnsServer.setTTL(3600);
-    dnsServer.start(53, "*", WiFi.softAPIP());
-    xTaskCreatePinnedToCore(dns_request_process, "DNS Request Handler", 6000, NULL, 1, NULL,1);
-}
-
-void dns_request_process(void *parameter)
-{
-    serial_print("DNS Request loop started.");
-    for(;;)
-    {
-        dnsServer.processNextRequest();
-        vTaskDelay(30/portTICK_PERIOD_MS);
-    }
-    vTaskDelete(NULL);
 }
 
 void config_gpios()
@@ -379,17 +289,6 @@ void debugger_print(void *param)
             {
                 Serial.println("\n"+msg);
             }
-            if(ws_connected)
-            {
-                JsonDocument doc;
-                doc["millis"] = millis();
-                doc["data"] = msg;
-                doc.shrinkToFit();
-                String payload;
-                serializeJson(doc, payload);
-                doc.clear();
-                send_to_events(payload, "DEBUG");
-            }
             delete params;
         }
     }
@@ -397,31 +296,6 @@ void debugger_print(void *param)
     vTaskDelay(100/portTICK_PERIOD_MS);
     xTaskCreatePinnedToCore(restart,"restart",6000,NULL,1,NULL,1);
     vTaskDelete(NULL);
-}
-
-String get_device_mode()
-{
-    serial_print("get_device_config");
-    if (SPIFFS.exists("/config/device_config.json"))
-    {
-        File file = SPIFFS.open("/config/device_config.json");
-        if(!file){
-            return "WiFi";
-        }
-        String device_config;
-        while(file.available()){
-            device_config += file.readString();
-        }
-        file.close();
-        serial_print("Reading device_mode");
-        JsonDocument doc;
-        deserializeJson(doc, device_config);
-        doc.shrinkToFit();
-        String device_mode = doc["device_mode"];
-        doc.clear();
-        return device_mode;
-    }
-    return "WiFi";
 }
 
 void setupTasks()

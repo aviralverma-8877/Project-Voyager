@@ -6,7 +6,6 @@
     #include <support_method.h>
     #include "CRC8.h"
     #include "CRC.h"
-    #include "mqtt_support.h"
     #define SCK             LSCK
     #define MISO            LMISO
     #define MOSI            LMOSI
@@ -26,7 +25,6 @@
     struct QueueParam {
         int type;
         String message;
-        AsyncWebServerRequest *request;
     };
     struct DebugQueueParam {
         String message;
@@ -35,7 +33,6 @@
     extern bool lora_available_for_write;
     extern uint8_t AknRecieved;
 
-    void setup_mqtt();
     void save_lora_config(String value);
     uint8_t get_checksum(String data);
     void LoRa_send(String data, uint8_t type);
