@@ -269,7 +269,6 @@ void manage_recv_queue(void* param)
             {
                 send_msg_to_ws((String)params->message);
             }
-            send_msg_to_mqtt((String)params->message, type);
         }
         else
         {
@@ -284,24 +283,6 @@ void manage_recv_queue(void* param)
     vTaskDelay(100/portTICK_PERIOD_MS);
     xTaskCreatePinnedToCore(restart,"restart",6000,NULL,1,NULL,1);
     vTaskDelete(NULL);
-}
-
-void send_msg_to_mqtt(String data, int type)
-{
-    JsonDocument doc;
-    doc["response_type"] = "lora_rx";
-    doc["lora_msg"] = data;
-    doc.shrinkToFit();
-    String val;
-    String mac = WiFi.macAddress();
-    String topic;
-    if(type == RAW_DATA)
-        topic = "voyager/"+mac+"/"+mqtt_topic_to_publish+"/RAW_DATA";
-    if(type == LORA_MSG)
-        topic = "voyager/"+mac+"/"+mqtt_topic_to_publish+"/LORA_MSG";
-    serializeJson(doc, val);
-    doc.clear();
-    send_to_mqtt(val, topic);
 }
 
 void send_msg_to_events(String data)

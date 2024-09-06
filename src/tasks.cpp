@@ -4,26 +4,6 @@ bool notify = false;
 bool btn_1_pressed = false;
 bool btn_2_pressed = false;
 
-void ping_mqtt_timer(void *param)
-{
-    String mac, mqtt_ping;
-    JsonDocument doc;
-    while(true)
-    {
-        if(mqttClient.connected())
-        {
-            mac = WiFi.macAddress();
-            doc["mac"] = mac;
-            doc["uname"] = username;
-            serializeJson(doc, mqtt_ping);
-            doc.clear();
-            ping_mqtt(mqtt_ping);
-        }
-        vTaskDelay(MQTT_PING_TIME/portTICK_PERIOD_MS);
-    }
-    vTaskDelete(NULL);
-}
-
 void async_led_notifier(void *param)
 {
     while(true)

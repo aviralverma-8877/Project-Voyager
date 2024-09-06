@@ -71,7 +71,6 @@ void onWifiConnect(WiFiEvent_t event, WiFiEventInfo_t info)
     display_buffer[2].msg = ssid;
     display_buffer[3].msg = IP.toString();
     display_text_oled();
-    setup_mqtt();
     xTaskCreatePinnedToCore(wifi_monitor, "wifi_monitor", 6000, NULL, 1, NULL,1);
 }
 

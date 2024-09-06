@@ -10,7 +10,6 @@
     extern bool btn_1_pressed;
     extern bool btn_2_pressed;
 
-    void ping_mqtt_timer(void *param);
     void init_isr(int btn);
     void async_led_notifier(void *param);
     void led_nortifier();
