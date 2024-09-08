@@ -18,6 +18,8 @@
     extern String hostname;
     extern DNSServer dnsServer;
     extern TaskHandle_t debug_handler;
+    void send_to_serial(void *param);
+    void send_to_lora(void *param);
     void serial_to_lora(void* param);
     void get_lora_serial();
     void get_username();

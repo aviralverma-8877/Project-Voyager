@@ -149,6 +149,34 @@ void save_lora_serial_config(void* param)
     vTaskDelete(NULL);
 }
 
+void send_to_serial(void *param)
+{
+    while(uxQueueSpacesAvailable(serial_packet_rec) > 0 )
+    {
+        DebugQueueParam *p = NULL;
+        if(xQueueReceive(serial_packet_rec, &(p) , ( TickType_t )0))
+        {
+            Serial.print((String)p->message);
+        }
+        delete p;
+    }
+    vTaskDelete(NULL);
+}
+
+void send_to_lora(void *param)
+{
+    while(uxQueueSpacesAvailable(serial_packet_send) > 0 )
+    {
+        DebugQueueParam *p = NULL;
+        if(xQueueReceive(serial_packet_send, &(p) , ( TickType_t )0))
+        {
+            LoRa_send((String)p->message, LORA_SERIAL);
+        }
+        delete p;
+    }
+    vTaskDelete(NULL);
+}
+
 // Loop to catch any input to Serial input and send it to lora.
 // This meathod will only be enabled if lora_serial flag is true.
 void serial_to_lora(void* param)
@@ -159,21 +187,16 @@ void serial_to_lora(void* param)
         {
             if(Serial.available())
             {
-                led_nortifier();
-                LoRa_txMode();
-                LoRa.beginPacket();
+                DebugQueueParam *p = new DebugQueueParam();
                 while(Serial.available())
-                {
-                    LoRa.write((uint8_t)Serial.read());
-                }
-                LoRa.endPacket(true);
-                LoRa_rxMode();
+                    p->message += (char)Serial.read();
+                xQueueSend(serial_packet_send, (void*)&p, (TickType_t)2);
             }
         }
         else{
             Serial.flush();
         }
-        vTaskDelay(500/portTICK_PERIOD_MS);
+        vTaskDelay(10/portTICK_PERIOD_MS);
     }
     vTaskDelete(NULL);
 }
@@ -200,7 +223,9 @@ void get_lora_serial()
         doc.shrinkToFit();
         lora_serial = doc["lora_serial"];
         doc.clear();
-        xTaskCreatePinnedToCore(serial_to_lora, "serial_to_lora", 6000, NULL, 1, NULL,1);
+        xTaskCreatePinnedToCore(send_to_serial, "send_to_serial", 6000, NULL, 1, NULL, 1);
+        xTaskCreatePinnedToCore(send_to_lora, "send_to_lora", 6000, NULL, 1, NULL, 1);
+        xTaskCreatePinnedToCore(serial_to_lora, "serial_to_lora", 6000, NULL, 1, NULL, 1);
     }
 }
 
@@ -428,5 +453,5 @@ void setupTasks()
 {
     xTaskCreatePinnedToCore(btn_intrupt, "btn_intrupt", 6000, NULL, 1, NULL,1);
     xTaskCreatePinnedToCore(get_heap_info, "get_heap_info", 6000, NULL, 1, NULL,1);
-    xTaskCreatePinnedToCore(async_led_notifier, "async_led_notifier", 6000, NULL, 1, &debug_handler, 1);
+    xTaskCreatePinnedToCore(async_led_notifier, "async_led_notifier", 6000, NULL, 1, NULL, 1);
 }
