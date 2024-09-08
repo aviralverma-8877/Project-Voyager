@@ -15,6 +15,8 @@ void setup() {
   send_packets = xQueueCreate(20, sizeof(QueueParam*));
   recv_packets = xQueueCreate(20, sizeof(QueueParam*));
   debug_msg = xQueueCreate(20, sizeof(DebugQueueParam*));
+  serial_packet_send = xQueueCreate(20, sizeof(DebugQueueParam*));
+  serial_packet_rec = xQueueCreate(20, sizeof(DebugQueueParam*));
   xTaskCreatePinnedToCore(debugger_print, "debugger_print", 6000, NULL, 1, &debug_handler, 1);
   if (!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED))
   {

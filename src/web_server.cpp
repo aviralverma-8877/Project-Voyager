@@ -2,6 +2,8 @@
 
 bool web_server_setup_done = false;
 AsyncWebServer server(80);
+QueueHandle_t serial_packet_send;
+QueueHandle_t serial_packet_rec;
 QueueHandle_t send_packets;
 QueueHandle_t recv_packets;
 QueueHandle_t debug_msg;

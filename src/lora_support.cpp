@@ -215,17 +215,17 @@ void LoRa_sendAkn(uint8_t result)
 
 void onReceive(int packetSize)
 {
-    if(lora_serial)
+    uint8_t size = (uint8_t)LoRa.read();
+    uint8_t type = (uint8_t)LoRa.read();
+    uint8_t checksum = (uint8_t)LoRa.read();
+    if(type == LORA_SERIAL)
     {
-        led_nortifier();
-        for (int i=0; i<packetSize; i++)
-            Serial.write(LoRa.read());
+        DebugQueueParam *p = new DebugQueueParam();
+        while(LoRa.available())
+            p->message +=(char)LoRa.read();
+        xQueueSend(serial_packet_rec, (void*)&p, (TickType_t)2);
         return;
     }
-    String message;
-    int size = (int)LoRa.read();
-    int type = (int)LoRa.read();
-    uint8_t checksum = (uint8_t)LoRa.read();
     if(type == REC_AKNG)
     {
         uint8_t result = (uint8_t)LoRa.read();
@@ -233,6 +233,7 @@ void onReceive(int packetSize)
         AknRecieved=result;
         return;
     }
+    String message;
     for (int i=0; i<size; i++)
     {
         message += (char)LoRa.read();

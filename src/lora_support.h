@@ -19,6 +19,7 @@
     #define LORA_MSG 0               //        The payload is normal text msg.
     #define RAW_DATA 1               //        The payload is a file chunk or raw data.
     #define REC_AKNG 2               //        The payload is an aknowledgement of recieved msg.
+    #define LORA_SERIAL 3
     struct TaskParameters {
     String data;
     };
