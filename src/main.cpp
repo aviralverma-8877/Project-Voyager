@@ -3,6 +3,7 @@
 #include <tasks.h>
 #include <lora_support.h>
 #include <support_method.h>
+#include <ble.h>
 #include "FS.h"
 #include "SPIFFS.h"
 // put function declarations here:
@@ -18,6 +19,7 @@ void setup() {
     serial_print("SPIFFS Mount Failed");
     return;
   }
+  ble_setup();
   get_lora_serial();
   get_username();
   config_gpios();
