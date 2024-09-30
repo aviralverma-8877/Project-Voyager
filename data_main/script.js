@@ -474,7 +474,7 @@ function init_events() {
       Socket.send(
         JSON.stringify({
           "request-type": "send_akn",
-          akn: 1,
+          "akn": 1,
         })
       );
       file_data += data;
@@ -594,7 +594,7 @@ function init_socket() {
         Socket.send(
           JSON.stringify({
             "request-type": "send_akn",
-            akn: 1,
+            "akn": 1,
           })
         );
         var uname = data.name;
