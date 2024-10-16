@@ -246,6 +246,7 @@ void onReceive(int packetSize)
         param->message = message;
         param->request = NULL;
         xQueueSend(recv_packets, (void*)&param, (TickType_t)50);
+        LoRa_sendAkn(1);
     }
     else{
         LoRa_sendAkn(0);
