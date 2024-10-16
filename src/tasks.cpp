@@ -95,6 +95,22 @@ void btn_intrupt(void *param)
     }
 }
 
+void get_wifi_rssi(void* params)
+{
+    int rssi;
+    JsonDocument doc;
+    String data;
+    while(true)
+    {
+        rssi = WiFi.RSSI();
+        doc["rssi"] = rssi;
+        serializeJson(doc, data);
+        doc.clear();
+        send_to_events(data, "WIFI_DATA");
+        vTaskDelay(1000/portTICK_PERIOD_MS);
+    }
+}
+
 void get_heap_info(void* params)
 {
     int free_heap, heap_size;

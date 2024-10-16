@@ -425,7 +425,14 @@ function init_events() {
       $("#file_upload_progress_bar").css("width", percent + "%");
     }
   });
-
+  source.addEventListener("WIFI_DATA", function (e) {
+    var data = JSON.parse(e.data);
+    if (data != "") {
+      var rssi = parseInt(data.rssi);
+      quality = 2 * (rssi + 100);
+      $("#wifi_quality").html(quality+" %")
+    }
+  });
   source.addEventListener("RAM_DATA", function (e) {
     var data = JSON.parse(e.data);
     if (data != "") {
