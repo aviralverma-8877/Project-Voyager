@@ -17,4 +17,5 @@
     void btn_intrupt(void *param);
     void transmit_beacon();
     void get_heap_info(void* params);
+    void get_wifi_rssi(void* params);
 #endif

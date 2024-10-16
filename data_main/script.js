@@ -471,12 +471,12 @@ function init_events() {
     lastEventTimestamp = data.millis;
     var data = data.data;
     if (data != "") {
-      Socket.send(
-        JSON.stringify({
-          "request-type": "send_akn",
-          "akn": 1,
-        })
-      );
+      // Socket.send(
+      //   JSON.stringify({
+      //     "request-type": "send_akn",
+      //     "akn": 1,
+      //   })
+      // );
       file_data += data;
       file_size_string = get_string_size(file_data);
       $("#chunk_ratio").html(
@@ -493,7 +493,14 @@ function init_events() {
       $("#file_upload_progress_bar").css("width", percent + "%");
     }
   });
-
+  source.addEventListener("WIFI_DATA", function (e) {
+    var data = JSON.parse(e.data);
+    if (data != "") {
+      var rssi = parseInt(data.rssi);
+      quality = 2 * (rssi + 100);
+      $("#wifi_quality").html(quality+" %")
+    }
+  });
   source.addEventListener("RAM_DATA", function (e) {
     var data = JSON.parse(e.data);
     if (data != "") {
@@ -591,12 +598,12 @@ function init_socket() {
       }
       if (response_type == "lora_rx") {
         data = JSON.parse(data.lora_msg);
-        Socket.send(
-          JSON.stringify({
-            "request-type": "send_akn",
-            "akn": 1,
-          })
-        );
+        // Socket.send(
+        //   JSON.stringify({
+        //     "request-type": "send_akn",
+        //     "akn": 1,
+        //   })
+        // );
         var uname = data.name;
         var data = JSON.parse(data.data);
         var pack_type = data["pack_type"];
