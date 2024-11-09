@@ -3,32 +3,88 @@ var loading_alert;
 var promptModal;
 var alertModel;
 
-$(document).ready(function () {
+function getEleById(id)
+{
+    if(document.getElementById(id) != null)
+    {
+        return document.getElementById(id);
+    }
+    else{
+        return document.createElement("null");
+    }
+}
+
+function JSONToFile(obj, filename){
+    const blob = new Blob([JSON.stringify(obj, null, 2)], {
+        type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filename}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+};
+
+function httpGET(theUrl, passed_callback = function(){}, failed_callback = function(){}){
+  var xmlHttp = new XMLHttpRequest();
+  xmlHttp.open( "GET", theUrl, false );
+  xmlHttp.onreadystatechange = function() {
+    if(xmlHttp.readyState == 4 && xmlHttp.status == 200) {
+        data = xmlHttp.responseText
+        try{
+            return_data = JSON.parse(data);
+            passed_callback(return_data);
+        }
+        catch
+        {
+            passed_callback(data);
+        }
+    }
+    else{
+      failed_callback();
+    }
+  }
+  xmlHttp.send( null );
+}
+
+function httpPOST(theUrl, params, passed_callback = function(){}, failed_callback = function(){}){
+  var xmlHttp = new XMLHttpRequest();
+  xmlHttp.open( "POST", theUrl, false );
+  xmlHttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+  xmlHttp.onreadystatechange = function() {
+    if(xmlHttp.readyState == 4 && xmlHttp.status == 200) {
+      passed_callback(xmlHttp.responseText);
+    }
+    else{
+      failed_callback();
+    }
+  }
+  xmlHttp.send(params);
+}
+
+function init() {
   init_socket();
   init_events();
   get_hostname();
-  promptModal = new bootstrap.Modal($("#promptModal"), {});
-  alertModel = new bootstrap.Modal($("#alertModal"), {});
-  loading_alert = new bootstrap.Modal($("#loadingModal"), {});
-  $("#loading_model_body").html("Connecting...");
+  promptModal = new bootstrap.Modal(getEleById("promptModal"), {});
+  alertModel = new bootstrap.Modal(getEleById("alertModal"), {});
+  loading_alert = new bootstrap.Modal(getEleById("loadingModal"), {});
+  getEleById("loading_model_body").innerHTML = "Connecting...";
   loading_alert.show();
   window.onbeforeunload = function () {
     return "Are you sure you want to leave?";
   };
-});
-
-$("#myModal").on("shown.bs.modal", function () {
-  $("#myInput").trigger("focus");
-});
+}
 
 function set_sync_word(val) {
-  $.get("/config/lora_config.json", function (lora_config) {
-    $("#sync_word").val(lora_config.SyncWord);
+  httpGET("/config/lora_config.json", function (lora_config) {
+    getEleById("sync_word").value = lora_config.SyncWord;
   });
 }
 
 function generate_sync_word() {
-  for (var i = 1; i < 256; i++) $("#sync_word").append(new Option(i, i));
+  for (var i = 1; i < 256; i++) getEleById("sync_word").append(new Option(i, i));
 }
 
 function get_username() {
@@ -42,13 +98,12 @@ function get_username() {
 function send_lora(msg) {
   if (msg != "") {
     tx_msg = { pack_type: "msg", data: msg };
-    $("#lora_msg").val("");
-    $("#lora_msg").attr("readonly", true);
-    $.post("/lora_transmit", { data: JSON.stringify(tx_msg) })
-      .done(function (data) {
-        $("#lora_msg").attr("readonly", false);
+    getEleById("lora_msg").value = "";
+    getEleById("lora_msg").setAttribute("readonly", true);
+    httpPOST("/lora_transmit", { data: JSON.stringify(tx_msg) }, function (data) {
+        getEleById("lora_msg").setAttribute("readonly", false);
         if (data.akn == 1) {
-          $("#lora_rx_msg").prepend(
+          getEleById("lora_rx_msg").prepend(
             "<li class='list-group-item'>" +
               data.username +
               " : " +
@@ -56,38 +111,39 @@ function send_lora(msg) {
               "</li>"
           );
         }
-      })
-      .fail(function (data) {
-        $("#lora_msg").attr("readonly", false);
+      }, function (data) {
+        getEleById("lora_msg").setAttribute("readonly", false);
       });
   }
 }
 
 function restart() {
-  $("#promptModalLabel").html("Device Restart");
-  $("#prompt_body").html("Are you sure you want to restart the device");
+  getEleById("promptModalLabel").innerHTML = "Device Restart";
+  getEleById("prompt_body").innerHTML = "Are you sure you want to restart the device";
   promptModal.show();
-  $("#promptModelProceed").click(function () {
+  getEleById("promptModelProceed").click(function () {
     promptModal.hide();
     Socket.send(JSON.stringify({ "request-type": "restart_device" }));
   });
 }
 
 function get_hostname() {
-  $.get("hostname", function (data) {
+  httpGET("hostname", function (data) {
     hostname_url = "http://" + data + ".local/";
-    $("#project_title").attr("href", hostname_url);
+    getEleById("project_title").setAttribute("href", hostname_url);
   });
 }
 
 function dashboard() {
-  $(".nav-link").removeClass("active");
-  $("#navbar-dashboard").addClass("active");
-  $.get("dashboard.html", function (data) {
-    $("#main_content").html(data);
+    Array.prototype.forEach.call(document.getElementsByClassName("nav-link"),function(item){
+    item.removeAttribute("active"); 
+  });
+  getEleById("navbar-dashboard").classList.add("active");
+  httpGET("dashboard.html", function (data) {
+    getEleById("main_content").innerHTML = data;
     var block_input_status = transmission;
-    $.get("/config/lora_serial.json", function (config) {
-      $("#lora_to_serial").attr("checked", config.lora_serial);
+    httpGET("/config/lora_serial.json", function (config) {
+      getEleById("lora_to_serial").setAttribute("checked", config.lora_serial);
       block_input_status = block_input_status || config.lora_serial;
       block_inputs(block_input_status);
       setTimeout(function () {
@@ -99,10 +155,10 @@ function dashboard() {
 }
 
 function file_transfer() {
-  $.get("file_transfer.html", function (data) {
-    $("#main_content").html(data);
+  httpGET("file_transfer.html", function (data) {
+    getEleById("main_content").innerHTML = data;
     var block_input_status = transmission;
-    $.get("/config/lora_serial.json", function (config) {
+    httpGET("/config/lora_serial.json", function (config) {
       block_input_status = block_input_status || config.lora_serial;
       block_inputs(block_input_status);
     });
@@ -110,25 +166,27 @@ function file_transfer() {
 }
 
 function wifi() {
-  $(".nav-link").removeClass("active");
-  $("#navbar-wifi").addClass("active");
-  $.get("wifi.html", function (data) {
-    $("#main_content").html(data);
+    Array.prototype.forEach.call(document.getElementsByClassName("nav-link"),function(item){
+    item.removeAttribute("style"); 
+  });
+  getEleById("navbar-wifi").classList.add("active");
+  httpGET("wifi.html", function (data) {
+    getEleById("main_content").innerHTML = data;
     block_inputs(transmission);
-    $.get("/config/wifi_config.json", function (data) {
-      $("#wifi_ssid_name").html(data.wifi_ssid);
+    httpGET("/config/wifi_config.json", function (data) {
+      getEleById("wifi_ssid_name").innerHTML = data.wifi_ssid;
     });
   });
 }
 
 function save_lora_config() {
-  $.get("/config/lora_config.json", function (lora_config) {
-    freq = $("#freq_range").val();
-    tx_power = $("#tx_power_range").val();
-    s_fact = $("#spreading_factor").val();
-    bandwidth = $("#bandwidth").val();
-    coding_rate = $("#coding_rate").val();
-    sync_word = $("#sync_word").val();
+  httpGET("/config/lora_config.json", function (lora_config) {
+    freq = getEleById("freq_range").value;
+    tx_power = getEleById("tx_power_range").value;
+    s_fact = getEleById("spreading_factor").value;
+    bandwidth = getEleById("bandwidth").value;
+    coding_rate = getEleById("coding_rate").value;
+    sync_word = getEleById("sync_word").value;
 
     lora_config["freq"] = parseInt(freq * 1000000);
     lora_config["TxPower"] = parseInt(tx_power);
@@ -146,13 +204,13 @@ function save_lora_config() {
 }
 
 function update_lora_config_from_file() {
-  const file = $("#LoraConfigFile").prop("files")[0];
+  const file = getEleById("LoraConfigFile").prop("files")[0];
   const reader = new FileReader();
   reader.readAsText(file);
   reader.onload = function (e) {
     try {
       lora_config = JSON.parse(reader.result);
-      $("#LoraConfigFile").val("");
+      getEleById("LoraConfigFile").value = "";
       set_lora_config(lora_config);
       alert("Settings applied.<br>Press save to apply.");
     } catch (e) {
@@ -162,13 +220,13 @@ function update_lora_config_from_file() {
 }
 
 function download_lora_config() {
-  $.get("/config/lora_config.json", function (lora_config) {
-    freq = $("#freq_range").val();
-    tx_power = $("#tx_power_range").val();
-    s_fact = $("#spreading_factor").val();
-    bandwidth = $("#bandwidth").val();
-    coding_rate = $("#coding_rate").val();
-    sync_word = $("#sync_word").val();
+  httpGET("/config/lora_config.json", function (lora_config) {
+    freq = getEleById("freq_range").value;
+    tx_power = getEleById("tx_power_range").value;
+    s_fact = getEleById("spreading_factor").value;
+    bandwidth = getEleById("bandwidth").value;
+    coding_rate = getEleById("coding_rate").value;
+    sync_word = getEleById("sync_word").value;
 
     lora_config["freq"] = parseInt(freq * 1000000);
     lora_config["TxPower"] = parseInt(tx_power);
@@ -180,45 +238,35 @@ function download_lora_config() {
   });
 }
 
-const JSONToFile = (obj, filename) => {
-  const blob = new Blob([JSON.stringify(obj, null, 2)], {
-    type: "application/json",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${filename}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-};
-
 function lora() {
-  $(".nav-link").removeClass("active");
-  $("#navbar-lora").addClass("active");
-  $.get("lora.html", function (data) {
-    $("#main_content").html(data);
+    Array.prototype.forEach.call(document.getElementsByClassName("nav-link"),function(item){
+    item.removeAttribute("active"); 
+  });
+  getEleById("navbar-lora").classList.add("active");
+  httpGET("lora.html", function (data) {
+    getEleById("main_content").innerHTML = data;
     block_inputs(transmission);
-    $.get("/config/lora_config.json", function (lora_config) {
+    httpGET("/config/lora_config.json", function (lora_config) {
       generate_sync_word();
 
-      $("#freq_range").val(lora_config.freq / 1000000);
-      $("#selected_lora_freq").html(lora_config.freq / 1000000);
+      getEleById("freq_range").value = (lora_config.freq / 1000000);
+      getEleById("selected_lora_freq").innerHTML = lora_config.freq / 1000000;
 
-      $("#tx_power_range").val(lora_config.TxPower);
-      $("#selected_lora_tx_power").html(lora_config.TxPower);
+      getEleById("tx_power_range").value = lora_config.TxPower;
+      getEleById("selected_lora_tx_power").innerHTML = lora_config.TxPower;
 
-      $("#spreading_factor").val(lora_config.SpreadingFactor);
-      $("#selected_lora_spreading_factor").html(lora_config.SpreadingFactor);
+      getEleById("spreading_factor").value = lora_config.SpreadingFactor;
+      getEleById("selected_lora_spreading_factor").innerHTML = lora_config.SpreadingFactor;
 
-      $("#bandwidth").val(lora_config.SignalBandwidth);
+      getEleById("bandwidth").value = lora_config.SignalBandwidth;
 
-      $("#coding_rate").val(lora_config.CodingRate4);
-      $("#selected_lora_coding_rate").html(lora_config.CodingRate4);
+      getEleById("coding_rate").value = lora_config.CodingRate4;
+      getEleById("selected_lora_coding_rate").innerHTML = lora_config.CodingRate4;
 
-      $("#sync_word").val(lora_config.SyncWord);
-      $.get("/config/config_list.json", function (config_list) {
+      getEleById("sync_word").value = lora_config.SyncWord;
+      httpGET("/config/config_list.json", function (config_list) {
         config_list.forEach((element) => {
-          $("#lora_config").append(
+          getEleById("lora_config").append(
             '<option value="' +
               element.value +
               '">' +
@@ -234,50 +282,52 @@ function lora() {
 function set_lora_config(lora_config) {
   generate_sync_word();
 
-  $("#freq_range").val(lora_config.freq / 1000000);
-  $("#selected_lora_freq").html(lora_config.freq / 1000000);
+  getEleById("freq_range").value = lora_config.freq / 1000000;
+  getEleById("selected_lora_freq").innerHTML = lora_config.freq / 1000000;
 
-  $("#tx_power_range").val(lora_config.TxPower);
-  $("#selected_lora_tx_power").html(lora_config.TxPower);
+  getEleById("tx_power_range").value = lora_config.TxPower;
+  getEleById("selected_lora_tx_power").innerHTML = lora_config.TxPower;
 
-  $("#spreading_factor").val(lora_config.SpreadingFactor);
-  $("#selected_lora_spreading_factor").html(lora_config.SpreadingFactor);
+  getEleById("spreading_factor").value = lora_config.SpreadingFactor;
+  getEleById("selected_lora_spreading_factor").innerHTML = lora_config.SpreadingFactor;
 
-  $("#bandwidth").val(lora_config.SignalBandwidth);
+  getEleById("bandwidth").value = lora_config.SignalBandwidth;
 
-  $("#coding_rate").val(lora_config.CodingRate4);
-  $("#selected_lora_coding_rate").html(lora_config.CodingRate4);
+  getEleById("coding_rate").value = lora_config.CodingRate4;
+  getEleById("selected_lora_coding_rate").innerHTML = lora_config.CodingRate4;
 
-  $("#sync_word").val(lora_config.SyncWord);
+  getEleById("sync_word").value = lora_config.SyncWord;
 }
 
 function load_lora_config(val) {
   if (val != "") {
-    $.get("/config/" + val, function (lora_config) {
+    httpGET("/config/" + val, function (lora_config) {
       set_lora_config(lora_config);
     });
   }
 }
 
 function update() {
-  $(".nav-link").removeClass("active");
-  $("#navbar-update").addClass("active");
-  $.get("update", function (data) {
-    $("#main_content").html(data);
+    Array.prototype.forEach.call(document.getElementsByClassName("nav-link"), function(item){
+    item.removeAttribute("active"); 
+  });
+  getEleById("navbar-update").classList.add("active");
+  httpGET("update", function (data) {
+    getEleById("main_content").innerHTML = data;
     block_inputs(transmission);
   });
 }
 
 function alert(msg) {
-  $("#alert_body").html(msg);
+  getEleById("alert_body").innerHTML = msg;
   alertModel.show();
 }
 
 function reset() {
-  $("#promptModalLabel").html("Device Reset");
-  $("#prompt_body").html("Are you sure you want to reset the device ?");
+  getEleById("promptModalLabel").innerHTML = "Device Reset";
+  getEleById("prompt_body").innerHTML = "Are you sure you want to reset the device ?";
   promptModal.show();
-  $("#promptModelProceed").click(function () {
+  getEleById("promptModelProceed").click(function () {
     promptModal.hide();
     Socket.send(JSON.stringify({ "request-type": "reset_device" }));
     setTimeout(function () {
@@ -287,15 +337,15 @@ function reset() {
 }
 
 function scan_ssid() {
-  $("#wifi_ssid_list").html("");
-  $("#wifi_scan_btn").html("Scanning...");
-  $("#wifi_scan_btn").attr("onclick", "");
+  getEleById("wifi_ssid_list").innerHTML = "";
+  getEleById("wifi_scan_btn").innerHTML = "Scanning...";
+  getEleById("wifi_scan_btn").setAttribute("onclick", "");
   Socket.send(JSON.stringify({ "request-type": "wifi_ssid_scan" }));
 }
 
 function wifi_connect() {
-  ssid = $("#wifi_ssid").val();
-  psk = $("#wifi_password").val();
+  ssid = getEleById("wifi_ssid").value;
+  psk = getEleById("wifi_password").value;
   if (ssid == "" || ssid == undefined) {
     alert("Invalid SSID.");
     return;
@@ -304,7 +354,7 @@ function wifi_connect() {
     alert("Invalid password.");
     return;
   }
-  $("#loading_model_body").html("Connecting to WiFi...");
+  getEleById("loading_model_body").innerHTML = "Connecting to WiFi...";
   loading_alert.show();
   Socket.send(
     JSON.stringify({
@@ -319,14 +369,12 @@ function wifi_connect() {
 }
 
 function wifi_ap_mode() {
-  $("#promptModalLabel").html("Access Point");
-  $("#prompt_body").html(
-    "Are you sure you want to switch to access point mode ?"
-  );
+  getEleById("promptModalLabel").innerHTML = "Access Point";
+  getEleById("prompt_body").innerHTML = "Are you sure you want to switch to access point mode ?";
   promptModal.show();
-  $("#promptModelProceed").click(function () {
+  getEleById("promptModelProceed").click(function () {
     promptModal.hide();
-    $.get("/username", function (username) {
+    httpGET("/username", function (username) {
       Socket.send(
         JSON.stringify({
           "request-type": "wifi_ap_mode",
@@ -362,7 +410,7 @@ function isJSON(str) {
   }
 }
 function update_wifi_ssid(ssid) {
-  $("#wifi_ssid").attr("value", ssid);
+  getEleById("wifi_ssid").setAttribute("value", ssid);
 }
 
 var total_packets = 0;
@@ -411,18 +459,17 @@ function init_events() {
       // );
       file_data += data;
       file_size_string = get_string_size(file_data);
-      $("#chunk_ratio").html(
+      getEleById("chunk_ratio").innerHTML = 
         "(" +
           current_packet +
           " / " +
           total_packets +
           ") " +
           file_size_string +
-          " Received"
-      );
+          " Received";
       current_packet += 1;
       var percent = (current_packet / total_packets) * 100;
-      $("#file_upload_progress_bar").css("width", percent + "%");
+      getEleById("file_upload_progress_bar").style.width = percent + "%";
     }
   });
   source.addEventListener("WIFI_DATA", function (e) {
@@ -430,7 +477,7 @@ function init_events() {
     if (data != "") {
       var rssi = parseInt(data.rssi);
       quality = 2 * (rssi + 100);
-      $("#wifi_quality").html(quality+" %")
+      getEleById("wifi_quality").innerHTML = quality+" %";
     }
   });
   source.addEventListener("RAM_DATA", function (e) {
@@ -439,17 +486,15 @@ function init_events() {
       var free_heap = parseInt(data.free_heap);
       var heap_size = parseInt(data.heap_size);
       var heap_per = Math.round(((heap_size - free_heap) / heap_size) * 100);
-      $("#ram_ratio").html(
-        "<b>" + heap_per + "%</b> (" + free_heap + "/" + heap_size + ")"
-      );
-      $("#heap_progress_bar").removeClass("bg-success");
-      $("#heap_progress_bar").removeClass("bg-warning");
-      $("#heap_progress_bar").removeClass("bg-danger");
-      if (heap_per < 30) $("#heap_progress_bar").addClass("bg-success");
+      getEleById("ram_ratio").innerHTML ="<b>" + heap_per + "%</b> (" + free_heap + "/" + heap_size + ")";
+      getEleById("heap_progress_bar").classList.remove("bg-success");
+      getEleById("heap_progress_bar").classList.remove("bg-warning");
+      getEleById("heap_progress_bar").classList.remove("bg-danger");
+      if (heap_per < 30) getEleById("heap_progress_bar").classList.add("bg-success");
       if (heap_per > 30 && heap_per <= 70)
-        $("#heap_progress_bar").addClass("bg-warning");
-      if (heap_per > 70) $("#heap_progress_bar").addClass("bg-danger");
-      $("#heap_progress_bar").css("width", heap_per + "%");
+        getEleById("heap_progress_bar").classList.add("bg-warning");
+      if (heap_per > 70) getEleById("heap_progress_bar").classList.add("bg-danger");
+      getEleById("heap_progress_bar").style.width = heap_per + "%";
     }
   });
   source.addEventListener("DEBUG", function (e) {
@@ -460,7 +505,7 @@ function init_events() {
     if (data != "") {
       const d = new Date();
       let time = d.getTime();
-      $("#debug_textarea").prepend(time + " > " + data + "\n");
+      getEleById("debug_textarea").prepend(time + " > " + data + "\n");
     }
   });
 }
@@ -495,8 +540,8 @@ function init_socket() {
         stop_file_transfer_mode();
       }
       if (response_type == "wifi_scan") {
-        $("#wifi_scan_btn").html("Scan SSID");
-        $("#wifi_scan_btn").attr("onclick", "scan_ssid()");
+        getEleById("wifi_scan_btn").innerHTML = "Scan SSID";
+        getEleById("wifi_scan_btn").setAttribute("onclick", "scan_ssid()");
         var ssid_list = data.SSID;
         var output = "";
         for (wifi_ssid in ssid_list) {
@@ -522,7 +567,7 @@ function init_socket() {
             wifi_ssid.ssid +
             "</a></li>";
         }
-        $("#wifi_ssid_list").html(output);
+        getEleById("wifi_ssid_list").innerHTML = output;
       }
       if (response_type == "alert") {
         var msg = data.alert_msg;
@@ -541,7 +586,7 @@ function init_socket() {
         var pack_type = data["pack_type"];
         if (pack_type == "msg") {
           msg = data["data"];
-          $("#lora_rx_msg").prepend(
+          getEleById("lora_rx_msg").prepend(
             "<li class='list-group-item'>" + uname + " : " + msg + "</li>"
           );
         }
@@ -553,8 +598,8 @@ function init_socket() {
             file_name = data["name"];
             time = data["time"];
             current_packet = 0;
-            $("#file_upload_progress_bar").addClass("bg-success");
-            $("#rec_info").html(
+            getEleById("file_upload_progress_bar").classList.add("bg-success");
+            getEleById("rec_info").innerHTML =
               "Total " +
                 total_packets +
                 " file chunks will be recieved." +
@@ -564,8 +609,7 @@ function init_socket() {
                 file_name +
                 "</b><br />Estimated min time <b>" +
                 time +
-                "</b>"
-            );
+                "</b>";
             start_file_transfer_mode();
           } else if (action == "disable_file_tx_mode") {
             stop_file_transfer_mode();
@@ -575,7 +619,7 @@ function init_socket() {
         }
       }
       if (response_type == "set_uname") {
-        $("#username").val(data.uname);
+        getEleById("username").value = data.uname;
       }
       if (response_type == "set_sync_word") {
         set_sync_word(data.value);
@@ -592,7 +636,7 @@ function init_socket() {
     dashboard();
   };
   Socket.onclose = function (event) {
-    $("#loading_model_body").html("Connecting...");
+    getEleById("loading_model_body").innerHTML = "Connecting...";
     loading_alert.show();
     console.log("Connection to websockets closed....");
     setTimeout(function () {
@@ -607,9 +651,13 @@ function init_socket() {
 
 function block_inputs(val) {
   if (val) {
-    $(".lora_transmission").attr("disabled", "true");
+    Array.prototype.forEach.call(document.getElementsByClassName("lora_transmission"), function(item){
+        item.setAttribute("disabled", "true");
+      });
   } else {
-    $(".lora_transmission").removeAttr("disabled");
+    Array.prototype.forEach.call(document.getElementsByClassName("lora_transmission"), function(item){
+        item.removeAttribute("disabled");
+      });
   }
 }
 
@@ -624,21 +672,21 @@ function set_lora_to_serial(val) {
 }
 
 function set_freq_range(val) {
-  $("#selected_lora_freq").html(val);
+  getEleById("selected_lora_freq").innerHTML = val;
 }
 function set_tx_power(val) {
-  $("#selected_lora_tx_power").html(val);
+  getEleById("selected_lora_tx_power").innerHTML = val;
 }
 function set_spreading_factor(val) {
-  $("#selected_lora_spreading_factor").html(val);
+  getEleById("selected_lora_spreading_factor").innerHTML = val;
 }
 
 function set_coding_rate(val) {
-  $("#selected_lora_coding_rate").html(val);
+  getEleById("selected_lora_coding_rate").innerHTML = val;
 }
 
 function reset_progress_bar() {
-  $("#file_upload_progress_bar").css("width", "0%");
+  getEleById("file_upload_progress_bar").style.width = "0%";
 }
 
 var transmission = false;
@@ -660,7 +708,7 @@ function dataURItoBlob(dataURI) {
   return new Blob([ab], { type: mimeString });
 }
 
-const downloadFile = () => {
+function downloadFile() {
   if (transmission) {
     alert("File transfer in progress.");
     return;
@@ -676,13 +724,13 @@ const downloadFile = () => {
 
 function file_broadcast() {
   if (transmission) return;
-  const file = $("#broadcastFile").prop("files")[0];
+  const file = getEleById("broadcastFile").prop("files")[0];
   const reader = new FileReader();
   reader.readAsDataURL(file);
   reader.onload = function (e) {
     const dataURL = reader.result;
-    const chunkSize = parseInt($("#chunk_size").val());
-    const waitTime = parseInt($("#wait_time").val());
+    const chunkSize = parseInt(getEleById("chunk_size").value);
+    const waitTime = parseInt(getEleById("wait_time").value);
     file_data = "";
     file_name = file.name;
     if (chunkSize > 200 || chunkSize < 0) {
@@ -705,7 +753,7 @@ function file_broadcast() {
     var h = Math.floor(time_estimate / 3600);
     var m = Math.floor((time_estimate % 3600) / 60);
     var s = Math.floor((time_estimate % 3600) % 60);
-    $("#chunk_ratio").html(
+    getEleById("chunk_ratio").innerHTML = 
       "Total <b>" +
         total_chunk +
         "</b> file chunks will be transmitted.<br>" +
@@ -718,15 +766,14 @@ function file_broadcast() {
         m +
         ":" +
         s +
-        "</b>."
-    );
-    $("#file_upload_progress_bar").removeClass("bg-success");
+        "</b>.";
+    getEleById("file_upload_progress_bar").classList.remove("bg-success");
     function loop(s) {
       if (s < dataURL.length && transmission) {
         function passed_callback() {
           s += chunkSize;
           var percent = Math.abs((s / dataURL.length) * 100);
-          $("#file_upload_progress_bar").css("width", percent + "%");
+          getEleById("file_upload_progress_bar").style.width = percent + "%";
           setTimeout(() => {
             loop(s);
           }, waitTime);
@@ -734,13 +781,11 @@ function file_broadcast() {
         function failed_callback() {
           stop_broadcast();
           tx_msg = { pack_type: "action", data: "disable_file_tx_mode" };
-          $.post("/lora_transmit", { data: JSON.stringify(tx_msg) })
-            .done(function (data) {
+          httpPOST("/lora_transmit", { data: JSON.stringify(tx_msg) }, function (data) {
               if (data.akn == 1) {
                 stop_broadcast();
               }
-            })
-            .fail(function (data) {});
+            });
         }
         var retry = 0;
         uploadChunk(dataURL.slice(s, s + chunkSize), passed_callback, () => {
@@ -756,13 +801,11 @@ function file_broadcast() {
       } else {
         stop_broadcast();
         tx_msg = { pack_type: "action", data: "disable_file_tx_mode" };
-        $.post("/lora_transmit", { data: JSON.stringify(tx_msg) })
-          .done(function (data) {
+        httpPOST("/lora_transmit", { data: JSON.stringify(tx_msg) }, function (data) {
             if (data.akn == 1) {
               stop_broadcast();
             }
-          })
-          .fail(function (data) {});
+          });
       }
     }
     setTimeout(() => {
@@ -774,16 +817,14 @@ function file_broadcast() {
         name: file_name,
         time: h + ":" + m + ":" + s,
       };
-      $.post("/lora_transmit", { data: JSON.stringify(tx_msg) })
-        .done(function (data) {
+      httpPOST("/lora_transmit", { data: JSON.stringify(tx_msg) }, function (data) {
           if (data.akn == 1) {
             start_file_transfer_mode();
             setTimeout(() => {
               loop(0);
             }, 2000);
           }
-        })
-        .fail(function (data) {});
+        });
     }, 2000);
   };
   reader.onerror = function (e) {
@@ -794,11 +835,9 @@ function file_broadcast() {
 function uploadChunk(chunk, passed_callback, failed_callback) {
   file_data += chunk;
   // console.log(chunk);
-  $.post("/send_raw", { data: chunk })
-    .done(function () {
+  httpPOST("/send_raw", { data: chunk }, function () {
       passed_callback();
-    })
-    .fail(function () {
+    }, function () {
       failed_callback();
     });
 }
