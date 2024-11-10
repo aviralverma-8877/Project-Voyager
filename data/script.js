@@ -54,13 +54,21 @@ function httpPOST(theUrl, params, passed_callback = function(){}, failed_callbac
   xmlHttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
   xmlHttp.onreadystatechange = function() {
     if(xmlHttp.readyState == 4 && xmlHttp.status == 200) {
-      passed_callback(xmlHttp.responseText);
+        data = xmlHttp.responseText
+        try{
+            return_data = JSON.parse(data);
+            passed_callback(return_data);
+        }
+        catch
+        {
+            passed_callback(data);
+        }
     }
     else{
       failed_callback();
     }
   }
-  xmlHttp.send(params);
+  xmlHttp.send(JSON.stringify(params));
 }
 
 function init() {
@@ -101,18 +109,17 @@ function send_lora(msg) {
     getEleById("lora_msg").value = "";
     getEleById("lora_msg").setAttribute("readonly", true);
     httpPOST("/lora_transmit", { data: JSON.stringify(tx_msg) }, function (data) {
-        getEleById("lora_msg").setAttribute("readonly", false);
+        getEleById("lora_msg").removeAttribute("readonly");
         if (data.akn == 1) {
-          getEleById("lora_rx_msg").prepend(
+          getEleById("lora_rx_msg").innerHTML = 
             "<li class='list-group-item'>" +
               data.username +
               " : " +
               msg +
-              "</li>"
-          );
+              "</li>" + getEleById("lora_rx_msg").innerHTML;
         }
       }, function (data) {
-        getEleById("lora_msg").setAttribute("readonly", false);
+        getEleById("lora_msg").removeAttribute("readonly");
       });
   }
 }
@@ -143,7 +150,7 @@ function dashboard() {
     getEleById("main_content").innerHTML = data;
     var block_input_status = transmission;
     httpGET("/config/lora_serial.json", function (config) {
-      getEleById("lora_to_serial").setAttribute("checked", config.lora_serial);
+      getEleById("lora_to_serial").checked = config.lora_serial;
       block_input_status = block_input_status || config.lora_serial;
       block_inputs(block_input_status);
       setTimeout(function () {
@@ -204,7 +211,7 @@ function save_lora_config() {
 }
 
 function update_lora_config_from_file() {
-  const file = getEleById("LoraConfigFile").prop("files")[0];
+  const file = getEleById("LoraConfigFile").files[0];
   const reader = new FileReader();
   reader.readAsText(file);
   reader.onload = function (e) {
@@ -371,8 +378,7 @@ function wifi_connect() {
 function wifi_ap_mode() {
   getEleById("promptModalLabel").innerHTML = "Access Point";
   getEleById("prompt_body").innerHTML = "Are you sure you want to switch to access point mode ?";
-  promptModal.show();
-  getEleById("promptModelProceed").click(function () {
+  getEleById("promptModelProceed").onclick = function () {
     promptModal.hide();
     httpGET("/username", function (username) {
       Socket.send(
@@ -389,7 +395,8 @@ function wifi_ap_mode() {
         window.location.replace(hostname_url);
       }, 10000);
     });
-  });
+  }
+  promptModal.show();
 }
 
 function set_username(val) {
@@ -582,13 +589,12 @@ function init_socket() {
         //   })
         // );
         var uname = data.name;
-        var data = JSON.parse(data.data);
+        var data = JSON.parse(JSON.parse(data.data).data);
         var pack_type = data["pack_type"];
         if (pack_type == "msg") {
           msg = data["data"];
-          getEleById("lora_rx_msg").prepend(
-            "<li class='list-group-item'>" + uname + " : " + msg + "</li>"
-          );
+          getEleById("lora_rx_msg").innerHTML =
+            "<li class='list-group-item'>" + uname + " : " + msg + "</li>" + getEleById("lora_rx_msg").innerHTML;
         }
         if (pack_type == "action") {
           action = data["data"];
@@ -652,7 +658,7 @@ function init_socket() {
 function block_inputs(val) {
   if (val) {
     Array.prototype.forEach.call(document.getElementsByClassName("lora_transmission"), function(item){
-        item.setAttribute("disabled", "true");
+        item.setAttribute("disabled", true);
       });
   } else {
     Array.prototype.forEach.call(document.getElementsByClassName("lora_transmission"), function(item){
@@ -724,7 +730,7 @@ function downloadFile() {
 
 function file_broadcast() {
   if (transmission) return;
-  const file = getEleById("broadcastFile").prop("files")[0];
+  const file = getEleById("broadcastFile").files[0];
   const reader = new FileReader();
   reader.readAsDataURL(file);
   reader.onload = function (e) {
