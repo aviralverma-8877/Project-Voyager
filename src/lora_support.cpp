@@ -167,15 +167,15 @@ void LoRa_sendRaw(void* param) {
                     }
                 }
             }
+            JsonDocument doc;
+            doc["akn"] = AknRecieved;
+            doc["username"] = username;
+            doc.shrinkToFit();
+            String return_res;
+            serializeJson(doc, return_res);
+            doc.clear();
             if( params->request != NULL)
             {
-                JsonDocument doc;
-                doc["akn"] = AknRecieved;
-                doc["username"] = username;
-                doc.shrinkToFit();
-                String return_res;
-                serializeJson(doc, return_res);
-                doc.clear();
                 int return_code = 200;
                 if(AknRecieved != 1)
                     return_code = 422;

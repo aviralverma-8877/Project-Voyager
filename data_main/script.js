@@ -840,12 +840,13 @@ function file_broadcast() {
 
 function uploadChunk(chunk, passed_callback, failed_callback) {
   file_data += chunk;
-  // console.log(chunk);
-  httpPOST("/send_raw", { data: chunk }, function () {
-      passed_callback();
-    }, function () {
-      failed_callback();
-    });
+  Socket.send(
+    JSON.stringify({
+      "request-type": "send_raw",
+      value: chunk,
+    })
+  );
+  passed_callback();
 }
 
 function start_file_transfer_mode() {

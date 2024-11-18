@@ -117,6 +117,15 @@ void handle_operations(JsonDocument doc)
         send_to_ws(return_value);
         return;
     }
+    if(strcmp(request_type, "send_raw")==0)
+    {
+        String data = doc["value"];
+        QueueParam *packet = new QueueParam();
+        packet->message = data;
+        packet->type = RAW_DATA;
+        packet->request = NULL;
+        xQueueSend(send_packets, (void*)&packet, (TickType_t)2);
+    }
 }
 
 // Method to save LoRa to Serial configration.
