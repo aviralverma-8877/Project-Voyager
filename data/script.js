@@ -108,7 +108,7 @@ function send_lora(msg) {
     tx_msg = { pack_type: "msg", data: msg };
     getEleById("lora_msg").value = "";
     getEleById("lora_msg").setAttribute("readonly", true);
-    httpPOST("/lora_transmit", { data: JSON.stringify(tx_msg) }, function (data) {
+    httpPOST("/lora_transmit", { data: tx_msg }, function (data) {
         getEleById("lora_msg").removeAttribute("readonly");
         if (data.akn == 1) {
           getEleById("lora_rx_msg").innerHTML = 
@@ -420,7 +420,7 @@ function update_wifi_ssid(ssid) {
   getEleById("wifi_ssid").setAttribute("value", ssid);
 }
 
-var total_packets = 0;
+var tpak = 0;
 var current_packet = 0;
 var file_data = "";
 var file_name = "";
@@ -470,12 +470,12 @@ function init_events() {
         "(" +
           current_packet +
           " / " +
-          total_packets +
+          tpak +
           ") " +
           file_size_string +
           " Received";
       current_packet += 1;
-      var percent = (current_packet / total_packets) * 100;
+      var percent = (current_packet / tpak) * 100;
       getEleById("file_upload_progress_bar").style.width = percent + "%";
     }
   });
@@ -598,8 +598,8 @@ function init_socket() {
         }
         if (pack_type == "action") {
           action = data["data"];
-          if (action == "enable_file_tx_mode") {
-            total_packets = data["total_packets"];
+          if (action == "en_tx") {
+            tpak = data["tpak"];
             file_size = data["size"];
             file_name = data["name"];
             time = data["time"];
@@ -607,7 +607,7 @@ function init_socket() {
             getEleById("file_upload_progress_bar").classList.add("bg-success");
             getEleById("rec_info").innerHTML =
               "Total " +
-                total_packets +
+                tpak +
                 " file chunks will be recieved." +
                 "<br />Total Size: <b>" +
                 file_size +
@@ -617,7 +617,7 @@ function init_socket() {
                 time +
                 "</b>";
             start_file_transfer_mode();
-          } else if (action == "disable_file_tx_mode") {
+          } else if (action == "dis_tx") {
             stop_file_transfer_mode();
           } else if (action == "sos") {
             alert("User " + uname + " has sent a SOS request.");
@@ -743,8 +743,8 @@ function file_broadcast() {
       alert("packet size should be between 1-200");
       return;
     }
-    if (waitTime < 10) {
-      alert("Wait time should be greater than 10 ms");
+    if (waitTime < 700) {
+      alert("Wait time should be greater than 700 ms");
       return;
     }
     file_size_string = get_string_size(dataURL);
@@ -786,8 +786,8 @@ function file_broadcast() {
         }
         function failed_callback() {
           stop_broadcast();
-          tx_msg = { pack_type: "action", data: "disable_file_tx_mode" };
-          httpPOST("/lora_transmit", { data: JSON.stringify(tx_msg) }, function (data) {
+          tx_msg = { pack_type: "action", data: "dis_tx" };
+          httpPOST("/lora_transmit", { data: tx_msg }, function (data) {
               if (data.akn == 1) {
                 stop_broadcast();
               }
@@ -806,8 +806,8 @@ function file_broadcast() {
         });
       } else {
         stop_broadcast();
-        tx_msg = { pack_type: "action", data: "disable_file_tx_mode" };
-        httpPOST("/lora_transmit", { data: JSON.stringify(tx_msg) }, function (data) {
+        tx_msg = { pack_type: "action", data: "dis_tx" };
+        httpPOST("/lora_transmit", { data: tx_msg }, function (data) {
             if (data.akn == 1) {
               stop_broadcast();
             }
@@ -817,13 +817,13 @@ function file_broadcast() {
     setTimeout(() => {
       tx_msg = {
         pack_type: "action",
-        data: "enable_file_tx_mode",
-        total_packets: total_chunk,
+        data: "en_tx",
+        tpak: total_chunk,
         size: file_size_string,
         name: file_name,
         time: h + ":" + m + ":" + s,
       };
-      httpPOST("/lora_transmit", { data: JSON.stringify(tx_msg) }, function (data) {
+      httpPOST("/lora_transmit", { data: tx_msg }, function (data) {
           if (data.akn == 1) {
             start_file_transfer_mode();
             setTimeout(() => {

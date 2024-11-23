@@ -598,7 +598,7 @@ function init_socket() {
         }
         if (pack_type == "action") {
           action = data["data"];
-          if (action == "enable_file_tx_mode") {
+          if (action == "en_tx") {
             total_packets = data["total_packets"];
             file_size = data["size"];
             file_name = data["name"];
@@ -617,7 +617,7 @@ function init_socket() {
                 time +
                 "</b>";
             start_file_transfer_mode();
-          } else if (action == "disable_file_tx_mode") {
+          } else if (action == "dis_tx") {
             stop_file_transfer_mode();
           } else if (action == "sos") {
             alert("User " + uname + " has sent a SOS request.");
@@ -743,8 +743,8 @@ function file_broadcast() {
       alert("packet size should be between 1-200");
       return;
     }
-    if (waitTime < 10) {
-      alert("Wait time should be greater than 10 ms");
+    if (waitTime <= 700) {
+      alert("Wait time should be greater than 700 ms");
       return;
     }
     file_size_string = get_string_size(dataURL);
@@ -786,7 +786,7 @@ function file_broadcast() {
         }
         function failed_callback() {
           stop_broadcast();
-          tx_msg = { pack_type: "action", data: "disable_file_tx_mode" };
+          tx_msg = { pack_type: "action", data: "dis_tx" };
           httpPOST("/lora_transmit", { data: JSON.stringify(tx_msg) }, function (data) {
               if (data.akn == 1) {
                 stop_broadcast();
@@ -806,7 +806,7 @@ function file_broadcast() {
         });
       } else {
         stop_broadcast();
-        tx_msg = { pack_type: "action", data: "disable_file_tx_mode" };
+        tx_msg = { pack_type: "action", data: "dis_tx" };
         httpPOST("/lora_transmit", { data: JSON.stringify(tx_msg) }, function (data) {
             if (data.akn == 1) {
               stop_broadcast();
@@ -817,7 +817,7 @@ function file_broadcast() {
     setTimeout(() => {
       tx_msg = {
         pack_type: "action",
-        data: "enable_file_tx_mode",
+        data: "en_tx",
         total_packets: total_chunk,
         size: file_size_string,
         name: file_name,
