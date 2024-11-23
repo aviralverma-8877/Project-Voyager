@@ -458,12 +458,6 @@ function init_events() {
     lastEventTimestamp = data.millis;
     var data = data.data;
     if (data != "") {
-      // Socket.send(
-      //   JSON.stringify({
-      //     "request-type": "send_akn",
-      //     "akn": 1,
-      //   })
-      // );
       file_data += data;
       file_size_string = get_string_size(file_data);
       getEleById("chunk_ratio").innerHTML = 
@@ -580,6 +574,27 @@ function init_socket() {
         var msg = data.alert_msg;
         alert(msg);
       }
+      if (response_type == "raw_data") {
+        data = JSON.parse(data.data);
+        if (lastEventTimestamp == data.millis) return;
+        lastEventTimestamp = data.millis;
+        var data = data.data;
+        if (data != "") {
+          file_data += data;
+          file_size_string = get_string_size(file_data);
+          getEleById("chunk_ratio").innerHTML =
+            "(" +
+              current_packet +
+              " / " +
+              tpak +
+              ") " +
+              file_size_string +
+              " Received";
+          current_packet += 1;
+          var percent = (current_packet / tpak) * 100;
+          getEleById("file_upload_progress_bar").style.width = percent + "%";
+        }
+      }
       if (response_type == "lora_rx") {
         data = JSON.parse(data.lora_msg);
         // Socket.send(
@@ -589,7 +604,7 @@ function init_socket() {
         //   })
         // );
         var uname = data.name;
-        var data = JSON.parse(JSON.parse(data.data).data);
+        var data = JSON.parse(data.data).data;
         var pack_type = data["pack_type"];
         if (pack_type == "msg") {
           msg = data["data"];

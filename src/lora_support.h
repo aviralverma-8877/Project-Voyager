@@ -49,5 +49,6 @@
     void onReceive(int packetSize);
     void onTxDone();
     void send_msg_to_events(String data);
+    void send_raw_data_to_ws(String data);
     void send_msg_to_ws(String data);
 #endif

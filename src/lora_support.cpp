@@ -298,6 +298,18 @@ void send_msg_to_events(String data)
     send_to_events(value, "RAW_DATA");
 }
 
+void send_raw_data_to_ws(String data)
+{
+    JsonDocument doc;
+    doc["response_type"] = "raw_data";
+    doc["millis"] = millis();
+    doc["data"] = data;
+    String val;
+    serializeJson(doc, val);
+    doc.clear();
+    send_to_ws(val);
+}
+
 void send_msg_to_ws(String data)
 {
     JsonDocument doc;

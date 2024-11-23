@@ -108,7 +108,7 @@ function send_lora(msg) {
     tx_msg = { pack_type: "msg", data: msg };
     getEleById("lora_msg").value = "";
     getEleById("lora_msg").setAttribute("readonly", true);
-    httpPOST("/lora_transmit", { data: JSON.stringify(tx_msg) }, function (data) {
+    httpPOST("/lora_transmit", { data: tx_msg }, function (data) {
         getEleById("lora_msg").removeAttribute("readonly");
         if (data.akn == 1) {
           getEleById("lora_rx_msg").innerHTML = 
@@ -420,7 +420,7 @@ function update_wifi_ssid(ssid) {
   getEleById("wifi_ssid").setAttribute("value", ssid);
 }
 
-var total_packets = 0;
+var tpak = 0;
 var current_packet = 0;
 var file_data = "";
 var file_name = "";
@@ -458,24 +458,18 @@ function init_events() {
     lastEventTimestamp = data.millis;
     var data = data.data;
     if (data != "") {
-      // Socket.send(
-      //   JSON.stringify({
-      //     "request-type": "send_akn",
-      //     "akn": 1,
-      //   })
-      // );
       file_data += data;
       file_size_string = get_string_size(file_data);
       getEleById("chunk_ratio").innerHTML = 
         "(" +
           current_packet +
           " / " +
-          total_packets +
+          tpak +
           ") " +
           file_size_string +
           " Received";
       current_packet += 1;
-      var percent = (current_packet / total_packets) * 100;
+      var percent = (current_packet / tpak) * 100;
       getEleById("file_upload_progress_bar").style.width = percent + "%";
     }
   });
@@ -580,6 +574,27 @@ function init_socket() {
         var msg = data.alert_msg;
         alert(msg);
       }
+      if (response_type == "raw_data") {
+        data = JSON.parse(data.data);
+        if (lastEventTimestamp == data.millis) return;
+        lastEventTimestamp = data.millis;
+        var data = data.data;
+        if (data != "") {
+          file_data += data;
+          file_size_string = get_string_size(file_data);
+          getEleById("chunk_ratio").innerHTML =
+            "(" +
+              current_packet +
+              " / " +
+              tpak +
+              ") " +
+              file_size_string +
+              " Received";
+          current_packet += 1;
+          var percent = (current_packet / tpak) * 100;
+          getEleById("file_upload_progress_bar").style.width = percent + "%";
+        }
+      }
       if (response_type == "lora_rx") {
         data = JSON.parse(data.lora_msg);
         // Socket.send(
@@ -589,7 +604,7 @@ function init_socket() {
         //   })
         // );
         var uname = data.name;
-        var data = JSON.parse(JSON.parse(data.data).data);
+        var data = JSON.parse(data.data).data;
         var pack_type = data["pack_type"];
         if (pack_type == "msg") {
           msg = data["data"];
@@ -599,7 +614,7 @@ function init_socket() {
         if (pack_type == "action") {
           action = data["data"];
           if (action == "en_tx") {
-            total_packets = data["total_packets"];
+            tpak = data["tpak"];
             file_size = data["size"];
             file_name = data["name"];
             time = data["time"];
@@ -607,7 +622,7 @@ function init_socket() {
             getEleById("file_upload_progress_bar").classList.add("bg-success");
             getEleById("rec_info").innerHTML =
               "Total " +
-                total_packets +
+                tpak +
                 " file chunks will be recieved." +
                 "<br />Total Size: <b>" +
                 file_size +
@@ -743,7 +758,7 @@ function file_broadcast() {
       alert("packet size should be between 1-200");
       return;
     }
-    if (waitTime <= 700) {
+    if (waitTime < 700) {
       alert("Wait time should be greater than 700 ms");
       return;
     }
@@ -787,7 +802,7 @@ function file_broadcast() {
         function failed_callback() {
           stop_broadcast();
           tx_msg = { pack_type: "action", data: "dis_tx" };
-          httpPOST("/lora_transmit", { data: JSON.stringify(tx_msg) }, function (data) {
+          httpPOST("/lora_transmit", { data: tx_msg }, function (data) {
               if (data.akn == 1) {
                 stop_broadcast();
               }
@@ -807,7 +822,7 @@ function file_broadcast() {
       } else {
         stop_broadcast();
         tx_msg = { pack_type: "action", data: "dis_tx" };
-        httpPOST("/lora_transmit", { data: JSON.stringify(tx_msg) }, function (data) {
+        httpPOST("/lora_transmit", { data: tx_msg }, function (data) {
             if (data.akn == 1) {
               stop_broadcast();
             }
@@ -818,12 +833,12 @@ function file_broadcast() {
       tx_msg = {
         pack_type: "action",
         data: "en_tx",
-        total_packets: total_chunk,
+        tpak: total_chunk,
         size: file_size_string,
         name: file_name,
         time: h + ":" + m + ":" + s,
       };
-      httpPOST("/lora_transmit", { data: JSON.stringify(tx_msg) }, function (data) {
+      httpPOST("/lora_transmit", { data: tx_msg }, function (data) {
           if (data.akn == 1) {
             start_file_transfer_mode();
             setTimeout(() => {
