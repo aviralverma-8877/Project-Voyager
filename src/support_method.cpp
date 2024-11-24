@@ -77,6 +77,28 @@ void handle_operations(JsonDocument doc)
         // Send BLE
         return;
     }
+    if(strcmp(request_type, "send_raw")==0)
+    {
+        String data = doc["value"];
+        QueueParam *packet = new QueueParam();
+        packet->message = data;
+        packet->type = RAW_DATA;
+        xQueueSend(send_packets, (void*)&packet, (TickType_t)2);
+    }
+    if(strcmp(request_type, "lora_transmit")==0)
+    {
+        String data = doc["value"];
+        JsonDocument doc;
+        doc["name"] = username;
+        doc["data"] = data;
+        String lora_payload;
+        serializeJson(doc, lora_payload);
+        doc.clear();
+        QueueParam* taskParams = new QueueParam();
+        taskParams->message=lora_payload;
+        taskParams->type = LORA_MSG;
+        xQueueSend(send_packets, (void*)&taskParams, (TickType_t)2);
+    }
 }
 
 // Method to save LoRa to Serial configration.

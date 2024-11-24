@@ -6,6 +6,7 @@
     #include <support_method.h>
     #include "CRC8.h"
     #include "CRC.h"
+    #include "ble.h"
     #define SCK             LSCK
     #define MISO            LMISO
     #define MOSI            LMOSI

@@ -248,11 +248,11 @@ void manage_recv_queue(void* param)
             type = (int)params->type;
             if(type == RAW_DATA)
             {
-                // Send BLE
+                send_to_ble((String)params->message);
             }
             if(type == LORA_MSG)
             {
-                // Send BLE
+                send_to_ble((String)params->message);
             }
         }
         else
