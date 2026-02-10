@@ -1,6 +1,6 @@
 #include <web_sockets.h>
 
-bool ws_connected = false;
+volatile uint32_t ws_client_count = 0;
 AsyncWebSocket webSocket("/ws");
 AsyncEventSource rawEvents("/rawEvents");
 
@@ -23,15 +23,19 @@ void clean_up_client(void* params)
 
 void handle_ws_request(void *arg, uint8_t *data, size_t len)
 {
-  String json = "";
+  String json;
+  json.reserve(len + 1);
   for(int i=0; i<len; i++)
   {
-    char r = (char)data[i];
-    json += r;
+    json += (char)data[i];
   }
   serial_print(json);
   JsonDocument doc;
-  deserializeJson(doc, json);
+  DeserializationError error = deserializeJson(doc, json);
+  if(error) {
+    serial_print("ERROR: WebSocket JSON parsing failed: "+(String)error.c_str());
+    return;
+  }
   doc.shrinkToFit();
   handle_operations(doc);
   doc.clear();
@@ -44,7 +48,7 @@ void send_to_events(String data, String topic)
 
 void send_to_ws(String return_value)
 {
-  if(ws_connected)
+  if(ws_client_count > 0)
   {
     webSocket.textAll(return_value);
   }
@@ -60,20 +64,23 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
              void *arg, uint8_t *data, size_t len) {
     switch (type) {
       case WS_EVT_CONNECT:
-        ws_connected = true;
-        serial_print("WebSocket client Connected.");
+        ws_client_count++;
+        serial_print("WebSocket client #"+(String)client->id()+" connected. Total clients: "+(String)ws_client_count);
         break;
       case WS_EVT_DISCONNECT:
-        ws_connected = false;
-        serial_print("WebSocket client Disconnected.");
+        if(ws_client_count > 0) {
+          ws_client_count--;
+        }
+        serial_print("WebSocket client #"+(String)client->id()+" disconnected. Total clients: "+(String)ws_client_count);
         break;
       case WS_EVT_DATA:
-        serial_print("WebSocket data Recieved.");
+        serial_print("WebSocket data received from client #"+(String)client->id());
         handle_ws_request(arg, data, len);
         break;
       case WS_EVT_PONG:
         break;
       case WS_EVT_ERROR:
+        serial_print("WebSocket error from client #"+(String)client->id());
         break;
   }
 }

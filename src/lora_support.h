@@ -15,6 +15,11 @@
     #define IRQ             DIO0
     #define	IMPLEMENTATION	FIFO
 
+    // LoRa transmission constants
+    #define LORA_ACK_TIMEOUT_MS    5000
+    #define LORA_MAX_RETRIES       3
+    #define LORA_TX_TIMEOUT_MS     10000
+
                                      //        Types of lora msg.
     #define LORA_MSG 0               //        The payload is normal text msg.
     #define RAW_DATA 1               //        The payload is a file chunk or raw data.
@@ -34,7 +39,9 @@
     };
     extern CRC8 crc;
     extern bool lora_available_for_write;
-    extern uint8_t AknRecieved;
+    extern SemaphoreHandle_t lora_write_mutex;
+    extern SemaphoreHandle_t ack_semaphore;
+    extern volatile uint8_t AknRecieved;
 
     void setup_mqtt();
     void save_lora_config(String value);

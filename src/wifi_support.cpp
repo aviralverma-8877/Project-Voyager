@@ -12,7 +12,7 @@ void config_wifi(void *param)
 
 void connect_wifi()
 {
-    if (SPIFFS.exists("/config/wifi_config.json"))
+    if (LittleFS.exists("/config/wifi_config.json"))
     {
         String wifi_config;
         wifi_config = get_wifi_setting("/config/wifi_config.json");
@@ -85,18 +85,20 @@ void onWifiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info)
         connect_wifi();
 }
 
-String get_wifi_setting(String wifi_config)
+String get_wifi_setting(String wifi_config_path)
 {
-    if (SPIFFS.exists(wifi_config))
+    if (LittleFS.exists(wifi_config_path))
     {
-        File file = SPIFFS.open(wifi_config);
+        File file = LittleFS.open(wifi_config_path);
         if(!file){
             setup_ap("Voyager");
             return "";
         }
+        size_t fileSize = file.size();
         String wifi_config;
+        wifi_config.reserve(fileSize + 1);
         while(file.available()){
-            wifi_config += file.readString();
+            wifi_config += (char)file.read();
         }
         file.close();
         wifi_backup.backup_config = wifi_config;
@@ -117,7 +119,7 @@ void save_wifi_settings(String config)
     serial_print(config);
     wifi_backup.backup_config = config;
     wifi_backup.backup_done = true;
-    File file = SPIFFS.open("/config/wifi_config.json", FILE_WRITE);
+    File file = LittleFS.open("/config/wifi_config.json", FILE_WRITE);
     if(!file){
         Serial.println("No wifi config file present");
         return;
