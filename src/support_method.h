@@ -11,7 +11,7 @@
     #include <lora_support.h>
     #include <wifi_support.h>
     #include <lora_support.h>
-    #include "SPIFFS.h"
+    #include "LittleFS.h"
     #define INTERRUPT_ATTR IRAM_ATTR
     extern bool lora_serial;
     extern String username;

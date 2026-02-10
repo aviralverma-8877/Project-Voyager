@@ -7,7 +7,7 @@
 #include <web_server.h>
 #include <web_sockets.h>
 #include "FS.h"
-#include "SPIFFS.h"
+#include "LittleFS.h"
 // put function declarations here:
 
 void setup() {
@@ -18,9 +18,9 @@ void setup() {
   serial_packet_send = xQueueCreate(20, sizeof(DebugQueueParam*));
   serial_packet_rec = xQueueCreate(20, sizeof(DebugQueueParam*));
   xTaskCreatePinnedToCore(debugger_print, "debugger_print", 6000, NULL, 1, &debug_handler, 1);
-  if (!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED))
+  if (!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED))
   {
-    serial_print("SPIFFS Mount Failed");
+    serial_print("LittleFS Mount Failed");
     return;
   }
   get_lora_serial();

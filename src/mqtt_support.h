@@ -9,7 +9,7 @@
     #include <AsyncMqttClient.h>
     #include "web_sockets.h"
     #include "lora_support.h"
-    #include "SPIFFS.h"
+    #include "LittleFS.h"
     #include "support_method.h"
 
     extern bool mqtt_enabled;

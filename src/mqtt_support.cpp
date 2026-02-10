@@ -187,9 +187,9 @@ void ping_mqtt(String msg)
 
 void save_mqtt_config(String value)
 {
-    if (SPIFFS.exists("/config/mqtt_config.json"))
+    if (LittleFS.exists("/config/mqtt_config.json"))
     {
-        File file = SPIFFS.open("/config/mqtt_config.json", FILE_WRITE);
+        File file = LittleFS.open("/config/mqtt_config.json", FILE_WRITE);
         if(!file){
             return;
         }
@@ -201,15 +201,17 @@ void save_mqtt_config(String value)
 
 String get_mqtt_config()
 {
-    if (SPIFFS.exists("/config/mqtt_config.json"))
+    if (LittleFS.exists("/config/mqtt_config.json"))
     {
-        File file = SPIFFS.open("/config/mqtt_config.json");
+        File file = LittleFS.open("/config/mqtt_config.json");
         if(!file){
             return "";
         }
+        size_t fileSize = file.size();
         String mqtt_config;
+        mqtt_config.reserve(fileSize + 1);
         while(file.available()){
-            mqtt_config += file.readString();
+            mqtt_config += (char)file.read();
         }
         file.close();
         serial_print("Reading mqtt settings");

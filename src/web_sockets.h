@@ -13,7 +13,7 @@
     #include <ArduinoJson.h>
     extern AsyncWebSocket webSocket;
     extern AsyncEventSource rawEvents;
-    extern bool ws_connected;
+    extern volatile uint32_t ws_client_count;
     void initWebSocket();
     void onRawEvents(AsyncEventSourceClient *client);
     void send_to_events(String data, String topic);

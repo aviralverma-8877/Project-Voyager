@@ -137,7 +137,7 @@ void save_lora_serial_config(void* param)
     String config;
     serializeJson(doc, config);
     doc.clear();
-    File file = SPIFFS.open("/config/lora_serial.json", FILE_WRITE);
+    File file = LittleFS.open("/config/lora_serial.json", FILE_WRITE);
     if(!file){
         Serial.println("No LoRa serial config file present.");
         return;
@@ -206,16 +206,18 @@ void serial_to_lora(void* param)
 // rather update the value in lora_serial flag.
 void get_lora_serial()
 {
-    if (SPIFFS.exists("/config/lora_serial.json"))
+    if (LittleFS.exists("/config/lora_serial.json"))
     {
-        File file = SPIFFS.open("/config/lora_serial.json");
+        File file = LittleFS.open("/config/lora_serial.json");
         if(!file){
             lora_serial = false;
             return;
         }
+        size_t fileSize = file.size();
         String lora_serial_config;
+        lora_serial_config.reserve(fileSize + 1);
         while(file.available()){
-            lora_serial_config += file.readString();
+            lora_serial_config += (char)file.read();
         }
         file.close();
         JsonDocument doc;
@@ -234,16 +236,18 @@ void get_lora_serial()
 void get_username()
 {
     serial_print("get_username");
-    if (SPIFFS.exists("/config/user_data.json"))
+    if (LittleFS.exists("/config/user_data.json"))
     {
-        File file = SPIFFS.open("/config/user_data.json");
+        File file = LittleFS.open("/config/user_data.json");
         if(!file){
             username = WiFi.macAddress();
             return;
         }
+        size_t fileSize = file.size();
         String username_config;
+        username_config.reserve(fileSize + 1);
         while(file.available()){
-            username_config += file.readString();
+            username_config += (char)file.read();
         }
         file.close();
         serial_print("Reading username");
@@ -285,7 +289,7 @@ void save_username(String uname)
     String username_config;
     serializeJson(doc, username_config);
     doc.clear();
-    File file = SPIFFS.open("/config/user_data.json", FILE_WRITE);
+    File file = LittleFS.open("/config/user_data.json", FILE_WRITE);
     if(!file){
         Serial.println("No username file present.");
         return;
@@ -309,8 +313,8 @@ void reset_device(void *param)
     {
         WiFi.disconnect();
     }
-    serial_print("Formatting SPIFFS");
-    bool formatted = SPIFFS.format();
+    serial_print("Formatting LittleFS");
+    bool formatted = LittleFS.format();
     if (formatted)
     {
         serial_print("Success formatting");
@@ -405,7 +409,7 @@ void debugger_print(void *param)
             {
                 Serial.println("\n"+msg);
             }
-            if(ws_connected)
+            if(ws_client_count > 0)
             {
                 JsonDocument doc;
                 doc["millis"] = millis();
@@ -428,15 +432,17 @@ void debugger_print(void *param)
 String get_device_mode()
 {
     serial_print("get_device_config");
-    if (SPIFFS.exists("/config/device_config.json"))
+    if (LittleFS.exists("/config/device_config.json"))
     {
-        File file = SPIFFS.open("/config/device_config.json");
+        File file = LittleFS.open("/config/device_config.json");
         if(!file){
             return "WiFi";
         }
+        size_t fileSize = file.size();
         String device_config;
+        device_config.reserve(fileSize + 1);
         while(file.available()){
-            device_config += file.readString();
+            device_config += (char)file.read();
         }
         file.close();
         serial_print("Reading device_mode");

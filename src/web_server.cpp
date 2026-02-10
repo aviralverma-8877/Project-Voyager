@@ -10,7 +10,7 @@ QueueHandle_t debug_msg;
 
 void define_api(void *param)
 {
-  server.serveStatic("/", SPIFFS, "/");
+  server.serveStatic("/", LittleFS, "/");
   server.on("/send_akn", HTTP_POST, [](AsyncWebServerRequest *request)
   {
     serial_print("send_akn");
@@ -75,9 +75,9 @@ void define_api(void *param)
   firmware_web_updater();                //Feature has to be disabled for including BLE features
   server.onNotFound([](AsyncWebServerRequest *request)
   {
-    if (SPIFFS.exists("/index.html"))
+    if (LittleFS.exists("/index.html"))
     {
-      request->send(SPIFFS, "/index.html");
+      request->send(LittleFS, "/index.html");
     }
     else{
       serial_print("Redirected to /update");
@@ -119,10 +119,10 @@ void firmware_web_updater()
       </div>\
       <input class='btn btn-primary mb-2' type='submit' value='Update'>\
     </form><hr />\
-    <form method='POST' action='/update_spiffs' enctype='multipart/form-data'>\
+    <form method='POST' action='/update_littlefs' enctype='multipart/form-data'>\
       <div class='form-group mx-sm-3 mb-2'>\
-        <label class='sr-only' for='spiff_file'><h5>spiffs.bin</h5></label>\
-        <input id='spiff_file' type='file' class='form-control row' placeholder='spiffs.bin' name='update'>\
+        <label class='sr-only' for='littlefs_file'><h5>littlefs.bin</h5></label>\
+        <input id='littlefs_file' type='file' class='form-control row' placeholder='littlefs.bin' name='update'>\
       </div>\
       <input class='btn btn-primary mb-2' type='submit' value='Update'>\
     </form></fieldset>"); });
@@ -167,7 +167,7 @@ void firmware_web_updater()
       }
     } });
 
-  server.on("/update_spiffs", HTTP_POST, [](AsyncWebServerRequest *request)
+  server.on("/update_littlefs", HTTP_POST, [](AsyncWebServerRequest *request)
             {
     bool shouldReboot = !Update.hasError();
     if(shouldReboot)

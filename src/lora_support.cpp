@@ -1,12 +1,24 @@
 #include<lora_support.h>
 
 bool lora_available_for_write = true;
-uint8_t AknRecieved = 2;
+volatile uint8_t AknRecieved = 2;
 CRC8 crc;
+SemaphoreHandle_t lora_write_mutex = NULL;
+SemaphoreHandle_t ack_semaphore = NULL;
 
 void config_lora()
 {
     serial_print("Configuring LORA");
+
+    // Create synchronization primitives
+    lora_write_mutex = xSemaphoreCreateMutex();
+    ack_semaphore = xSemaphoreCreateBinary();
+
+    if(lora_write_mutex == NULL || ack_semaphore == NULL) {
+        serial_print("Failed to create LORA synchronization primitives");
+        while (true);
+    }
+
     SPI.begin(SCK, MISO, MOSI, SS);
     LoRa.setPins(SS, RST, IRQ);
     if (!LoRa.begin(433E6)) {
@@ -23,9 +35,9 @@ void config_lora()
 
 void save_lora_config(String value)
 {
-    if (SPIFFS.exists("/config/lora_config.json"))
+    if (LittleFS.exists("/config/lora_config.json"))
     {
-        File file = SPIFFS.open("/config/lora_config.json", FILE_WRITE);
+        File file = LittleFS.open("/config/lora_config.json", FILE_WRITE);
         if(!file){
             return;
         }
@@ -59,15 +71,17 @@ void save_lora_config(String value)
 
 void set_lora_parameters()
 {
-    if (SPIFFS.exists("/config/lora_config.json"))
+    if (LittleFS.exists("/config/lora_config.json"))
     {
-        File file = SPIFFS.open("/config/lora_config.json");
+        File file = LittleFS.open("/config/lora_config.json");
         if(!file){
             return;
         }
+        size_t fileSize = file.size();
         String lora_config;
+        lora_config.reserve(fileSize + 1);
         while(file.available()){
-            lora_config += file.readString();
+            lora_config += (char)file.read();
         }
         file.close();
         serial_print(lora_config);
@@ -110,107 +124,133 @@ uint8_t get_checksum(String data)
 void LoRa_send(String data, uint8_t type)
 {
     serial_print(data);
-    while(!lora_available_for_write){}
+
+    // Use mutex with timeout to prevent deadlock
+    if(xSemaphoreTake(lora_write_mutex, pdMS_TO_TICKS(LORA_TX_TIMEOUT_MS)) != pdTRUE) {
+        serial_print("ERROR: LoRa write mutex timeout");
+        return;
+    }
+
     LoRa_txMode();
-    lora_available_for_write=false;
     LoRa.beginPacket();
     LoRa.write(data.length());
     LoRa.write(type);
     LoRa.write(get_checksum(data));
+
+    // Write data efficiently
+    const char* dataPtr = data.c_str();
     for(int i=0; i<data.length(); i++)
     {
-        LoRa.write((char)data[i]);
+        LoRa.write(dataPtr[i]);
     }
+
     LoRa.endPacket(true);
     LoRa_rxMode();
     led_nortifier();
-    lora_available_for_write = true;
+
+    xSemaphoreGive(lora_write_mutex);
 }
 
 void LoRa_sendRaw(void* param) {
     serial_print("LoRa_sendRaw");
-    int type, time, retry;
-    while(uxQueueSpacesAvailable(send_packets) > 0 )
+    int type, retry;
+
+    while(true)
     {
         QueueParam* params = NULL;
-        if(xQueueReceive(send_packets, &(params) , ( TickType_t )0))
+
+        // Wait for items in queue with timeout to prevent reboot
+        if(xQueueReceive(send_packets, &(params), pdMS_TO_TICKS(100)) == pdTRUE)
         {
             type = (int)params->type;
-            AknRecieved = 2;
-            LoRa_send((String)params->message, type);
-            time = millis();
             retry = 0;
-            while(AknRecieved != 1)
+            bool transmission_success = false;
+
+            // Clear any pending ACK semaphore
+            xSemaphoreTake(ack_semaphore, 0);
+
+            // Retry loop with proper timeout handling
+            while(retry <= LORA_MAX_RETRIES)
             {
-                if(AknRecieved == 0)
+                AknRecieved = 2; // Reset ACK state
+                LoRa_send((String)params->message, type);
+
+                // Wait for ACK using semaphore with timeout (non-blocking)
+                if(xSemaphoreTake(ack_semaphore, pdMS_TO_TICKS(LORA_ACK_TIMEOUT_MS)) == pdTRUE)
                 {
-                    retry += 1;
-                    serial_print("Retry: "+(String)retry);
-                    AknRecieved = 2;
-                    LoRa_send((String)params->message, type);
-                }
-                if(millis()-time > 5000)
-                {
-                    retry += 1;
-                    if(retry > 3)
+                    // ACK received, check result
+                    if(AknRecieved == 1)
                     {
-                        show_alert("Transmission Failed");
-                        stop_transmission();
+                        transmission_success = true;
                         break;
                     }
-                    else
+                    else if(AknRecieved == 0)
                     {
-                        serial_print("Retry: "+(String)retry);
-                        time = millis();
-                        AknRecieved = 2;
-                        LoRa_send((String)params->message, type);
+                        // NACK received, retry
+                        retry++;
+                        serial_print("NACK received, Retry: "+(String)retry);
                     }
                 }
+                else
+                {
+                    // Timeout occurred
+                    retry++;
+                    serial_print("ACK timeout, Retry: "+(String)retry);
+                }
+
+                // Yield to other tasks between retries
+                vTaskDelay(10/portTICK_PERIOD_MS);
             }
-            if( params->request != NULL)
+
+            // Handle transmission result
+            if(!transmission_success)
+            {
+                show_alert("Transmission Failed after "+(String)LORA_MAX_RETRIES+" retries");
+                stop_transmission();
+            }
+
+            // Send HTTP response if requested
+            if(params->request != NULL)
             {
                 JsonDocument doc;
-                doc["akn"] = AknRecieved;
+                doc["akn"] = transmission_success ? 1 : 0;
                 doc["username"] = username;
                 doc.shrinkToFit();
                 String return_res;
                 serializeJson(doc, return_res);
                 doc.clear();
-                int return_code = 200;
-                if(AknRecieved != 1)
-                    return_code = 422;
+                int return_code = transmission_success ? 200 : 422;
                 params->request->send(return_code, "text/json", return_res);
             }
+
+            delete params;
         }
-        else
-        {
-            LoRa.flush();
-            xQueueReset(send_packets);
-        }
-        delete params;
-        vTaskDelay(50/portTICK_PERIOD_MS);
+
+        // Yield to prevent task starvation
+        vTaskDelay(10/portTICK_PERIOD_MS);
     }
-    show_alert("Queue is full, Rebooting...");
-    stop_transmission();
-    vTaskDelay(100/portTICK_PERIOD_MS);
-    xTaskCreatePinnedToCore(restart,"restart",6000,NULL,1,NULL,1);
-    vTaskDelete(NULL);
 }
 
 void LoRa_sendAkn(uint8_t result)
 {
     serial_print("SENT AKN: "+(String)result);
-    while(!lora_available_for_write){}
+
+    // Use mutex with timeout
+    if(xSemaphoreTake(lora_write_mutex, pdMS_TO_TICKS(LORA_TX_TIMEOUT_MS)) != pdTRUE) {
+        serial_print("ERROR: LoRa ACK mutex timeout");
+        return;
+    }
+
     LoRa_txMode();
-    lora_available_for_write=false;
-    LoRa.beginPacket();                   // start packet
+    LoRa.beginPacket();
     LoRa.write(1);                        // Dummy data length
     LoRa.write(REC_AKNG);
     LoRa.write(0);                        // Dummy Checksum
     LoRa.write(result);
-    LoRa.endPacket(true);                 // finish packet and send it
+    LoRa.endPacket(true);
     LoRa_rxMode();
-    lora_available_for_write = true;
+
+    xSemaphoreGive(lora_write_mutex);
 }
 
 void onReceive(int packetSize)
@@ -218,26 +258,38 @@ void onReceive(int packetSize)
     uint8_t size = (uint8_t)LoRa.read();
     uint8_t type = (uint8_t)LoRa.read();
     uint8_t checksum = (uint8_t)LoRa.read();
+
     if(type == LORA_SERIAL)
     {
         DebugQueueParam *p = new DebugQueueParam();
+        p->message.reserve(size + 1);
         while(LoRa.available())
             p->message +=(char)LoRa.read();
         xQueueSend(serial_packet_rec, (void*)&p, (TickType_t)2);
         return;
     }
+
     if(type == REC_AKNG)
     {
         uint8_t result = (uint8_t)LoRa.read();
         serial_print("REC AKN: "+(String)result);
-        AknRecieved=result;
+        AknRecieved = result;
+
+        // Signal ACK reception via semaphore (safe from ISR)
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        xSemaphoreGiveFromISR(ack_semaphore, &xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
         return;
     }
+
+    // Pre-allocate message buffer
     String message;
+    message.reserve(size + 1);
     for (int i=0; i<size; i++)
     {
         message += (char)LoRa.read();
     }
+
     serial_print(message);
     if(checksum == get_checksum(message) && message.length() == size)
     {
@@ -245,10 +297,20 @@ void onReceive(int packetSize)
         param->type = type;
         param->message = message;
         param->request = NULL;
-        xQueueSend(recv_packets, (void*)&param, (TickType_t)50);
-        LoRa_sendAkn(1);
+
+        // Try to send to queue, but don't block in ISR
+        BaseType_t result = xQueueSendFromISR(recv_packets, (void*)&param, NULL);
+        if(result != pdTRUE) {
+            // Queue full, delete param to prevent memory leak
+            delete param;
+            serial_print("WARNING: recv_packets queue full, dropping packet");
+            LoRa_sendAkn(0);
+        } else {
+            LoRa_sendAkn(1);
+        }
     }
     else{
+        serial_print("ERROR: Checksum mismatch or size mismatch");
         LoRa_sendAkn(0);
     }
 }
@@ -256,13 +318,19 @@ void onReceive(int packetSize)
 void manage_recv_queue(void* param)
 {
     int type;
-    while( uxQueueSpacesAvailable( recv_packets ) > 0 )
+    uint32_t queue_full_count = 0;
+    const uint32_t QUEUE_FULL_THRESHOLD = 10;
+
+    while(true)
     {
         QueueParam* params = NULL;
-        if(xQueueReceive(recv_packets, &(params) , (TickType_t)0))
+
+        // Wait for items with timeout
+        if(xQueueReceive(recv_packets, &(params), pdMS_TO_TICKS(100)) == pdTRUE)
         {
             led_nortifier();
             type = (int)params->type;
+
             if(type == RAW_DATA)
             {
                 send_msg_to_events((String)params->message);
@@ -272,20 +340,39 @@ void manage_recv_queue(void* param)
                 send_msg_to_ws((String)params->message);
             }
             send_msg_to_mqtt((String)params->message, type);
+
+            delete params;
+            queue_full_count = 0; // Reset counter on successful processing
         }
         else
         {
-            LoRa.flush();
-            xQueueReset(recv_packets);
+            // Check if queue is critically full
+            UBaseType_t spaces = uxQueueSpacesAvailable(recv_packets);
+            if(spaces == 0)
+            {
+                queue_full_count++;
+                serial_print("WARNING: recv_packets queue full (count: "+(String)queue_full_count+")");
+
+                if(queue_full_count >= QUEUE_FULL_THRESHOLD)
+                {
+                    serial_print("ERROR: Queue persistently full, applying backpressure");
+                    show_alert("System overload, dropping old packets");
+
+                    // Drop oldest packets to make room (backpressure)
+                    QueueParam* dropped = NULL;
+                    while(uxQueueSpacesAvailable(recv_packets) < 5) {
+                        if(xQueueReceive(recv_packets, &(dropped), 0) == pdTRUE) {
+                            delete dropped;
+                        }
+                    }
+                    queue_full_count = 0;
+                }
+            }
         }
-        delete params;
-        vTaskDelay(50/portTICK_PERIOD_MS);
+
+        // Yield to prevent task starvation
+        vTaskDelay(10/portTICK_PERIOD_MS);
     }
-    show_alert("Queue is full, Rebooting...");
-    stop_transmission();
-    vTaskDelay(100/portTICK_PERIOD_MS);
-    xTaskCreatePinnedToCore(restart,"restart",6000,NULL,1,NULL,1);
-    vTaskDelete(NULL);
 }
 
 void send_msg_to_mqtt(String data, int type)
