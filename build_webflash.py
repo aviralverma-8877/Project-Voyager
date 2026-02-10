@@ -242,10 +242,9 @@ def main():
             print_error(f"\nBuild failed for {version}!")
             sys.exit(1)
 
-    # Build filesystem (only once, same for all versions)
-    if not build_filesystem():
-        print_error("\nFilesystem build failed!")
-        sys.exit(1)
+        if not build_filesystem(env_name):
+            print_error("\nFilesystem build failed!")
+            sys.exit(1)
 
     # Copy files to webflash directory
     if not copy_files_to_webflash():
