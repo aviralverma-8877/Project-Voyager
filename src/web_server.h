@@ -17,8 +17,10 @@
     #include "freertos/task.h"
     #include "freertos/queue.h"
 
-    #define U_FLASH   0
-    #define U_LITTLEFS  100
+    // Use U_SPIFFS for filesystem updates (works for both SPIFFS and LittleFS)
+    #ifndef U_SPIFFS
+        #define U_SPIFFS 100
+    #endif
     #define UPDATE_SIZE_UNKNOWN 0xFFFFFFFF
     extern QueueHandle_t serial_packet_send;
     extern QueueHandle_t serial_packet_rec;

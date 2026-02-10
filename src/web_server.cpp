@@ -186,7 +186,7 @@ void firmware_web_updater()
     if(!index){
       if(DEBUG)
         Serial.printf("Update Start: %s\n", filename.c_str());
-      if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_LittleFS)){
+      if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_SPIFFS)){
         Update.printError(Serial);
       }
     }
