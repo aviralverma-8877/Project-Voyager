@@ -1,52 +1,609 @@
 <!doctype html>
-<html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Voyager Web Flasher</title>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-    <body>
-        <h1>Project Voyager Web Flasher</h1>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', 'Consolas', monospace;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1a2e 50%, #16213e 100%);
+            color: #00ff88;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Animated background grid */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(0, 255, 136, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 136, 0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: gridMove 20s linear infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes gridMove {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(50px); }
+        }
+
+        /* Glowing particles */
+        .particle {
+            position: fixed;
+            width: 3px;
+            height: 3px;
+            background: #00ff88;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #00ff88;
+            animation: float 15s infinite;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) translateX(0); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(-100vh) translateX(50px); opacity: 0; }
+        }
+
+        .container {
+            background: rgba(10, 14, 39, 0.9);
+            padding: 60px 50px;
+            border-radius: 20px;
+            border: 2px solid #00ff88;
+            box-shadow: 0 0 40px rgba(0, 255, 136, 0.3), inset 0 0 40px rgba(0, 255, 136, 0.1);
+            max-width: 700px;
+            width: 90%;
+            position: relative;
+            z-index: 10;
+            backdrop-filter: blur(10px);
+        }
+
+        .corner-decoration {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #00ff88;
+        }
+
+        .corner-tl { top: 10px; left: 10px; border-right: none; border-bottom: none; }
+        .corner-tr { top: 10px; right: 10px; border-left: none; border-bottom: none; }
+        .corner-bl { bottom: 10px; left: 10px; border-right: none; border-top: none; }
+        .corner-br { bottom: 10px; right: 10px; border-left: none; border-top: none; }
+
+        h1 {
+            font-size: 2.5em;
+            text-align: center;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            text-shadow: 0 0 20px #00ff88, 0 0 40px #00ff88;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 10px #00ff88, 0 0 20px #00ff88; }
+            to { text-shadow: 0 0 20px #00ff88, 0 0 40px #00ff88, 0 0 60px #00ff88; }
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #00ccff;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+            letter-spacing: 2px;
+        }
+
+        hr {
+            border: none;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #00ff88, transparent);
+            margin: 30px 0;
+            box-shadow: 0 0 10px #00ff88;
+        }
+
+        .version-selector {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 30px 0;
+            gap: 20px;
+        }
+
+        .version-selector label {
+            font-size: 1.1em;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        select {
+            background: rgba(0, 255, 136, 0.1);
+            color: #00ff88;
+            border: 2px solid #00ff88;
+            padding: 12px 25px;
+            font-size: 1em;
+            font-family: 'Courier New', 'Consolas', monospace;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+        }
+
+        select:hover {
+            background: rgba(0, 255, 136, 0.2);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+            transform: scale(1.05);
+        }
+
+        select option {
+            background: #0a0e27;
+            color: #00ff88;
+        }
+
+        .flash-button-container {
+            text-align: center;
+            margin: 40px 0;
+        }
+
+        esp-web-install-button {
+            --esp-tools-button-color: #00ff88;
+            --esp-tools-button-text-color: #0a0e27;
+        }
+
+        esp-web-install-button::part(button) {
+            background: linear-gradient(135deg, #00ff88, #00ccff);
+            color: #0a0e27;
+            border: none;
+            padding: 18px 40px;
+            font-size: 1.3em;
+            font-weight: bold;
+            font-family: 'Courier New', 'Consolas', monospace;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.6);
+            transition: all 0.3s;
+        }
+
+        esp-web-install-button::part(button):hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 50px rgba(0, 255, 136, 0.9);
+        }
+
+        .progress-container {
+            margin: 40px 0;
+            display: none;
+        }
+
+        .progress-label {
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .progress-bar-wrapper {
+            position: relative;
+            height: 40px;
+            background: rgba(0, 255, 136, 0.1);
+            border: 2px solid #00ff88;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: inset 0 0 20px rgba(0, 255, 136, 0.2);
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #00ff88, #00ccff, #00ff88);
+            background-size: 200% 100%;
+            animation: progressShine 2s linear infinite;
+            transition: width 0.3s ease;
+            position: relative;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.8);
+        }
+
+        .progress-bar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+            animation: progressScan 1.5s linear infinite;
+        }
+
+        @keyframes progressShine {
+            0% { background-position: 0% 0%; }
+            100% { background-position: 200% 0%; }
+        }
+
+        @keyframes progressScan {
+            0% { left: -100%; }
+            100% { left: 200%; }
+        }
+
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #0a0e27;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+            z-index: 2;
+            mix-blend-mode: difference;
+        }
+
+        .status-message {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 1.1em;
+            min-height: 30px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .status-success {
+            color: #00ff88;
+            text-shadow: 0 0 10px #00ff88;
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        .status-error {
+            color: #ff0055;
+            text-shadow: 0 0 10px #ff0055;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .note {
+            text-align: center;
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(255, 200, 0, 0.1);
+            border: 1px solid #ffcc00;
+            border-radius: 10px;
+            color: #ffcc00;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+
+        .note::before {
+            content: '⚠ ';
+            font-size: 1.2em;
+        }
+
+        .not-supported {
+            text-align: center;
+            padding: 40px;
+            background: rgba(255, 0, 85, 0.1);
+            border: 2px solid #ff0055;
+            border-radius: 10px;
+            color: #ff0055;
+            font-size: 1.2em;
+            line-height: 1.8;
+        }
+
+        .not-supported::before {
+            content: '✖ ';
+            font-size: 1.5em;
+            display: block;
+            margin-bottom: 15px;
+        }
+
+        /* Sound control */
+        .sound-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 255, 136, 0.2);
+            border: 2px solid #00ff88;
+            color: #00ff88;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: all 0.3s;
+        }
+
+        .sound-toggle:hover {
+            background: rgba(0, 255, 136, 0.3);
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
+        }
+
+        .sound-toggle.muted {
+            color: #666;
+            border-color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 40px 30px;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .version-selector {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Animated particles -->
+    <script>
+        for (let i = 0; i < 20; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.animationDelay = Math.random() * 15 + 's';
+            particle.style.animationDuration = (15 + Math.random() * 10) + 's';
+            document.body.appendChild(particle);
+        }
+    </script>
+
+    <div class="container">
+        <div class="corner-decoration corner-tl"></div>
+        <div class="corner-decoration corner-tr"></div>
+        <div class="corner-decoration corner-bl"></div>
+        <div class="corner-decoration corner-br"></div>
+
+        <button class="sound-toggle" id="soundToggle" title="Toggle Sound">🔊</button>
+
+        <h1>Project Voyager</h1>
+        <div class="subtitle">Web Flasher Interface v2.0</div>
+
         <hr>
-        Hardware Version:
-        <select onchange="select_version(this.value)">
-            <option value="1" selected>Version 1</option>
-            <option value="2">Version 2</option>
-        </select>
+
         <div id="main" style="display: none">
-            <br>
-            <script type="module" src="https://unpkg.com/esp-web-tools@7.3.1/dist/web/install-button.js?module"></script>
-            <esp-web-install-button id="installButton" manifest="webflash/manifest-1.json"></esp-web-install-button>
-            <br>
-            <br>
-            <span>
-                NOTE: Make sure to close anything using your devices com port (e.g.
-        Serial monitor)
-            </span
-      >
+            <div class="version-selector">
+                <label>Hardware Version:</label>
+                <select id="versionSelect" onchange="select_version(this.value)">
+                    <option value="1" selected>Version 1</option>
+                    <option value="2">Version 2</option>
+                </select>
+            </div>
+
+            <div class="flash-button-container">
+                <script type="module" src="https://unpkg.com/esp-web-tools@7.3.1/dist/web/install-button.js?module"></script>
+                <esp-web-install-button id="installButton" manifest="webflash/manifest-1.json"></esp-web-install-button>
+            </div>
+
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-label">Flashing Progress</div>
+                <div class="progress-bar-wrapper">
+                    <div class="progress-bar" id="progressBar"></div>
+                    <div class="progress-text" id="progressText">0%</div>
+                </div>
+                <div class="status-message" id="statusMessage"></div>
+            </div>
+
+            <div class="note">
+                <strong>Important:</strong> Make sure to close any applications using your device's COM port (e.g., Serial Monitor) before flashing.
+            </div>
         </div>
-        <div id="notSupported" style="display: none">
-            Your browser does not support the Web Serial API. Try Chrome
+
+        <div id="notSupported" class="not-supported" style="display: none">
+            Your browser does not support the Web Serial API.<br>
+            Please use Google Chrome, Microsoft Edge, or Opera.
         </div>
-        <script>
-      function select_version(val)
-      {
-        if(val == "1")
-        {
-          $("#installButton").attr("manifest",
-            "webflash/manifest-1.json"
-          )
+    </div>
+
+    <script>
+        // Sound management
+        let soundEnabled = true;
+        const soundToggle = document.getElementById('soundToggle');
+
+        // Create audio context for sound effects
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioContext = new AudioContext();
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            switch(type) {
+                case 'start':
+                    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                    oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.3);
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.3);
+                    break;
+
+                case 'progress':
+                    oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
+                    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.1);
+                    break;
+
+                case 'success':
+                    oscillator.frequency.setValueAtTime(400, audioContext.currentTime);
+                    oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.1);
+                    oscillator.frequency.exponentialRampToValueAtTime(1200, audioContext.currentTime + 0.2);
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.4);
+                    break;
+
+                case 'error':
+                    oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+                    oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.5);
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.5);
+                    break;
+            }
         }
-        if(val == "2")
-        {
-          $("#installButton").attr("manifest",
-            "webflash/manifest-2.json"
-          )
+
+        soundToggle.addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            soundToggle.textContent = soundEnabled ? '🔊' : '🔇';
+            soundToggle.classList.toggle('muted');
+            if (soundEnabled) {
+                playSound('progress');
+            }
+        });
+
+        function select_version(val) {
+            if (val == "1") {
+                $("#installButton").attr("manifest", "webflash/manifest-1.json");
+            }
+            if (val == "2") {
+                $("#installButton").attr("manifest", "webflash/manifest-2.json");
+            }
         }
-      }
-      if (navigator.serial) {
-        document.getElementById("notSupported").style.display = "none";
-        document.getElementById("main").style.display = "block";
-      } else {
-        document.getElementById("notSupported").style.display = "block";
-        document.getElementById("main").style.display = "none";
-      }
-        </script>
-    </body>
+
+        // Check Web Serial API support
+        if (navigator.serial) {
+            document.getElementById("notSupported").style.display = "none";
+            document.getElementById("main").style.display = "block";
+        } else {
+            document.getElementById("notSupported").style.display = "block";
+            document.getElementById("main").style.display = "none";
+        }
+
+        // Monitor ESP Web Tools events
+        const installButton = document.getElementById('installButton');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const statusMessage = document.getElementById('statusMessage');
+
+        let lastProgressSoundTime = 0;
+
+        installButton.addEventListener('state-changed', (e) => {
+            const state = e.detail;
+
+            if (state.state === 'DASHBOARD') {
+                // Flashing started
+                progressContainer.style.display = 'block';
+                statusMessage.textContent = 'Initializing...';
+                statusMessage.className = 'status-message';
+                playSound('start');
+            }
+        });
+
+        // Use MutationObserver to watch for progress changes in the shadow DOM
+        const observer = new MutationObserver(() => {
+            try {
+                const shadowRoot = installButton.shadowRoot;
+                if (!shadowRoot) return;
+
+                const progressElement = shadowRoot.querySelector('.progress');
+                const logElement = shadowRoot.querySelector('.log');
+
+                if (progressElement) {
+                    const progressValue = progressElement.value || 0;
+                    const progressMax = progressElement.max || 100;
+                    const percentage = Math.round((progressValue / progressMax) * 100);
+
+                    if (percentage > 0 && percentage < 100) {
+                        progressContainer.style.display = 'block';
+                        progressBar.style.width = percentage + '%';
+                        progressText.textContent = percentage + '%';
+                        statusMessage.textContent = 'Flashing firmware...';
+                        statusMessage.className = 'status-message';
+
+                        // Play sound every 10% progress
+                        const currentTime = Date.now();
+                        if (currentTime - lastProgressSoundTime > 500) {
+                            playSound('progress');
+                            lastProgressSoundTime = currentTime;
+                        }
+                    }
+
+                    if (percentage >= 100) {
+                        progressBar.style.width = '100%';
+                        progressText.textContent = '100%';
+                        statusMessage.textContent = '✓ Flash Complete!';
+                        statusMessage.className = 'status-message status-success';
+                        playSound('success');
+                    }
+                }
+
+                if (logElement) {
+                    const logText = logElement.textContent.toLowerCase();
+
+                    if (logText.includes('error') || logText.includes('failed')) {
+                        statusMessage.textContent = '✖ Flash Failed!';
+                        statusMessage.className = 'status-message status-error';
+                        playSound('error');
+                    }
+                }
+            } catch (err) {
+                // Silently handle any errors accessing shadow DOM
+            }
+        });
+
+        // Start observing the install button
+        if (installButton.shadowRoot) {
+            observer.observe(installButton.shadowRoot, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                characterData: true
+            });
+        }
+
+        // Also observe the install button itself for shadow root attachment
+        const rootObserver = new MutationObserver(() => {
+            if (installButton.shadowRoot && !observer) {
+                observer.observe(installButton.shadowRoot, {
+                    childList: true,
+                    subtree: true,
+                    attributes: true,
+                    characterData: true
+                });
+                rootObserver.disconnect();
+            }
+        });
+
+        rootObserver.observe(installButton, {
+            childList: true,
+            subtree: true
+        });
+    </script>
+</body>
 </html>
