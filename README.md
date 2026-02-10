@@ -223,6 +223,36 @@ Sender                          Receiver
    pio device monitor -b 115200
    ```
 
+#### Automated Build Scripts (Web Flasher)
+
+For building all firmware versions and preparing web flasher files:
+
+**Windows:**
+```bash
+build_webflash.bat
+```
+
+**Linux/Mac/Windows (Python):**
+```bash
+python build_webflash.py
+```
+
+This script will:
+- Build firmware for both hardware versions (v1 and v2)
+- Build LittleFS filesystem
+- Copy all files to `webflash/` directory
+- Prepare files for ESP Web Tools flasher
+
+**Using Makefile (Linux/Mac):**
+```bash
+make webflash      # Build and prepare webflash binaries
+make build         # Build all versions
+make upload-v1     # Upload version 1
+make monitor       # Serial monitor
+```
+
+See [webflash/README.md](webflash/README.md) for web flasher setup.
+
 #### Using esptool.py (Manual Flashing)
 
 ```bash

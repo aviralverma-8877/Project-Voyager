@@ -1,5 +1,6 @@
 {
-  "name": "Project Voyager Firmware",
+  "name": "Project Voyager v2 - LoRa File Transfer",
+  "version": "1.0.0",
   "new_install_prompt_erase": true,
   "builds": [
     {
@@ -9,7 +10,7 @@
         { "path": "partitions.bin", "offset": 32768 },
         { "path": "boot_app0.bin", "offset": 57344 },
         { "path": "firmware-2.bin", "offset": 65536 },
-        { "path": "spiffs-2.bin", "offset": 2686976 }
+        { "path": "littlefs-2.bin", "offset": 2686976 }
       ]
     }
   ]
