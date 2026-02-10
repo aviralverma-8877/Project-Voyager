@@ -193,7 +193,7 @@ Sender                          Receiver
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/Project-Voyager.git
+   git clone https://github.com/aviralverma-8877/Project-Voyager.git
    cd Project-Voyager
    ```
 
@@ -628,9 +628,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📧 Contact & Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/Project-Voyager/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/Project-Voyager/discussions)
-- **Email**: your.email@example.com
+- **Issues**: [GitHub Issues](https://github.com/aviralverma-8877/Project-Voyager/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/aviralverma-8877/Project-Voyager/discussions)
+- **Email**: aviral.verma.8877@gmail.com
 
 ---
 
