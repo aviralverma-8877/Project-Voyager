@@ -21,24 +21,36 @@ void connect_wifi()
         JsonDocument doc;
         deserializeJson(doc, wifi_config);
 
-        const char* mode = doc["wifi_function"];
-        const char* wifi_ssid = doc["wifi_ssid"];
-        const char* wifi_pass = doc["wifi_pass"];
+        // Copy to Strings so pointers survive doc lifetime and handle missing keys
+        String mode = doc["wifi_function"] | "";
+        String wifi_ssid = doc["wifi_ssid"] | "";
+        String wifi_pass = doc["wifi_pass"] | "";
+        doc.clear();
 
-        WiFi.disconnect(true, true);
-        vTaskDelay(200 / portTICK_PERIOD_MS);
+        // Only disconnect if the TCP/IP stack has been initialised (not first boot)
+        if(WiFi_setup_done)
+        {
+            WiFi.disconnect(true, true);
+            vTaskDelay(200 / portTICK_PERIOD_MS);
+        }
 
-        if(strcmp(mode, "AP") == 0)
+        if(mode == "AP" && wifi_ssid.length() > 0)
         {
             serial_print("AP Mode");
             sta_mode_active = false;
-            setup_ap(wifi_ssid);
+            setup_ap(wifi_ssid.c_str());
         }
-        else if(strcmp(mode, "STA") == 0)
+        else if(mode == "STA" && wifi_ssid.length() > 0)
         {
             serial_print("STA Mode");
             sta_mode_active = true;
-            setup_sta(wifi_ssid, wifi_pass);
+            setup_sta(wifi_ssid.c_str(), wifi_pass.c_str());
+        }
+        else
+        {
+            serial_print("Invalid WiFi config, defaulting to AP");
+            sta_mode_active = false;
+            setup_ap("Voyager");
         }
     }
     else

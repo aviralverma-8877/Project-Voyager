@@ -18,7 +18,24 @@ void setup_mqtt()
     if(mqtt_enabled)
     {
         serial_print("Setting up mqtt");
-        while(!WiFi.isConnected()){}
+        // Copy all string values out of the JsonDocument before clearing it.
+        // const char* pointers into doc become dangling after doc.clear().
+        String host_string = doc["host"] | "";
+        uint16_t port = doc["port"];
+        bool auth = doc["auth"];
+        String uname = doc["username"] | "";
+        String pass = doc["password"] | "";
+        mqtt_topic_to_send_raw = doc["raw_data"] | "";
+        mqtt_topic_to_publish  = doc["pub_topic"]  | "";
+        mqtt_topic_to_subscribe = doc["sub_topic"] | "";
+        mqtt_topic_to_ping = doc["ping_topic"] | "";
+        doc.clear();
+
+        IPAddress host;
+        host.fromString(host_string.c_str());
+        serial_print(host.toString());
+        serial_print(String(port));
+
         mqttClient.setCleanSession(true);
         mqttClient.onConnect(onMqttConnect);
         mqttClient.onDisconnect(onMqttDisconnect);
@@ -26,34 +43,11 @@ void setup_mqtt()
         mqttClient.onUnsubscribe(onMqttUnsubscribe);
         mqttClient.onMessage(onMqttMessage);
         mqttClient.onPublish(onMqttPublish);
-        const char* host_string = doc["host"];
-        uint16_t port = doc["port"];
-        bool auth = doc["auth"];
-        const char* uname = doc["username"];
-        const char* pass = doc["password"];
-
-        String raw_data = doc["raw_data"];
-        mqtt_topic_to_send_raw = raw_data;
-
-        String pub_topic = doc["pub_topic"];
-        mqtt_topic_to_publish = pub_topic;
-
-        String sub_topic = doc["sub_topic"];
-        mqtt_topic_to_subscribe = sub_topic;
-
-        String ping_topic = doc["ping_topic"];
-        mqtt_topic_to_ping = ping_topic;
-        doc.clear();
-        IPAddress host;
-        host.fromString(host_string);
-        serial_print(host.toString());
-        serial_print(String(port));
 
         if(auth)
         {
             serial_print(uname);
-            serial_print(pass);
-            mqttClient.setCredentials(uname, pass);
+            mqttClient.setCredentials(uname.c_str(), pass.c_str());
         }
         mqttClient.setServer(host, port);
         xTaskCreatePinnedToCore(connectToMqtt, "connectToMqtt", 6000, NULL, 1, NULL, 1);

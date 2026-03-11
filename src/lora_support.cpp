@@ -262,10 +262,20 @@ void onReceive(int packetSize)
     if(type == LORA_SERIAL)
     {
         DebugQueueParam *p = new DebugQueueParam();
-        p->message.reserve(size + 1);
-        while(LoRa.available())
-            p->message +=(char)LoRa.read();
-        xQueueSend(serial_packet_rec, (void*)&p, (TickType_t)2);
+        if(p)
+        {
+            p->message.reserve(size + 1);
+            while(LoRa.available())
+                p->message += (char)LoRa.read();
+            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+            if(xQueueSendFromISR(serial_packet_rec, (void*)&p, &xHigherPriorityTaskWoken) != pdTRUE)
+                delete p;
+            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+        }
+        else
+        {
+            while(LoRa.available()) LoRa.read(); // drain to avoid stale bytes
+        }
         return;
     }
 
