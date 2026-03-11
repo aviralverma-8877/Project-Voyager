@@ -188,9 +188,13 @@ void serial_to_lora(void* param)
             if(Serial.available())
             {
                 DebugQueueParam *p = new DebugQueueParam();
-                while(Serial.available())
-                    p->message += (char)Serial.read();
-                xQueueSend(serial_packet_send, (void*)&p, (TickType_t)2);
+                if(p)
+                {
+                    while(Serial.available())
+                        p->message += (char)Serial.read();
+                    if(xQueueSend(serial_packet_send, (void*)&p, (TickType_t)2) != pdTRUE)
+                        delete p;
+                }
             }
         }
         else{
@@ -392,8 +396,12 @@ void serial_print(String msg)
     if(debug_handler != NULL)
     {
         DebugQueueParam *payload = new DebugQueueParam();
+        if(!payload) return;
         payload->message = msg;
-        xQueueSend(debug_msg, (void*)&payload, (TickType_t)2);
+        if(xQueueSend(debug_msg, (void*)&payload, (TickType_t)2) != pdTRUE)
+        {
+            delete payload; // prevent heap exhaustion when queue is full
+        }
     }
 }
 

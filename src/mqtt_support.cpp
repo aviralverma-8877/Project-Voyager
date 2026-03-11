@@ -56,8 +56,8 @@ void setup_mqtt()
             mqttClient.setCredentials(uname, pass);
         }
         mqttClient.setServer(host, port);
-        connectToMqtt(NULL);
-        xTaskCreatePinnedToCore(ping_mqtt_timer, "ping_mqtt_timer", 6000, NULL, 0, NULL,1);
+        xTaskCreatePinnedToCore(connectToMqtt, "connectToMqtt", 6000, NULL, 1, NULL, 1);
+        xTaskCreatePinnedToCore(ping_mqtt_timer, "ping_mqtt_timer", 6000, NULL, 0, NULL, 1);
     }
 }
 

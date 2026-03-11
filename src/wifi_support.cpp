@@ -89,7 +89,14 @@ void onWifiConnect(WiFiEvent_t event, WiFiEventInfo_t info)
     display_buffer[2].msg = ssid;
     display_buffer[3].msg = IP.toString();
     display_text_oled();
-    setup_mqtt();
+
+    // Only initialise MQTT once — re-connects are handled by the MQTT client itself
+    static bool mqtt_initialised = false;
+    if(!mqtt_initialised)
+    {
+        setup_mqtt();
+        mqtt_initialised = true;
+    }
 
     // Spawn wifi_monitor only once
     if(wifi_monitor_handle == NULL || eTaskGetState(wifi_monitor_handle) == eDeleted)
