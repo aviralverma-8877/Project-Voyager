@@ -151,30 +151,30 @@ void save_lora_serial_config(void* param)
 
 void send_to_serial(void *param)
 {
-    while(uxQueueSpacesAvailable(serial_packet_rec) > 0 )
+    while(true)
     {
         DebugQueueParam *p = NULL;
-        if(xQueueReceive(serial_packet_rec, &(p) , ( TickType_t )0))
+        if(xQueueReceive(serial_packet_rec, &(p), pdMS_TO_TICKS(100)) == pdTRUE)
         {
             Serial.print((String)p->message);
+            delete p;
         }
-        delete p;
+        vTaskDelay(10 / portTICK_PERIOD_MS);
     }
-    vTaskDelete(NULL);
 }
 
 void send_to_lora(void *param)
 {
-    while(uxQueueSpacesAvailable(serial_packet_send) > 0 )
+    while(true)
     {
         DebugQueueParam *p = NULL;
-        if(xQueueReceive(serial_packet_send, &(p) , ( TickType_t )0))
+        if(xQueueReceive(serial_packet_send, &(p), pdMS_TO_TICKS(100)) == pdTRUE)
         {
             LoRa_send((String)p->message, LORA_SERIAL);
+            delete p;
         }
-        delete p;
+        vTaskDelay(10 / portTICK_PERIOD_MS);
     }
-    vTaskDelete(NULL);
 }
 
 // Loop to catch any input to Serial input and send it to lora.
@@ -399,10 +399,10 @@ void serial_print(String msg)
 
 void debugger_print(void *param)
 {
-    while( uxQueueSpacesAvailable( debug_msg ) > 0 )
+    while(true)
     {
         DebugQueueParam* params = NULL;
-        if(xQueueReceive(debug_msg, &(params) , (TickType_t)0))
+        if(xQueueReceive(debug_msg, &(params), pdMS_TO_TICKS(100)) == pdTRUE)
         {
             String msg = (String)params->message;
             if(DEBUGGING && !lora_serial)
@@ -422,11 +422,8 @@ void debugger_print(void *param)
             }
             delete params;
         }
+        vTaskDelay(10 / portTICK_PERIOD_MS);
     }
-    show_alert("Queue is full, Rebooting...");
-    vTaskDelay(100/portTICK_PERIOD_MS);
-    xTaskCreatePinnedToCore(restart,"restart",6000,NULL,1,NULL,1);
-    vTaskDelete(NULL);
 }
 
 String get_device_mode()
