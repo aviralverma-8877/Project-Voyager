@@ -33,16 +33,6 @@ void define_api(void *param)
     serial_print("username");
     request->send(200, "text/plain", username);
   });
-  server.on("/send_raw", HTTP_POST, [](AsyncWebServerRequest *request)
-  {
-    AsyncWebParameter * j = request->getParam(0);
-    String data = j->value();
-    QueueParam *packet = new QueueParam();
-    packet->message = data;
-    packet->type = RAW_DATA;
-    packet->request = request;
-    xQueueSend(send_packets, (void*)&packet, (TickType_t)2);
-  });
   server.on("/lora_transmit", HTTP_POST, [](AsyncWebServerRequest *request)
   {
     AsyncWebParameter * j = request->getParam(0);

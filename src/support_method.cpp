@@ -179,6 +179,10 @@ void serial_to_lora(void* param)
         {
             if(Serial.available())
             {
+                // Wait 20ms after first byte so a full XModem block (133 bytes
+                // at 115200 baud ~12ms) has time to arrive before we read,
+                // avoiding splitting one protocol frame across two LoRa packets.
+                vTaskDelay(20/portTICK_PERIOD_MS);
                 DebugQueueParam *p = new DebugQueueParam();
                 if(p)
                 {
@@ -221,10 +225,6 @@ void get_lora_serial()
         doc.shrinkToFit();
         lora_serial = doc["lora_serial"];
         doc.clear();
-        if(DEBUGGING)
-            xTaskCreatePinnedToCore(send_to_serial, "send_to_serial", 6000, NULL, 1, NULL, 1);
-        xTaskCreatePinnedToCore(send_to_lora, "send_to_lora", 6000, NULL, 1, NULL, 1);
-        xTaskCreatePinnedToCore(serial_to_lora, "serial_to_lora", 6000, NULL, 1, NULL, 1);
     }
 }
 
@@ -459,4 +459,9 @@ void setupTasks()
     xTaskCreatePinnedToCore(get_heap_info, "get_heap_info", 6000, NULL, 1, NULL,1);
     xTaskCreatePinnedToCore(get_wifi_rssi, "get_wifi_rssi", 6000, NULL, 1, NULL,1);
     xTaskCreatePinnedToCore(async_led_notifier, "async_led_notifier", 6000, NULL, 1, NULL, 1);
+    // Serial bridge tasks run permanently; they check the lora_serial flag
+    // internally so they are safe to start even when the flag is false.
+    xTaskCreatePinnedToCore(send_to_serial, "send_to_serial", 6000, NULL, 1, NULL, 1);
+    xTaskCreatePinnedToCore(send_to_lora,   "send_to_lora",   6000, NULL, 1, NULL, 1);
+    xTaskCreatePinnedToCore(serial_to_lora, "serial_to_lora", 6000, NULL, 1, NULL, 1);
 }
