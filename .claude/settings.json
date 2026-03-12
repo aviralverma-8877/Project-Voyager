@@ -1,5 +1,22 @@
 {
   "permissions": {
+    "allow": [
+      "Bash(where:*)",
+      "Bash(py -m platformio:*)",
+      "Read(//c/Users/aviralv/**)",
+      "Bash(cmd.exe /c \"where pio 2>&1\")",
+      "Bash(cmd.exe /c \"pio run -e esp_lora_v1 2>&1\")",
+      "Bash(cmd.exe /c \"where pio\")",
+      "Bash(cmd.exe /c \"dir C:\\\\Users\\\\aviralv\\\\.platformio\\\\penv\\\\Scripts\\\\pio* 2>&1\")",
+      "Bash(cmd.exe /c \"dir /s /b C:\\\\Users\\\\aviralv\\\\AppData\\\\Local\\\\Programs\\\\*.exe 2>&1 | findstr /i pio\")",
+      "Bash(cmd.exe /c \"py -m platformio run -e esp_lora_v1 2>&1\")",
+      "Bash(cmd.exe /c \"cd /d C:\\\\Users\\\\aviralv\\\\Documents\\\\Projects\\\\Project-Voyager && py -m platformio run -e esp_lora_v1 > build_out.txt 2>&1 && echo SUCCESS || echo FAILED\")",
+      "Bash(cmd.exe /c \"python --version & py --version & py -m platformio --version\")",
+      "Bash(powershell.exe -Command \"cd ''C:\\\\Users\\\\aviralv\\\\Documents\\\\Projects\\\\Project-Voyager''; py -m platformio run -e esp_lora_v1\")",
+      "Bash(powershell.exe -Command \"Get-Command python,python3,pio,platformio -ErrorAction SilentlyContinue | Select-Object Name,Source\")",
+      "Bash(powershell.exe -Command \"cd ''C:\\\\Users\\\\aviralv\\\\Documents\\\\Projects\\\\Project-Voyager''; & ''C:\\\\Users\\\\aviralv\\\\AppData\\\\Local\\\\Python\\\\bin\\\\python.exe'' -m platformio run -e esp_lora_v1 2>&1\")",
+      "Bash(powershell.exe -Command:*)"
+    ],
     "additionalDirectories": [
       "c:\\Users\\aviralv\\Documents\\Projects\\Project-Voyager\\src"
     ]
