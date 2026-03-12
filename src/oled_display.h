@@ -51,7 +51,6 @@
         DisplayMode mode;
         WiFiStatus wifi_status;
         LoRaStatus lora_status;
-        bool mqtt_connected;
         String title;
         String line1;
         String line2;
@@ -81,7 +80,6 @@
     // Status update functions
     void set_wifi_status(WiFiStatus status, const char* ssid = nullptr, const char* ip = nullptr);
     void set_lora_status(LoRaStatus status);
-    void set_mqtt_status(bool connected);
     void set_status_message(const char* message);
     void set_signal_strength(uint8_t strength); // 0-4 bars
 
@@ -90,7 +88,6 @@
     void draw_status_bar();
     void draw_wifi_icon(int16_t x, int16_t y, WiFiStatus status);
     void draw_lora_icon(int16_t x, int16_t y, LoRaStatus status);
-    void draw_mqtt_icon(int16_t x, int16_t y, bool connected);
     void draw_signal_bars(int16_t x, int16_t y, uint8_t strength);
     void draw_progress_bar(int16_t x, int16_t y, int16_t width, int16_t height, uint8_t progress);
     void draw_centered_text(const char* text, int16_t y, uint8_t size = 1);

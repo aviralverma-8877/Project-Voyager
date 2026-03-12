@@ -6,7 +6,6 @@
     #include <support_method.h>
     #include "CRC8.h"
     #include "CRC.h"
-    #include "mqtt_support.h"
     #define SCK             LSCK
     #define MISO            LMISO
     #define MOSI            LMOSI
@@ -43,7 +42,6 @@
     extern SemaphoreHandle_t ack_semaphore;
     extern volatile uint8_t AknRecieved;
 
-    void setup_mqtt();
     void save_lora_config(String value);
     uint8_t get_checksum(String data);
     void LoRa_send(String data, uint8_t type);
@@ -57,6 +55,5 @@
     void onReceive(int packetSize);
     void onTxDone();
     void send_msg_to_events(String data);
-    void send_msg_to_mqtt(String data, int type);
     void send_msg_to_ws(String data);
 #endif

@@ -92,14 +92,6 @@ void handle_operations(JsonDocument doc)
         send_to_ws(return_value);
         return;
     }
-    if(strcmp(request_type, "set_mqtt_config") == 0)
-    {
-        String val = doc["val"];
-        serial_print("saving mqtt config");
-        serial_print(val);
-        save_mqtt_config(val);
-        return;
-    }
     if(strcmp(request_type, "set_lora_config") == 0)
     {
         String val = doc["val"];

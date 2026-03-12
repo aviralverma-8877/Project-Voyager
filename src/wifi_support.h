@@ -5,7 +5,6 @@
     #include <support_method.h>
     #include <ArduinoJson.h>
     #include <web_sockets.h>
-    #include "mqtt_support.h"
     struct WiFiBackup{
         String backup_config = "";
         bool backup_done = false;

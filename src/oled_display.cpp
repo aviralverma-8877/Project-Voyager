@@ -20,7 +20,6 @@ void init_oled() {
     display_state.mode = MODE_SPLASH;
     display_state.wifi_status = WIFI_DISCONNECTED;
     display_state.lora_status = LORA_IDLE;
-    display_state.mqtt_connected = false;
     display_state.signal_strength = 0;
     display_state.last_update = millis();
 
@@ -195,11 +194,6 @@ void set_lora_status(LoRaStatus status) {
     display_state.last_update = millis();
 }
 
-void set_mqtt_status(bool connected) {
-    display_state.mqtt_connected = connected;
-    display_state.last_update = millis();
-}
-
 void set_status_message(const char* message) {
     display_state.status_message = message;
     display_state.last_update = millis();
@@ -255,12 +249,6 @@ void draw_status_bar() {
     draw_lora_icon(x_pos, icon_y, display_state.lora_status);
     x_pos += icon_spacing;
 
-    // MQTT icon
-    if(display_state.mqtt_connected) {
-        draw_mqtt_icon(x_pos, icon_y, display_state.mqtt_connected);
-        x_pos += icon_spacing;
-    }
-
     // Signal strength on the right
     draw_signal_bars(SCREEN_WIDTH - 18, icon_y, display_state.signal_strength);
 }
@@ -315,15 +303,6 @@ void draw_lora_icon(int16_t x, int16_t y, LoRaStatus status) {
         display.drawLine(x + 3, y, x + 3, y + 6, SSD1306_WHITE);
         display.drawLine(x, y + 2, x + 3, y, SSD1306_WHITE);
         display.drawLine(x + 6, y + 2, x + 3, y, SSD1306_WHITE);
-    }
-}
-
-void draw_mqtt_icon(int16_t x, int16_t y, bool connected) {
-    if(connected) {
-        // Draw "M" for MQTT
-        display.setTextSize(1);
-        display.setCursor(x, y);
-        display.print("M");
     }
 }
 
