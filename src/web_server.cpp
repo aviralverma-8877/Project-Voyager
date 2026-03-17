@@ -10,7 +10,6 @@ QueueHandle_t debug_msg;
 
 void define_api(void *param)
 {
-  server.serveStatic("/", LittleFS, "/");
   server.on("/send_akn", HTTP_POST, [](AsyncWebServerRequest *request)
   {
     serial_print("send_akn");
@@ -72,6 +71,7 @@ void define_api(void *param)
     request->send(200, "Resetting device ....");
     xTaskCreatePinnedToCore(reset_device, "reset_devide", 6000, NULL, 1, NULL,1);
   });
+  server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
   firmware_web_updater();                //Feature has to be disabled for including BLE features
   server.onNotFound([](AsyncWebServerRequest *request)
   {
