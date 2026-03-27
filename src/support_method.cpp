@@ -1,125 +1,11 @@
 #include <support_method.h>
+#include "bt_support.h"
 
 bool lora_serial = false;
 String username;
-String hostname;
-DNSServer dnsServer;
 TaskHandle_t debug_handler = NULL;
 
-// This is main method to handle web-socket input
-// It accepts input as JsonDocument which should have the key request-type.
-// Based on the request type corresponding operations will be performed on the ESP32.
-void handle_operations(JsonDocument doc)
-{
-    const char* request_type = doc["request-type"];
-    if(strcmp(request_type, "wifi_ssid_scan") == 0)
-    {
-        String json_string;
-        xTaskCreatePinnedToCore(scan_ssid, "scan_wifi", 6000, NULL, 1, NULL,1);
-        return;
-    }
-    if(strcmp(request_type, "connect_wifi") == 0)
-    {
-        const char * wifi_ssid = doc["wifi_ssid"];
-        serial_print(wifi_ssid);
-        const char * psk = doc["wifi_pass"];
-        serial_print(psk);
-        // Reading wifi config
-        String wifi_config = get_wifi_setting("/config/wifi_config.json");
-        // modifying wifi config
-        serial_print(wifi_config);
-        JsonDocument wifi_conf;
-        deserializeJson(wifi_conf, wifi_config);
-        wifi_conf.shrinkToFit();
-        wifi_conf["wifi_function"] = "STA";
-        wifi_conf["wifi_ssid"] = wifi_ssid;
-        wifi_conf["wifi_pass"] = psk;
-        serializeJsonPretty(wifi_conf, wifi_config);
-        wifi_conf.clear();
-        serial_print(wifi_config);
-        // writing wifi config
-        save_wifi_settings(wifi_config);
-        restart(NULL);
-        return;
-    }
-    if(strcmp(request_type, "wifi_ap_mode") == 0)
-    {
-        String wifi_config = get_wifi_setting("/config/wifi_default.json");
-        JsonDocument doc;
-        deserializeJson(doc, wifi_config);
-        doc["wifi_ssid"] = username;
-        serializeJson(doc, wifi_config);
-        doc.clear();
-        save_wifi_settings(wifi_config);
-        restart(NULL);
-        return;
-    }
-    if(strcmp(request_type, "send_akn") == 0)
-    {
-        serial_print("send_akn");
-        uint8_t akn = doc["akn"];
-        LoRa_sendAkn(akn);
-        doc.clear();
-        return;
-    }
-    if(strcmp(request_type, "reset_device") == 0)
-    {
-        xTaskCreatePinnedToCore(reset_device, "reset_device", 6000, NULL, 1, NULL,1);
-        return;
-    }
-    if(strcmp(request_type, "restart_device") == 0)
-    {
-        xTaskCreatePinnedToCore(restart, "Restart", 6000, NULL, 1, NULL,1);
-        return;
-    }
-    if(strcmp(request_type, "set_username") == 0)
-    {
-        String val = doc["val"];
-        serial_print("changing username");
-        serial_print(val);
-        save_username(val);
-        return;
-    }
-    if(strcmp(request_type, "get_username") == 0)
-    {
-        serial_print("get_username");
-        JsonDocument doc;
-        doc["response_type"] = "set_uname";
-        doc["uname"] = username;
-        String return_value;
-        serializeJson(doc, return_value);
-        doc.clear();
-        send_to_ws(return_value);
-        return;
-    }
-    if(strcmp(request_type, "set_lora_config") == 0)
-    {
-        String val = doc["val"];
-        serial_print("saving lora config");
-        serial_print(val);
-        save_lora_config(val);
-        return;
-    }
-    if(strcmp(request_type, "set_serial_mode")==0)
-    {
-        lora_serial = doc["value"];
-        xTaskCreatePinnedToCore(save_lora_serial_config, "save_lora_serial_config", 6000, NULL, 1, NULL,1);
-        return;
-    }
-    if(strcmp(request_type, "get_serial_mode")==0)
-    {
-        JsonDocument doc;
-        doc["response_type"] = "serial_mode";
-        doc["value"] = lora_serial;
-        String return_value;
-        serializeJson(doc, return_value);
-        doc.clear();
-        send_to_ws(return_value);
-        return;
-    }
-}
-
-// Method to save LoRa to Serial configration.
+// Method to save LoRa to Serial configuration.
 // This method should be called using xTaskCreatePinnedToCore.
 // It will save current value of lora_serial global variable to /config/lora_serial.json
 void save_lora_serial_config(void* param)
@@ -141,6 +27,7 @@ void save_lora_serial_config(void* param)
     vTaskDelete(NULL);
 }
 
+// Forwards LoRa serial bridge received data to BT client and USB serial (debug)
 void send_to_serial(void *param)
 {
     while(true)
@@ -148,7 +35,9 @@ void send_to_serial(void *param)
         DebugQueueParam *p = NULL;
         if(xQueueReceive(serial_packet_rec, &(p), pdMS_TO_TICKS(100)) == pdTRUE)
         {
-            Serial.print((String)p->message);
+            bt_send("SERIAL|" + (String)p->message);
+            if(DEBUGGING && !lora_serial)
+                Serial.print((String)p->message);
             delete p;
         }
         vTaskDelay(10 / portTICK_PERIOD_MS);
@@ -169,8 +58,8 @@ void send_to_lora(void *param)
     }
 }
 
-// Loop to catch any input to Serial input and send it to lora.
-// This meathod will only be enabled if lora_serial flag is true.
+// Loop to catch any input on the USB serial and forward it to LoRa.
+// Only active when lora_serial flag is true.
 void serial_to_lora(void* param)
 {
     Serial.flush();
@@ -197,9 +86,7 @@ void serial_to_lora(void* param)
     vTaskDelete(NULL);
 }
 
-// Method to fetch the flag lora_serial.
-// This method will not return any value,
-// rather update the value in lora_serial flag.
+// Reads lora_serial flag from LittleFS and starts serial bridge tasks if the config file exists.
 void get_lora_serial()
 {
     if (LittleFS.exists("/config/lora_serial.json"))
@@ -221,14 +108,13 @@ void get_lora_serial()
         doc.shrinkToFit();
         lora_serial = doc["lora_serial"];
         doc.clear();
-        if(DEBUGGING)
-            xTaskCreatePinnedToCore(send_to_serial, "send_to_serial", 6000, NULL, 1, NULL, 1);
+        xTaskCreatePinnedToCore(send_to_serial, "send_to_serial", 6000, NULL, 1, NULL, 1);
         xTaskCreatePinnedToCore(send_to_lora, "send_to_lora", 6000, NULL, 1, NULL, 1);
         xTaskCreatePinnedToCore(serial_to_lora, "serial_to_lora", 6000, NULL, 1, NULL, 1);
     }
 }
 
-// Update username flag with username value
+// Load username from LittleFS; fall back to chip ID if not set
 void get_username()
 {
     serial_print("get_username");
@@ -236,7 +122,11 @@ void get_username()
     {
         File file = LittleFS.open("/config/user_data.json");
         if(!file){
-            username = WiFi.macAddress();
+            // Fall back to chip ID
+            uint64_t chipid = ESP.getEfuseMac();
+            char id_str[13];
+            snprintf(id_str, sizeof(id_str), "%04X%08X", (uint16_t)(chipid >> 32), (uint32_t)chipid);
+            username = String(id_str);
             return;
         }
         size_t fileSize = file.size();
@@ -252,28 +142,24 @@ void get_username()
         doc.shrinkToFit();
         const char* uname = doc["username"];
         doc.clear();
-        if(strcmp(uname, "")==0)
+        if(strcmp(uname, "") == 0)
         {
-            username = WiFi.macAddress();
-            return;
+            uint64_t chipid = ESP.getEfuseMac();
+            char id_str[13];
+            snprintf(id_str, sizeof(id_str), "%04X%08X", (uint16_t)(chipid >> 32), (uint32_t)chipid);
+            username = String(id_str);
         }
         else
         {
             username = uname;
-            return;
         }
     }
 }
 
-//Send stop transmission comamnd to client
+// Send stop transmission notification to the BT client
 void stop_transmission()
 {
-    JsonDocument doc;
-    doc["response_type"] = "stop_transmission";
-    String return_value;
-    serializeJson(doc, return_value);
-    doc.clear();
-    send_to_ws(return_value);
+    bt_send("STATUS|stop_transmission");
 }
 
 void save_username(String uname)
@@ -297,18 +183,13 @@ void save_username(String uname)
     username = uname;
 }
 
-//Reset ESP32
+// Reset ESP32 — wipes LittleFS and restarts
 void reset_device(void *param)
 {
-    show_alert("Device reset successfully,\nPlease reconfigure the device by connecting to the AP.\nRebooting Now.");
+    show_alert("Resetting device");
     clear_oled_display();
     display_buffer[1].msg = "Resetting";
     display_text_oled();
-    serial_print("Stopping WiFi");
-    if (WiFi.status() == WL_CONNECTED)
-    {
-        WiFi.disconnect();
-    }
     serial_print("Formatting LittleFS");
     bool formatted = LittleFS.format();
     if (formatted)
@@ -322,15 +203,10 @@ void reset_device(void *param)
     }
 }
 
+// Send an alert message to the BT client
 void show_alert(String msg)
 {
-    JsonDocument doc;
-    doc["response_type"] = "alert";
-    doc["alert_msg"] = msg;
-    String return_response;
-    serializeJsonPretty(doc, return_response);
-    doc.clear();
-    send_to_ws(return_response);
+    bt_send("STATUS|" + msg);
 }
 
 void restart(void *param)
@@ -340,46 +216,9 @@ void restart(void *param)
     ESP.restart();
 }
 
-void setup_mdns()
-{
-    String mac = WiFi.macAddress();
-    mac.replace(":","_");
-    hostname = "project-voyager-"+mac;
-    WiFi.hostname(hostname);
-    serial_print("Device hostname: "+hostname);
-    if (MDNS.begin(hostname.c_str())) {
-        MDNS.addService("http", "tcp", 80); 
-        serial_print("Started mDNS service");
-    }
-}
-
-void setup_dns()
-{
-    serial_print("DNS service started.");
-    serial_print("Soft AP IP.");
-    serial_print(WiFi.softAPIP().toString());
-    dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
-    dnsServer.setTTL(3600);
-    dnsServer.start(53, "*", WiFi.softAPIP());
-    xTaskCreatePinnedToCore(dns_request_process, "DNS Request Handler", 6000, NULL, 1, NULL,1);
-}
-
-void dns_request_process(void *parameter)
-{
-    serial_print("DNS Request loop started.");
-    for(;;)
-    {
-        dnsServer.processNextRequest();
-        vTaskDelay(30/portTICK_PERIOD_MS);
-    }
-    vTaskDelete(NULL);
-}
-
 void config_gpios()
 {
     pinMode(LED, OUTPUT);
-    pinMode(BTN1, INPUT_PULLDOWN);
-    pinMode(BTN2, INPUT_PULLDOWN);
     digitalWrite(LED, LOW);
 }
 
@@ -409,16 +248,9 @@ void debugger_print(void *param)
             {
                 Serial.println("\n"+msg);
             }
-            if(ws_client_count > 0)
+            if(bt_client_connected)
             {
-                JsonDocument doc;
-                doc["millis"] = millis();
-                doc["data"] = msg;
-                doc.shrinkToFit();
-                String payload;
-                serializeJson(doc, payload);
-                doc.clear();
-                send_to_events(payload, "DEBUG");
+                bt_send("DEBUG|" + msg);
             }
             delete params;
         }
@@ -426,37 +258,7 @@ void debugger_print(void *param)
     }
 }
 
-String get_device_mode()
-{
-    serial_print("get_device_config");
-    if (LittleFS.exists("/config/device_config.json"))
-    {
-        File file = LittleFS.open("/config/device_config.json");
-        if(!file){
-            return "WiFi";
-        }
-        size_t fileSize = file.size();
-        String device_config;
-        device_config.reserve(fileSize + 1);
-        while(file.available()){
-            device_config += (char)file.read();
-        }
-        file.close();
-        serial_print("Reading device_mode");
-        JsonDocument doc;
-        deserializeJson(doc, device_config);
-        doc.shrinkToFit();
-        String device_mode = doc["device_mode"];
-        doc.clear();
-        return device_mode;
-    }
-    return "WiFi";
-}
-
 void setupTasks()
 {
-    xTaskCreatePinnedToCore(btn_intrupt, "btn_intrupt", 6000, NULL, 1, NULL,1);
-    xTaskCreatePinnedToCore(get_heap_info, "get_heap_info", 6000, NULL, 1, NULL,1);
-    xTaskCreatePinnedToCore(get_wifi_rssi, "get_wifi_rssi", 6000, NULL, 1, NULL,1);
-    xTaskCreatePinnedToCore(async_led_notifier, "async_led_notifier", 6000, NULL, 1, NULL, 1);
+    xTaskCreatePinnedToCore(async_led_notifier, "async_led_notifier", 4000, NULL, 1, NULL, 1);
 }

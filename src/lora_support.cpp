@@ -1,4 +1,6 @@
-#include<lora_support.h>
+#include "lora_support.h"
+#include "bt_support.h"
+#include <ArduinoJson.h>
 
 bool lora_available_for_write = true;
 volatile uint8_t AknRecieved = 2;
@@ -65,7 +67,7 @@ void save_lora_config(String value)
         int SyncWord = doc["SyncWord"];
         LoRa.setSyncWord(SyncWord);
         doc.clear();
-        show_alert("LoRa config saved successfully");
+        show_alert("LoRa config saved");
     }
 }
 
@@ -205,22 +207,13 @@ void LoRa_sendRaw(void* param) {
             // Handle transmission result
             if(!transmission_success)
             {
-                show_alert("Transmission Failed after "+(String)LORA_MAX_RETRIES+" retries");
-                stop_transmission();
+                show_alert("Transmission failed after "+(String)LORA_MAX_RETRIES+" retries");
             }
 
-            // Send HTTP response if requested
-            if(params->request != NULL)
+            // Send BT response if requested
+            if(params->send_response)
             {
-                JsonDocument doc;
-                doc["akn"] = transmission_success ? 1 : 0;
-                doc["username"] = username;
-                doc.shrinkToFit();
-                String return_res;
-                serializeJson(doc, return_res);
-                doc.clear();
-                int return_code = transmission_success ? 200 : 422;
-                params->request->send(return_code, "text/json", return_res);
+                bt_send(transmission_success ? "TX|OK" : "TX|FAIL");
             }
 
             delete params;
@@ -306,7 +299,7 @@ void onReceive(int packetSize)
         QueueParam* param = new QueueParam();
         param->type = type;
         param->message = message;
-        param->request = NULL;
+        param->send_response = false;
 
         // Try to send to queue, but don't block in ISR
         BaseType_t result = xQueueSendFromISR(recv_packets, (void*)&param, NULL);
@@ -343,11 +336,17 @@ void manage_recv_queue(void* param)
 
             if(type == RAW_DATA)
             {
-                send_msg_to_events((String)params->message);
+                bt_send("RAW|" + (String)params->message);
             }
             if(type == LORA_MSG)
             {
-                send_msg_to_ws((String)params->message);
+                // Parse JSON to extract sender name and message text
+                JsonDocument doc;
+                deserializeJson(doc, params->message);
+                String sender = doc["name"] | String("Unknown");
+                String msg    = doc["data"] | (String)params->message;
+                doc.clear();
+                bt_send("MSG|" + sender + "|" + msg);
             }
 
             delete params;
@@ -384,27 +383,6 @@ void manage_recv_queue(void* param)
     }
 }
 
-void send_msg_to_events(String data)
-{
-    JsonDocument doc;
-    doc["millis"] = millis();
-    doc["data"] = data;
-    String value;
-    serializeJson(doc, value);
-    doc.clear();
-    send_to_events(value, "RAW_DATA");
-}
-
-void send_msg_to_ws(String data)
-{
-    JsonDocument doc;
-    doc["response_type"] = "lora_rx";
-    doc["lora_msg"] = data;
-    String val;
-    serializeJson(doc, val);
-    doc.clear();
-    send_to_ws(val);
-}
 void onTxDone()
 {
     serial_print("LORA packet transmitted");

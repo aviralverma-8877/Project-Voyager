@@ -18,7 +18,7 @@ void init_oled() {
 
     // Initialize display state
     display_state.mode = MODE_SPLASH;
-    display_state.wifi_status = WIFI_DISCONNECTED;
+    display_state.bt_status = BT_DISCONNECTED;
     display_state.lora_status = LORA_IDLE;
     display_state.signal_strength = 0;
     display_state.last_update = millis();
@@ -83,33 +83,26 @@ void show_status_screen() {
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
 
-    // Line 1: WiFi status
-    if(display_state.wifi_status == WIFI_CONNECTED_AP) {
-        display.setCursor(MARGIN_LEFT, y);
-        display.print("Mode: AP");
-    } else if(display_state.wifi_status == WIFI_CONNECTED_STA) {
-        display.setCursor(MARGIN_LEFT, y);
-        display.print("Mode: STA");
-    } else if(display_state.wifi_status == WIFI_CONNECTING) {
-        display.setCursor(MARGIN_LEFT, y);
-        display.print("Connecting...");
+    // Line 1: Bluetooth connection status
+    display.setCursor(MARGIN_LEFT, y);
+    if(display_state.bt_status == BT_CONNECTED) {
+        display.print("BT: Connected");
+    } else if(display_state.bt_status == BT_CONNECTING) {
+        display.print("BT: Init...");
     } else {
-        display.setCursor(MARGIN_LEFT, y);
-        display.print("WiFi: Off");
+        display.print("BT: Waiting...");
     }
     y += LINE_HEIGHT;
 
-    // Line 2: SSID or IP
+    // Line 2: Device name
+    display.setCursor(MARGIN_LEFT, y);
+    display.print("Dev: " + String(PROJECT_NAME));
+    y += LINE_HEIGHT;
+
+    // Line 3: Username
     if(!display_state.line1.isEmpty()) {
         display.setCursor(MARGIN_LEFT, y);
-        display.print(display_state.line1.substring(0, 20)); // Limit length
-    }
-    y += LINE_HEIGHT;
-
-    // Line 3: IP Address or additional info
-    if(!display_state.line2.isEmpty()) {
-        display.setCursor(MARGIN_LEFT, y);
-        display.print(display_state.line2.substring(0, 20));
+        display.print(display_state.line1.substring(0, 20));
     }
     y += LINE_HEIGHT;
 
@@ -182,10 +175,8 @@ void show_message_screen(const char* title, const char* message) {
 // STATUS UPDATE FUNCTIONS
 // ============================================================================
 
-void set_wifi_status(WiFiStatus status, const char* ssid, const char* ip) {
-    display_state.wifi_status = status;
-    if(ssid != nullptr) display_state.line1 = ssid;
-    if(ip != nullptr) display_state.line2 = ip;
+void set_bt_status(BtStatus status) {
+    display_state.bt_status = status;
     display_state.last_update = millis();
 }
 
@@ -241,8 +232,8 @@ void draw_status_bar() {
     // Draw status bar background line
     display.drawLine(0, SCREEN_HEIGHT - STATUS_BAR_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT - STATUS_BAR_HEIGHT, SSD1306_WHITE);
 
-    // WiFi icon
-    draw_wifi_icon(x_pos, icon_y, display_state.wifi_status);
+    // BT icon
+    draw_bt_icon(x_pos, icon_y, display_state.bt_status);
     x_pos += icon_spacing;
 
     // LoRa icon
@@ -253,30 +244,21 @@ void draw_status_bar() {
     draw_signal_bars(SCREEN_WIDTH - 18, icon_y, display_state.signal_strength);
 }
 
-void draw_wifi_icon(int16_t x, int16_t y, WiFiStatus status) {
-    // WiFi signal icon (simplified)
-    if(status == WIFI_DISCONNECTED) {
-        // Draw X
+void draw_bt_icon(int16_t x, int16_t y, BtStatus status) {
+    if(status == BT_DISCONNECTED) {
+        // Draw X for disconnected
         display.drawLine(x, y, x + 6, y + 6, SSD1306_WHITE);
         display.drawLine(x, y + 6, x + 6, y, SSD1306_WHITE);
-    } else if(status == WIFI_CONNECTING) {
-        // Draw blinking dot
+    } else if(status == BT_CONNECTING) {
+        // Blinking dot while initialising
         if((millis() / 500) % 2 == 0) {
             display.fillCircle(x + 3, y + 3, 2, SSD1306_WHITE);
         }
     } else {
-        // Draw WiFi waves (AP or STA)
-        display.drawCircle(x + 3, y + 6, 2, SSD1306_WHITE);
-        display.drawLine(x + 1, y + 4, x + 5, y + 4, SSD1306_WHITE);
-        display.drawPixel(x, y + 2, SSD1306_WHITE);
-        display.drawPixel(x + 6, y + 2, SSD1306_WHITE);
-
-        // Add "A" for AP mode
-        if(status == WIFI_CONNECTED_AP) {
-            display.setTextSize(1);
-            display.setCursor(x + 8, y);
-            display.print("A");
-        }
+        // "B" character for connected Bluetooth
+        display.setTextSize(1);
+        display.setCursor(x, y);
+        display.print("B");
     }
 }
 

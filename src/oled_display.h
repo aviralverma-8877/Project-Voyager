@@ -32,12 +32,11 @@
         MODE_MESSAGE
     };
 
-    // Status indicators
-    enum WiFiStatus {
-        WIFI_DISCONNECTED,
-        WIFI_CONNECTING,
-        WIFI_CONNECTED_AP,
-        WIFI_CONNECTED_STA
+    // Bluetooth connection status
+    enum BtStatus {
+        BT_DISCONNECTED,
+        BT_CONNECTING,
+        BT_CONNECTED
     };
 
     enum LoRaStatus {
@@ -49,7 +48,7 @@
 
     struct DisplayState {
         DisplayMode mode;
-        WiFiStatus wifi_status;
+        BtStatus bt_status;
         LoRaStatus lora_status;
         String title;
         String line1;
@@ -78,7 +77,7 @@
     void show_message_screen(const char* title, const char* message);
 
     // Status update functions
-    void set_wifi_status(WiFiStatus status, const char* ssid = nullptr, const char* ip = nullptr);
+    void set_bt_status(BtStatus status);
     void set_lora_status(LoRaStatus status);
     void set_status_message(const char* message);
     void set_signal_strength(uint8_t strength); // 0-4 bars
@@ -86,7 +85,7 @@
     // Drawing helper functions
     void draw_header();
     void draw_status_bar();
-    void draw_wifi_icon(int16_t x, int16_t y, WiFiStatus status);
+    void draw_bt_icon(int16_t x, int16_t y, BtStatus status);
     void draw_lora_icon(int16_t x, int16_t y, LoRaStatus status);
     void draw_signal_bars(int16_t x, int16_t y, uint8_t strength);
     void draw_progress_bar(int16_t x, int16_t y, int16_t width, int16_t height, uint8_t progress);

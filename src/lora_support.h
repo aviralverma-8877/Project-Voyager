@@ -6,7 +6,10 @@
     #include <support_method.h>
     #include "CRC8.h"
     #include "CRC.h"
-    #include <ESPAsyncWebServer.h>
+    #include "freertos/FreeRTOS.h"
+    #include "freertos/task.h"
+    #include "freertos/queue.h"
+
     #define SCK             LSCK
     #define MISO            LMISO
     #define MOSI            LMOSI
@@ -25,18 +28,28 @@
     #define RAW_DATA 1               //        The payload is a file chunk or raw data.
     #define REC_AKNG 2               //        The payload is an aknowledgement of recieved msg.
     #define LORA_SERIAL 3
+
     struct TaskParameters {
-    String data;
+        String data;
     };
 
     struct QueueParam {
         int type;
         String message;
-        AsyncWebServerRequest *request;
+        bool send_response;  // true = send TX|OK or TX|FAIL over BT after transmission
     };
+
     struct DebugQueueParam {
         String message;
     };
+
+    // FreeRTOS queue handles (created in main.cpp)
+    extern QueueHandle_t serial_packet_send;
+    extern QueueHandle_t serial_packet_rec;
+    extern QueueHandle_t send_packets;
+    extern QueueHandle_t recv_packets;
+    extern QueueHandle_t debug_msg;
+
     extern CRC8 crc;
     extern bool lora_available_for_write;
     extern SemaphoreHandle_t lora_write_mutex;
@@ -55,6 +68,4 @@
     void LoRa_sendAkn(uint8_t result);
     void onReceive(int packetSize);
     void onTxDone();
-    void send_msg_to_events(String data);
-    void send_msg_to_ws(String data);
 #endif
