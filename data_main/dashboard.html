@@ -36,6 +36,7 @@
             id="username"
             onchange="set_username(this.value)"
             value=""
+            maxlength="32"
             type="text"
             placeholder="Name"
         >
@@ -47,7 +48,7 @@
         <textarea class="form-control" id="lora_msg" rows="3"></textarea>
     </div>
     <div class="mb-3">
-        <button class="btn btn-primary" onclick="send_lora(lora_msg.value)">
+        <button type="button" class="btn btn-primary" onclick="send_lora()">
             <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="20"
@@ -60,5 +61,6 @@
             </svg>
             Transmit
         </button>
+        <span class="ms-2 text-muted" id="lora_send_status"></span>
     </div>
 </fieldset>

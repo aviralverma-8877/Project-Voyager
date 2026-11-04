@@ -1,325 +1,282 @@
 #include <support_method.h>
+#include <core_dispatch.h>
+#include <web_sockets.h>
+#include <auth.h>
+#include <mutex>
 
-bool lora_serial = false;
-String username;
+volatile bool lora_serial = false;
+volatile bool fs_mounted = false;
 String hostname;
 DNSServer dnsServer;
 TaskHandle_t debug_handler = NULL;
 
-// This is main method to handle web-socket input
-// It accepts input as JsonDocument which should have the key request-type.
-// Based on the request type corresponding operations will be performed on the ESP32.
-void handle_operations(JsonDocument doc)
+static String s_username;
+static std::mutex s_username_lock;
+
+// ------------------------------------------------------------------ file I/O
+
+bool read_file(const char* path, String& out)
 {
-    const char* request_type = doc["request-type"];
-    if(strcmp(request_type, "wifi_ssid_scan") == 0)
-    {
-        String json_string;
-        xTaskCreatePinnedToCore(scan_ssid, "scan_wifi", 6000, NULL, 1, NULL,1);
-        return;
+    out = "";
+    if (!fs_mounted || !LittleFS.exists(path)) return false;
+    File file = LittleFS.open(path, FILE_READ);
+    if (!file) return false;
+    size_t size = file.size();
+    if (size > 4096) { file.close(); return false; }   // config files are tiny
+    out.reserve(size + 1);
+    while (file.available())
+        out += (char)file.read();
+    file.close();
+    return true;
+}
+
+bool write_file_atomic(const char* path, const String& content)
+{
+    if (!fs_mounted || path == NULL) return false;
+    String tmp = String(path) + ".tmp";
+    File file = LittleFS.open(tmp, FILE_WRITE);
+    if (!file) return false;
+    size_t written = file.print(content);
+    file.close();
+    if (written != content.length()) {
+        LittleFS.remove(tmp);
+        return false;
     }
-    if(strcmp(request_type, "connect_wifi") == 0)
-    {
-        const char * wifi_ssid = doc["wifi_ssid"];
-        serial_print(wifi_ssid);
-        const char * psk = doc["wifi_pass"];
-        serial_print(psk);
-        // Reading wifi config
-        String wifi_config = get_wifi_setting("/config/wifi_config.json");
-        // modifying wifi config
-        serial_print(wifi_config);
-        JsonDocument wifi_conf;
-        deserializeJson(wifi_conf, wifi_config);
-        wifi_conf.shrinkToFit();
-        wifi_conf["wifi_function"] = "STA";
-        wifi_conf["wifi_ssid"] = wifi_ssid;
-        wifi_conf["wifi_pass"] = psk;
-        serializeJsonPretty(wifi_conf, wifi_config);
-        wifi_conf.clear();
-        serial_print(wifi_config);
-        // writing wifi config
-        save_wifi_settings(wifi_config);
-        restart(NULL);
-        return;
+    // LittleFS rename replaces an existing target atomically.
+    if (!LittleFS.rename(tmp, path)) {
+        LittleFS.remove(tmp);
+        return false;
     }
-    if(strcmp(request_type, "wifi_ap_mode") == 0)
+    return true;
+}
+
+// ------------------------------------------------------------- dispatcher
+
+static void send_username_to_ws()
+{
+    JsonDocument out;
+    out["response_type"] = "set_uname";
+    out["uname"] = get_username();
+    String payload;
+    serializeJson(out, payload);
+    send_to_ws(payload);
+}
+
+static void send_serial_mode_to_ws()
+{
+    JsonDocument out;
+    out["response_type"] = "serial_mode";
+    out["value"] = (bool)lora_serial;
+    String payload;
+    serializeJson(out, payload);
+    send_to_ws(payload);
+}
+
+// WS command dispatcher (Contract 3). Runs on the web_sockets worker task.
+// Validation lives in core_dispatch.h (unit-tested natively); this only routes.
+// Never logs argument values for wifi / ap passwords.
+void handle_operations(JsonDocument& doc)
+{
+    CoreCommand cmd = core_parse_request(doc.as<JsonVariantConst>());
+    switch (cmd.action)
     {
-        String wifi_config = get_wifi_setting("/config/wifi_default.json");
-        JsonDocument doc;
-        deserializeJson(doc, wifi_config);
-        doc["wifi_ssid"] = username;
-        serializeJson(doc, wifi_config);
-        doc.clear();
-        save_wifi_settings(wifi_config);
-        restart(NULL);
+    case CoreAction::Missing:
+    case CoreAction::Unknown:
+        serial_print(String("WS request ignored: ") + cmd.error);
         return;
-    }
-    if(strcmp(request_type, "send_akn") == 0)
-    {
-        serial_print("send_akn");
-        uint8_t akn = doc["akn"];
-        LoRa_sendAkn(akn);
-        doc.clear();
+    case CoreAction::Invalid:
+        serial_print(String("WS request rejected: ") + cmd.error);
+        show_alert(String("Request rejected: ") + cmd.error);
         return;
-    }
-    if(strcmp(request_type, "reset_device") == 0)
-    {
-        xTaskCreatePinnedToCore(reset_device, "reset_device", 6000, NULL, 1, NULL,1);
+    case CoreAction::WifiScan:
+        if (xTaskCreatePinnedToCore(scan_ssid, "scan_wifi", 6000, NULL, 1, NULL, 1) != pdPASS)
+            serial_print("scan_wifi task create failed");
         return;
-    }
-    if(strcmp(request_type, "restart_device") == 0)
-    {
-        xTaskCreatePinnedToCore(restart, "Restart", 6000, NULL, 1, NULL,1);
+    case CoreAction::ConnectWifi:
+        serial_print("connect_wifi: " + String(cmd.arg1.c_str()));
+        wifi_save_sta(cmd.arg1.c_str(), cmd.arg2.c_str());   // alerts on failure itself
         return;
-    }
-    if(strcmp(request_type, "set_username") == 0)
-    {
-        String val = doc["val"];
-        serial_print("changing username");
-        serial_print(val);
-        save_username(val);
+    case CoreAction::WifiApMode:
+        serial_print("wifi_ap_mode");
+        wifi_switch_to_ap();   // alerts on failure itself
         return;
-    }
-    if(strcmp(request_type, "get_username") == 0)
-    {
-        serial_print("get_username");
-        JsonDocument doc;
-        doc["response_type"] = "set_uname";
-        doc["uname"] = username;
-        String return_value;
-        serializeJson(doc, return_value);
-        doc.clear();
-        send_to_ws(return_value);
+    case CoreAction::SetApPass:
+        serial_print("set_ap_pass");
+        wifi_set_ap_pass(cmd.arg1.c_str());   // alerts on failure itself
         return;
-    }
-    if(strcmp(request_type, "set_lora_config") == 0)
-    {
-        String val = doc["val"];
-        serial_print("saving lora config");
-        serial_print(val);
-        save_lora_config(val);
+    case CoreAction::ResetDevice:
+        if (xTaskCreatePinnedToCore(reset_device, "reset_device", 6000, NULL, 1, NULL, 1) != pdPASS)
+            serial_print("reset_device task create failed");
         return;
-    }
-    if(strcmp(request_type, "set_serial_mode")==0)
-    {
-        lora_serial = doc["value"];
-        xTaskCreatePinnedToCore(save_lora_serial_config, "save_lora_serial_config", 6000, NULL, 1, NULL,1);
+    case CoreAction::RestartDevice:
+        if (xTaskCreatePinnedToCore(restart, "restart", 4096, NULL, 1, NULL, 1) != pdPASS)
+            serial_print("restart task create failed");
         return;
-    }
-    if(strcmp(request_type, "get_serial_mode")==0)
-    {
-        JsonDocument doc;
-        doc["response_type"] = "serial_mode";
-        doc["value"] = lora_serial;
-        String return_value;
-        serializeJson(doc, return_value);
-        doc.clear();
-        send_to_ws(return_value);
+    case CoreAction::SetUsername:
+        if (save_username(String(cmd.arg1.c_str())))
+            show_alert("Username saved");
+        else
+            show_alert("Username could not be saved");
+        send_username_to_ws();
+        return;
+    case CoreAction::GetUsername:
+        send_username_to_ws();
+        return;
+    case CoreAction::SetLoraConfig:
+        serial_print("set_lora_config");
+        if (!save_lora_config(cmd.arg1.c_str()))
+            show_alert("LoRa config rejected");
+        return;
+    case CoreAction::SetSerialMode:
+        lora_serial = cmd.flag;
+        if (xTaskCreatePinnedToCore(save_lora_serial_config, "save_lora_serial", 4096, NULL, 1, NULL, 1) != pdPASS)
+            serial_print("save_lora_serial task create failed");
+        send_serial_mode_to_ws();
+        return;
+    case CoreAction::GetSerialMode:
+        send_serial_mode_to_ws();
         return;
     }
 }
 
-// Method to save LoRa to Serial configration.
-// This method should be called using xTaskCreatePinnedToCore.
-// It will save current value of lora_serial global variable to /config/lora_serial.json
+// Saves the current lora_serial flag. Task: every path ends in vTaskDelete.
 void save_lora_serial_config(void* param)
 {
     JsonDocument doc;
-    doc["lora_serial"] = lora_serial;
+    doc["lora_serial"] = (bool)lora_serial;
     String config;
     serializeJson(doc, config);
-    doc.clear();
-    File file = LittleFS.open("/config/lora_serial.json", FILE_WRITE);
-    if(!file){
-        Serial.println("No LoRa serial config file present.");
-        return;
-    }
-    if(file.print(config)){
+    if (write_file_atomic("/config/lora_serial.json", config))
         serial_print("LoRa serial config saved.");
-    }
-    file.close();
+    else
+        serial_print("LoRa serial config save failed.");
     vTaskDelete(NULL);
 }
 
+// ------------------------------------------------------ LoRa <-> serial bridge
+
+// Received LORA_SERIAL payloads -> UART. Runs in every build (not DEBUG-gated).
 void send_to_serial(void *param)
 {
-    while(true)
+    while (true)
     {
         DebugQueueParam *p = NULL;
-        if(xQueueReceive(serial_packet_rec, &(p), pdMS_TO_TICKS(100)) == pdTRUE)
+        if (xQueueReceive(serial_packet_rec, &p, portMAX_DELAY) == pdTRUE && p)
         {
-            Serial.print((String)p->message);
+            Serial.print(p->message);
             delete p;
         }
-        vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 }
 
 void send_to_lora(void *param)
 {
-    while(true)
+    while (true)
     {
         DebugQueueParam *p = NULL;
-        if(xQueueReceive(serial_packet_send, &(p), pdMS_TO_TICKS(100)) == pdTRUE)
+        if (xQueueReceive(serial_packet_send, &p, portMAX_DELAY) == pdTRUE && p)
         {
-            LoRa_send((String)p->message, LORA_SERIAL);
+            if (lora_serial)
+                LoRa_send(p->message, LORA_SERIAL);
             delete p;
         }
-        vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 }
 
-// Loop to catch any input to Serial input and send it to lora.
-// This meathod will only be enabled if lora_serial flag is true.
+// UART -> LoRa. Each chunk is at most LORA_MAX_PAYLOAD bytes.
 void serial_to_lora(void* param)
 {
-    Serial.flush();
-    while(true){
-        if(lora_serial)
+    while (true)
+    {
+        if (lora_serial)
         {
-            if(Serial.available())
+            if (Serial.available())
             {
-                DebugQueueParam *p = new DebugQueueParam();
-                if(p)
+                // Give a short burst time to arrive so we send fuller chunks.
+                vTaskDelay(pdMS_TO_TICKS(20));
+                DebugQueueParam *p = new (std::nothrow) DebugQueueParam();
+                if (p)
                 {
-                    while(Serial.available())
+                    p->message.reserve(LORA_MAX_PAYLOAD);
+                    while (Serial.available() && p->message.length() < LORA_MAX_PAYLOAD)
                         p->message += (char)Serial.read();
-                    if(xQueueSend(serial_packet_send, (void*)&p, (TickType_t)2) != pdTRUE)
+                    if (xQueueSend(serial_packet_send, (void*)&p, pdMS_TO_TICKS(100)) != pdTRUE)
                         delete p;
                 }
+                continue;   // drain any remainder immediately
             }
-        }
-        else{
-            Serial.flush();
-        }
-        vTaskDelay(10/portTICK_PERIOD_MS);
-    }
-    vTaskDelete(NULL);
-}
-
-// Method to fetch the flag lora_serial.
-// This method will not return any value,
-// rather update the value in lora_serial flag.
-void get_lora_serial()
-{
-    if (LittleFS.exists("/config/lora_serial.json"))
-    {
-        File file = LittleFS.open("/config/lora_serial.json");
-        if(!file){
-            lora_serial = false;
-            return;
-        }
-        size_t fileSize = file.size();
-        String lora_serial_config;
-        lora_serial_config.reserve(fileSize + 1);
-        while(file.available()){
-            lora_serial_config += (char)file.read();
-        }
-        file.close();
-        JsonDocument doc;
-        deserializeJson(doc, lora_serial_config);
-        doc.shrinkToFit();
-        lora_serial = doc["lora_serial"];
-        doc.clear();
-        if(DEBUGGING)
-            xTaskCreatePinnedToCore(send_to_serial, "send_to_serial", 6000, NULL, 1, NULL, 1);
-        xTaskCreatePinnedToCore(send_to_lora, "send_to_lora", 6000, NULL, 1, NULL, 1);
-        xTaskCreatePinnedToCore(serial_to_lora, "serial_to_lora", 6000, NULL, 1, NULL, 1);
-    }
-}
-
-// Update username flag with username value
-void get_username()
-{
-    serial_print("get_username");
-    if (LittleFS.exists("/config/user_data.json"))
-    {
-        File file = LittleFS.open("/config/user_data.json");
-        if(!file){
-            username = WiFi.macAddress();
-            return;
-        }
-        size_t fileSize = file.size();
-        String username_config;
-        username_config.reserve(fileSize + 1);
-        while(file.available()){
-            username_config += (char)file.read();
-        }
-        file.close();
-        serial_print("Reading username");
-        JsonDocument doc;
-        deserializeJson(doc, username_config);
-        doc.shrinkToFit();
-        const char* uname = doc["username"];
-        doc.clear();
-        if(strcmp(uname, "")==0)
-        {
-            username = WiFi.macAddress();
-            return;
         }
         else
         {
-            username = uname;
-            return;
+            while (Serial.available()) Serial.read();   // discard console input
         }
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
-//Send stop transmission comamnd to client
-void stop_transmission()
+// Must run after config_lora() (radio mutex) and after the queues exist.
+void start_serial_bridge()
 {
-    JsonDocument doc;
-    doc["response_type"] = "stop_transmission";
-    String return_value;
-    serializeJson(doc, return_value);
-    doc.clear();
-    send_to_ws(return_value);
+    if (xTaskCreatePinnedToCore(send_to_serial, "send_to_serial", 4096, NULL, 1, NULL, 1) != pdPASS)
+        oled_alert("Boot error", "serial rx task", 0);
+    if (xTaskCreatePinnedToCore(send_to_lora, "send_to_lora", 6000, NULL, 1, NULL, 1) != pdPASS)
+        oled_alert("Boot error", "serial tx task", 0);
+    if (xTaskCreatePinnedToCore(serial_to_lora, "serial_to_lora", 4096, NULL, 1, NULL, 1) != pdPASS)
+        oled_alert("Boot error", "serial in task", 0);
 }
 
-void save_username(String uname)
+void get_lora_serial()
 {
-    serial_print("Saving username");
-    serial_print(uname);
+    String cfg;
+    bool ok = read_file("/config/lora_serial.json", cfg);
+    lora_serial = core_parse_lora_serial(ok ? cfg.c_str() : nullptr);
+}
+
+// ---------------------------------------------------------------- username
+
+void load_username()
+{
+    String cfg;
+    bool ok = read_file("/config/user_data.json", cfg);
+    std::string mac = WiFi.macAddress().c_str();
+    std::string u = core_parse_username(ok ? cfg.c_str() : nullptr, mac);
+    std::lock_guard<std::mutex> g(s_username_lock);
+    s_username = u.c_str();
+}
+
+String get_username()
+{
+    std::lock_guard<std::mutex> g(s_username_lock);
+    if (s_username.length() == 0)
+        return WiFi.macAddress();
+    return s_username;   // copy made under the lock
+}
+
+// Caller has validated length (1-32). Saved atomically; memory updated only on success.
+bool save_username(const String& uname)
+{
     JsonDocument doc;
     doc["username"] = uname;
-    String username_config;
-    serializeJson(doc, username_config);
-    doc.clear();
-    File file = LittleFS.open("/config/user_data.json", FILE_WRITE);
-    if(!file){
-        Serial.println("No username file present.");
-        return;
+    String cfg;
+    serializeJson(doc, cfg);
+    if (!write_file_atomic("/config/user_data.json", cfg))
+    {
+        serial_print("Username save failed");
+        return false;
     }
-    if(file.print(username_config)){
-        serial_print("Username saved");
+    {
+        std::lock_guard<std::mutex> g(s_username_lock);
+        s_username = uname;
     }
-    file.close();
-    username = uname;
+    serial_print("Username saved");
+    return true;
 }
 
-//Reset ESP32
-void reset_device(void *param)
+// ------------------------------------------------------------ WS helpers
+
+void stop_transmission()
 {
-    show_alert("Device reset successfully,\nPlease reconfigure the device by connecting to the AP.\nRebooting Now.");
-    clear_oled_display();
-    display_buffer[1].msg = "Resetting";
-    display_text_oled();
-    serial_print("Stopping WiFi");
-    if (WiFi.status() == WL_CONNECTED)
-    {
-        WiFi.disconnect();
-    }
-    serial_print("Formatting LittleFS");
-    bool formatted = LittleFS.format();
-    if (formatted)
-    {
-        serial_print("Success formatting");
-        restart(NULL);
-    }
-    else
-    {
-        serial_print("Error formatting");
-    }
+    send_to_ws("{\"response_type\":\"stop_transmission\"}");
 }
 
 void show_alert(String msg)
@@ -327,136 +284,193 @@ void show_alert(String msg)
     JsonDocument doc;
     doc["response_type"] = "alert";
     doc["alert_msg"] = msg;
-    String return_response;
-    serializeJsonPretty(doc, return_response);
-    doc.clear();
-    send_to_ws(return_response);
+    String payload;
+    serializeJson(doc, payload);
+    send_to_ws(payload);
 }
 
+// --------------------------------------------------------- restart / reset
+
+// Task. Short delay lets the WS/HTTP reply flush first.
 void restart(void *param)
 {
-    vTaskDelay(500/portTICK_PERIOD_MS);
     serial_print("Restarting esp.");
+    vTaskDelay(pdMS_TO_TICKS(500));
     ESP.restart();
+    vTaskDelete(NULL);   // not reached
 }
 
-void setup_mdns()
+static bool restore_default(const char* target, const char* source)
 {
-    String mac = WiFi.macAddress();
-    mac.replace(":","_");
-    hostname = "project-voyager-"+mac;
-    WiFi.hostname(hostname);
-    serial_print("Device hostname: "+hostname);
-    if (MDNS.begin(hostname.c_str())) {
-        MDNS.addService("http", "tcp", 80); 
-        serial_print("Started mDNS service");
-    }
+    String content;
+    if (!read_file(source, content) || content.length() == 0)
+        return false;
+    return write_file_atomic(target, content);
 }
 
-void setup_dns()
+// Factory reset (Contract 5). Task. Does NOT format: the web UI stays.
+void reset_device(void *param)
 {
-    serial_print("DNS service started.");
-    serial_print("Soft AP IP.");
-    serial_print(WiFi.softAPIP().toString());
-    dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
-    dnsServer.setTTL(3600);
-    dnsServer.start(53, "*", WiFi.softAPIP());
-    xTaskCreatePinnedToCore(dns_request_process, "DNS Request Handler", 6000, NULL, 1, NULL,1);
-}
+    serial_print("Factory reset");
+    show_alert("Device reset successfully,\nPlease reconfigure the device by connecting to the AP.\nRebooting Now.");
+    oled_alert("Resetting", "Restoring defaults", 5000);
 
-void dns_request_process(void *parameter)
-{
-    serial_print("DNS Request loop started.");
-    for(;;)
+    bool ok = true;
+    if (!restore_default("/config/wifi_config.json", "/config/wifi_default.json"))
     {
-        dnsServer.processNextRequest();
-        vTaskDelay(30/portTICK_PERIOD_MS);
+        // No default file: write the built-in AP default (empty ap_pass = derived default).
+        ok &= write_file_atomic("/config/wifi_config.json",
+            "{\"wifi_function\":\"AP\",\"wifi_ssid\":\"\",\"wifi_pass\":\"\",\"ap_pass\":\"\"}");
     }
-    vTaskDelete(NULL);
+    if (!restore_default("/config/lora_config.json", "/config/lora_default.json"))
+    {
+        // No default: remove the active config so the radio uses its compiled defaults.
+        if (fs_mounted && LittleFS.exists("/config/lora_config.json"))
+            ok &= LittleFS.remove("/config/lora_config.json");
+    }
+    ok &= write_file_atomic("/config/user_data.json", "{\"username\":\"\"}");
+    ok &= write_file_atomic("/config/lora_serial.json", "{\"lora_serial\":false}");
+    lora_serial = false;
+    auth_clear();
+    if (!ok)
+        serial_print("Factory reset: some config files could not be restored");
+
+    vTaskDelay(pdMS_TO_TICKS(1500));   // let the alert reach the browser / OLED
+    ESP.restart();
+    vTaskDelete(NULL);   // not reached
+}
+
+// ---------------------------------------------------------------- GPIO
+
+static void config_button_pin(int pin)
+{
+    // GPIO 34-39 are input-only with no internal pulls: external resistor required.
+    if (pin >= 34 && pin <= 39)
+        pinMode(pin, INPUT);
+    else
+        pinMode(pin, STATE == HIGH ? INPUT_PULLDOWN : INPUT_PULLUP);
 }
 
 void config_gpios()
 {
     pinMode(LED, OUTPUT);
-    pinMode(BTN1, INPUT_PULLDOWN);
-    pinMode(BTN2, INPUT_PULLDOWN);
     digitalWrite(LED, LOW);
+    config_button_pin(BTN1);
+    config_button_pin(BTN2);
 }
 
+// ---------------------------------------------------------------- logging
+
+// Queue a debug line. No-op in release builds, from ISRs, or before the
+// logger exists. Callers must never pass secrets (Contract 4).
 void serial_print(String msg)
 {
-    if(debug_handler != NULL)
-    {
-        DebugQueueParam *payload = new DebugQueueParam();
-        if(!payload) return;
-        payload->message = msg;
-        if(xQueueSend(debug_msg, (void*)&payload, (TickType_t)2) != pdTRUE)
-        {
-            delete payload; // prevent heap exhaustion when queue is full
-        }
-    }
+    if (!DEBUGGING) return;
+    if (xPortInIsrContext()) return;
+    if (debug_handler == NULL || debug_msg == NULL) return;
+    DebugQueueParam *payload = new (std::nothrow) DebugQueueParam();
+    if (!payload) return;
+    payload->message = msg;
+    if (xQueueSend(debug_msg, (void*)&payload, 0) != pdTRUE)
+        delete payload;   // queue full: drop rather than block the caller
 }
 
 void debugger_print(void *param)
 {
-    while(true)
+    while (true)
     {
         DebugQueueParam* params = NULL;
-        if(xQueueReceive(debug_msg, &(params), pdMS_TO_TICKS(100)) == pdTRUE)
+        if (xQueueReceive(debug_msg, &params, portMAX_DELAY) != pdTRUE || !params)
+            continue;
+        if (DEBUGGING && !lora_serial)   // the UART belongs to the bridge in serial mode
         {
-            String msg = (String)params->message;
-            if(DEBUGGING && !lora_serial)
-            {
-                Serial.println("\n"+msg);
-            }
-            if(ws_client_count > 0)
-            {
-                JsonDocument doc;
-                doc["millis"] = millis();
-                doc["data"] = msg;
-                doc.shrinkToFit();
-                String payload;
-                serializeJson(doc, payload);
-                doc.clear();
-                send_to_events(payload, "DEBUG");
-            }
-            delete params;
+            Serial.print("\n");
+            Serial.println(params->message);
         }
-        vTaskDelay(10 / portTICK_PERIOD_MS);
+        if (DEBUGGING && events_client_count() > 0)
+        {
+            JsonDocument doc;
+            doc["millis"] = millis();
+            doc["data"] = params->message;
+            String payload;
+            serializeJson(doc, payload);
+            send_to_events(payload, "DEBUG");
+        }
+        delete params;
     }
 }
 
 String get_device_mode()
 {
-    serial_print("get_device_config");
-    if (LittleFS.exists("/config/device_config.json"))
-    {
-        File file = LittleFS.open("/config/device_config.json");
-        if(!file){
-            return "WiFi";
-        }
-        size_t fileSize = file.size();
-        String device_config;
-        device_config.reserve(fileSize + 1);
-        while(file.available()){
-            device_config += (char)file.read();
-        }
-        file.close();
-        serial_print("Reading device_mode");
-        JsonDocument doc;
-        deserializeJson(doc, device_config);
-        doc.shrinkToFit();
-        String device_mode = doc["device_mode"];
-        doc.clear();
-        return device_mode;
-    }
-    return "WiFi";
+    String cfg;
+    bool ok = read_file("/config/device_config.json", cfg);
+    return String(core_parse_device_mode(ok ? cfg.c_str() : nullptr).c_str());
 }
 
 void setupTasks()
 {
-    xTaskCreatePinnedToCore(btn_intrupt, "btn_intrupt", 6000, NULL, 1, NULL,1);
-    xTaskCreatePinnedToCore(get_heap_info, "get_heap_info", 6000, NULL, 1, NULL,1);
-    xTaskCreatePinnedToCore(get_wifi_rssi, "get_wifi_rssi", 6000, NULL, 1, NULL,1);
-    xTaskCreatePinnedToCore(async_led_notifier, "async_led_notifier", 6000, NULL, 1, NULL, 1);
+    // LED task first so led_nortifier() has a target as early as possible.
+    if (xTaskCreatePinnedToCore(async_led_notifier, "led_notifier", 2048, NULL, 1, &led_task_handle, 1) != pdPASS)
+        serial_print("led task create failed");
+    if (xTaskCreatePinnedToCore(btn_intrupt, "buttons", 4096, NULL, 2, NULL, 1) != pdPASS)
+        oled_alert("Boot error", "button task", 0);
+    if (xTaskCreatePinnedToCore(get_heap_info, "get_heap_info", 4096, NULL, 1, NULL, 1) != pdPASS)
+        serial_print("heap task create failed");
+    if (xTaskCreatePinnedToCore(get_wifi_rssi, "get_wifi_rssi", 4096, NULL, 1, NULL, 1) != pdPASS)
+        serial_print("rssi task create failed");
+}
+
+// ------------------------------------- wifi-network-engineer owned functions
+// Owner: wifi-network-engineer. Starts mDNS once per boot; the IDF responder
+// follows AP/STA interfaces by itself, so reconnects need no new begin().
+// The hostname is set by wifi_support before WiFi.mode()/begin().
+void setup_mdns()
+{
+    static bool mdns_started = false;
+    if (mdns_started) return;
+    if (hostname.length() == 0)
+    {
+        String mac = WiFi.macAddress();
+        mac.replace(":","_");
+        hostname = "project-voyager-"+mac;
+    }
+    if (MDNS.begin(hostname.c_str())) {
+        MDNS.addService("http", "tcp", 80);
+        mdns_started = true;
+        serial_print("Started mDNS service: " + hostname);
+    } else {
+        serial_print("mDNS start failed");
+    }
+}
+
+// Owner: wifi-network-engineer. Captive DNS for the AP; started once per boot.
+void setup_dns()
+{
+    static bool dns_started = false;
+    if (dns_started) return;
+    dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+    dnsServer.setTTL(3600);
+    if (!dnsServer.start(53, "*", WiFi.softAPIP()))
+    {
+        serial_print("DNS server start failed");
+        return;
+    }
+    if (xTaskCreatePinnedToCore(dns_request_process, "DNS Request Handler", 4096, NULL, 1, NULL, 1) != pdPASS)
+    {
+        dnsServer.stop();
+        serial_print("DNS task create failed");
+        return;
+    }
+    dns_started = true;
+    serial_print("DNS service started on " + WiFi.softAPIP().toString());
+}
+
+// Owner: wifi-network-engineer. Never returns.
+void dns_request_process(void *parameter)
+{
+    for(;;)
+    {
+        dnsServer.processNextRequest();
+        vTaskDelay(30/portTICK_PERIOD_MS);
+    }
 }

@@ -1,11 +1,11 @@
 <h1>
-    WiFi Configration.
+    WiFi Configuration.
 </h1>
 <hr>
-<fieldset class="lora_transmission">
+<fieldset class="busy_lock">
     <div class="mb-3">
         <dl class="row">
-            <dt class="col-sm-2">Connected SSID:</dt>
+            <dt class="col-sm-2">Saved SSID:</dt>
             <dd id="wifi_ssid_name" class="col-sm-10">Loading...</dd>
         </dl>
     </div>
@@ -31,7 +31,7 @@
                 readonly
                 class="form-control"
                 id="wifi_ssid"
-                placeholder="WiFi SSID"
+                placeholder="Choose a network from the scan list"
             >
         </div>
     </div>
@@ -42,13 +42,59 @@
                 type="password"
                 class="form-control"
                 id="wifi_password"
-                placeholder="Password"
+                maxlength="63"
+                autocomplete="off"
+                placeholder="Password (leave empty for an open network)"
             >
         </div>
     </div>
     <br>
     <div class="mb-3">
-        <button class="btn btn-primary mb-2" onclick="wifi_connect()">Connect</button>
-        <button class="btn btn-primary mb-2" onclick="wifi_ap_mode()">AP Mode</button>
+        <button type="button" class="btn btn-primary mb-2" onclick="wifi_connect()">Connect</button>
+        <button type="button" class="btn btn-primary mb-2" onclick="wifi_ap_mode()">AP Mode</button>
+    </div>
+    <hr>
+    <h4>Access point password</h4>
+    <div class="form-group row">
+        <label for="ap_password" class="col-sm-2 col-form-label">AP password</label>
+        <div class="col-sm-10">
+            <input
+                type="password"
+                class="form-control"
+                id="ap_password"
+                maxlength="63"
+                autocomplete="new-password"
+                placeholder="8-63 characters"
+            >
+            <div class="form-text">
+                Used by the device's own WiFi access point (WPA2). Leave it empty to go back to
+                the default password shown on the device's OLED <b>Network</b> page.
+            </div>
+        </div>
+    </div>
+    <div class="mb-3 mt-2">
+        <button type="button" class="btn btn-primary" onclick="set_ap_password()">Set AP password</button>
+        <span class="ms-2 text-muted" id="ap_pass_status"></span>
     </div>
 </fieldset>
+<hr>
+<h4>Change admin password</h4>
+<p class="form-text">
+    The admin password protects this web interface (user name <b>admin</b>). After changing it,
+    your browser will ask you to sign in again.
+</p>
+<div class="form-group row">
+    <label for="admin_pass1" class="col-sm-2 col-form-label">New password</label>
+    <div class="col-sm-10">
+        <input type="password" class="form-control" id="admin_pass1" maxlength="63" autocomplete="new-password" placeholder="8-63 characters">
+    </div>
+</div>
+<div class="form-group row mt-2">
+    <label for="admin_pass2" class="col-sm-2 col-form-label">Repeat password</label>
+    <div class="col-sm-10">
+        <input type="password" class="form-control" id="admin_pass2" maxlength="63" autocomplete="new-password" placeholder="Repeat the new password">
+    </div>
+</div>
+<div class="mb-3 mt-2">
+    <button type="button" class="btn btn-primary" onclick="change_admin_password()">Change admin password</button>
+</div>

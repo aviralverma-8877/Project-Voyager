@@ -2,7 +2,7 @@
     LoRa Configuration
 </h1>
 <hr>
-<fieldset class="lora_transmission">
+<fieldset class="busy_lock">
     <div class="mb-3">
         <h5>
             Default LoRa configs.
@@ -13,7 +13,7 @@
             aria-label="lora_config"
             onchange="load_lora_config(this.value)"
         >
-            <option value="">Default configs</option>
+            <option value="">Presets</option>
         </select>
     </div>
     <div class="mb-3">
@@ -23,6 +23,7 @@
         <input
             type="file"
             class="form-control"
+            accept=".json,application/json"
             onchange="update_lora_config_from_file()"
             id="LoraConfigFile"
         >
@@ -40,7 +41,7 @@
             step="0.5"
             value="410"
             id="freq_range"
-            onchange="set_freq_range(this.value)"
+            oninput="set_freq_range(this.value)"
         >
     </div>
     <div class="mb-3">
@@ -51,12 +52,12 @@
         <input
             type="range"
             class="form-range"
-            min="0"
-            max="14"
+            min="2"
+            max="20"
             step="1"
-            value="0"
+            value="10"
             id="tx_power_range"
-            onchange="set_tx_power(this.value)"
+            oninput="set_tx_power(this.value)"
         >
     </div>
     <div class="mb-3">
@@ -72,7 +73,7 @@
             step="1"
             value="6"
             id="spreading_factor"
-            onchange="set_spreading_factor(this.value)"
+            oninput="set_spreading_factor(this.value)"
         >
     </div>
     <div class="mb-3">
@@ -103,7 +104,7 @@
             step="1"
             value="5"
             id="coding_rate"
-            onchange="set_coding_rate(this.value)"
+            oninput="set_coding_rate(this.value)"
         >
     </div>
     <div class="mb-3">
@@ -111,7 +112,7 @@
         <select class="form-control" id="sync_word"></select>
     </div>
     <div class="mb-3">
-        <button class="btn btn-primary" onclick="save_lora_config()">Save</button>
-        <button class="btn btn-primary" onclick="download_lora_config()">Download Setting</button>
+        <button type="button" class="btn btn-primary" onclick="save_lora_config()">Save</button>
+        <button type="button" class="btn btn-primary" onclick="download_lora_config()">Download Setting</button>
     </div>
 </fieldset>

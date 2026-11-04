@@ -2,7 +2,7 @@
     File Transfer.
 </h1>
 <hr>
-<fieldset class="lora_transmission">
+<fieldset class="file_tx_controls">
     <div class="mb-3">
         <input
             type="file"
@@ -17,18 +17,23 @@
             class="form-control form-control-sm"
             id="wait_time"
             value="10"
+            min="10"
+            step="1"
             type="number"
-            placeholder="Time delay between packets in mili secs (>10)"
+            placeholder="Delay between packets in milliseconds (at least 10)"
         >
     </div>
     <div class="mb-3">
-        <h5>Size of each packet (bytes):</h5>
+        <h5>Size of each packet (1-200 characters):</h5>
         <input
             class="form-control form-control-sm"
             id="chunk_size"
             value="200"
+            min="1"
+            max="200"
+            step="1"
             type="number"
-            placeholder="Packet Size (1-250)"
+            placeholder="Packet size (1-200)"
         >
     </div>
 </fieldset>
@@ -44,5 +49,6 @@
         id="stopBroadcastButton"
         class="btn btn-danger"
         onclick="stop_broadcast()"
+        disabled
     >Stop</button>
 </div>

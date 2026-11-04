@@ -1,18 +1,38 @@
-<html>
-    <title>
-        Project Voyager
-    </title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Project Voyager</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"></link>
-    <link rel="stylesheet" href="bootstrap.min.css"></link>
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.min.js"></script>
-    <script type="text/javascript" src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script type="text/javascript" src="bootstrap.min.js"></script>
+    <link rel="stylesheet" href="bootstrap.min.css">
+    <style>
+        .pre-line { white-space: pre-line; }
+        .pre-wrap { white-space: pre-wrap; word-break: break-word; }
+        #debug_textarea { font-size: 10px; }
+    </style>
     <script type="text/javascript" src="jquery-3.7.1.min.js"></script>
+    <script type="text/javascript" src="bootstrap.min.js"></script>
+    <script type="text/javascript" src="lib.js"></script>
     <script type="text/javascript" src="script.js"></script>
+</head>
     <body>
-        <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container border shadow-sm p-3 my-5 bg-white rounded" id="setup_screen" style="max-width: 32rem" hidden>
+            <h3>Set the admin password</h3>
+            <p>This device has no admin password yet. Choose one (8-63 characters). You'll use it with the user name <b>admin</b> whenever the browser asks you to sign in.</p>
+            <form id="setup_form" autocomplete="off">
+                <div class="mb-3">
+                    <label for="setup_pass1" class="form-label">Password</label>
+                    <input type="password" class="form-control" id="setup_pass1" minlength="8" maxlength="63" autocomplete="new-password" required>
+                </div>
+                <div class="mb-3">
+                    <label for="setup_pass2" class="form-label">Repeat password</label>
+                    <input type="password" class="form-control" id="setup_pass2" minlength="8" maxlength="63" autocomplete="new-password" required>
+                </div>
+                <p class="text-danger" id="setup_error"></p>
+                <button type="submit" class="btn btn-primary" id="setup_submit">Set password</button>
+            </form>
+        </div>
+        <nav id="main_nav" class="navbar navbar-expand-lg navbar-light bg-light">
             <div class="container-fluid">
                 <a class="navbar-brand" id="project_title" href="">Project Voyager</a>
                 <button
@@ -39,9 +59,8 @@
                         </li>
                         <li class="nav-item">
                             <a
-                                id="navbar-dashboard"
+                                id="navbar-file-transfer"
                                 class="nav-link"
-                                aria-current="page"
                                 href="#"
                                 onclick="file_transfer()"
                             >File Transfer</a>
@@ -50,7 +69,6 @@
                             <a
                                 id="navbar-wifi"
                                 class="nav-link"
-                                aria-current="page"
                                 href="#"
                                 onclick="wifi()"
                             >WiFi (<span id="wifi_quality">...</span>)</a>
@@ -59,7 +77,6 @@
                             <a
                                 id="navbar-lora"
                                 class="nav-link"
-                                aria-current="page"
                                 href="#"
                                 onclick="lora()"
                             >LoRa</a>
@@ -69,7 +86,6 @@
                             <a
                                 id="navbar-update"
                                 class="nav-link"
-                                aria-current="page"
                                 href="#"
                                 onclick="update()"
                             >Update</a>
@@ -77,9 +93,7 @@
                         <li class="nav-item">
                             <a
                                 id="navbar-restart"
-                                id="navbar-dashboard"
                                 class="nav-link"
-                                aria-current="page"
                                 href="#"
                                 onclick="restart()"
                             >Restart</a>
@@ -88,7 +102,6 @@
                             <a
                                 id="navbar-reset"
                                 class="nav-link"
-                                aria-current="page"
                                 href="#"
                                 onclick="reset()"
                             >Reset</a>
@@ -101,7 +114,7 @@
         <div class="container border shadow-sm p-3 mb-5 bg-white rounded" id="main_content">
             <h1>Loading...</h1>
         </div>
-        <div class="container border shadow-sm p-3 mb-5 bg-white rounded">
+        <div class="container border shadow-sm p-3 mb-5 bg-white rounded" id="status_panel">
             <div class="mb-3">
                 <h5>RAM Usage.</h5>
                 <label id="ram_ratio"></label>
@@ -119,9 +132,9 @@
             </div>
             <div class="mb-3">
                 <h5>File transfer progress.</h5>
-                <label id="rec_info"></label>
-                <br>
-                <label id="chunk_ratio"></label>
+                <div id="rec_info"></div>
+                <div id="chunk_ratio"></div>
+                <div id="rec_verify" class="fw-bold"></div>
                 <div class="progress">
                     <div
                         id="file_upload_progress_bar"
@@ -135,7 +148,8 @@
                 </div>
             </div>
             <div class="mb-3">
-                <button class="btn btn-primary" onclick="downloadFile()">Download</button>
+                <button type="button" class="btn btn-primary" id="download_btn" disabled>Download</button>
+                <button type="button" class="btn btn-outline-danger" id="cancel_receive_btn" hidden>Cancel receiving</button>
             </div>
             <hr>
             <div class="mb-3 form-group">
@@ -146,13 +160,12 @@
                     class="form-control fw-bold"
                     id="debug_textarea"
                     rows="10"
-                    style="font-size:10"
                     readonly
                 ></textarea>
             </div>
             <hr>
             <div class="mb-3 mw-10">
-                <h5>LoRa recieved messages:</h5>
+                <h5>LoRa messages:</h5>
                 <ul class="list-group" id="lora_rx_msg"></ul>
             </div>
         </div>
@@ -174,8 +187,9 @@
                             aria-label="Close"
                         ></button>
                     </div>
-                    <div class="modal-body" id="prompt_body"></div>
+                    <div class="modal-body pre-line" id="prompt_body"></div>
                     <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="button" class="btn btn-primary" id="promptModelProceed">Proceed</button>
                     </div>
                 </div>
@@ -199,7 +213,7 @@
                             aria-label="Close"
                         ></button>
                     </div>
-                    <div class="modal-body" id="alert_body"></div>
+                    <div class="modal-body pre-line" id="alert_body"></div>
                 </div>
             </div>
         </div>
@@ -207,7 +221,6 @@
             class="modal fade"
             id="loadingModal"
             tabindex="-1"
-            aria-labelledby="promptModalLabel"
             aria-hidden="true"
         >
             <div class="modal-dialog">

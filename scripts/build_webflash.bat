@@ -1,165 +1,100 @@
 @echo off
 REM Project Voyager - Web Flash Build Script (Windows)
-REM Builds firmware and filesystem for all hardware versions
+REM Builds RELEASE firmware (DEBUG=false) and LittleFS for every hardware version
+REM and copies the binaries into webflash\.
+REM
+REM Usage: scripts\build_webflash.bat [--yes]
+REM   --yes   non-interactive (no clean prompt, no pause)
+REM
+REM Manifest offsets are NOT regenerated here; scripts\build_webflash.py does that
+REM from the built partitions.bin. Run the Python script for releases.
+REM
 REM Author: Aviral Verma
 REM Repository: https://github.com/aviralverma-8877/Project-Voyager
 
 setlocal enabledelayedexpansion
 
+REM Run from the repo root regardless of the caller's cwd
+pushd "%~dp0.."
+
+set YES=0
+if /i "%~1"=="--yes" set YES=1
+if /i "%~1"=="-y" set YES=1
+
 echo.
 echo ============================================================
 echo    Project Voyager - WebFlash Build Tool
 echo ============================================================
-echo Author: Aviral Verma
-echo Repository: https://github.com/aviralverma-8877/Project-Voyager
 echo.
 
-REM Check if PlatformIO is installed
-where pio >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo [ERROR] PlatformIO not found! Please install PlatformIO first.
-    echo Install from: https://platformio.org/install
-    pause
-    exit /b 1
-)
-echo [OK] PlatformIO found
-
-REM Ask to clean previous builds
-echo.
-set /p CLEAN="Clean previous builds? (y/N): "
-if /i "%CLEAN%"=="y" (
-    echo [STEP] Cleaning previous builds...
-    if exist .pio\build (
-        rmdir /s /q .pio\build
-        echo [OK] Build directory cleaned
+REM Locate PlatformIO: %PIO%, then PATH, then the default install
+if not defined PIO (
+    where pio >nul 2>&1
+    if !ERRORLEVEL! EQU 0 (
+        set PIO=pio
+    ) else if exist "%USERPROFILE%\.platformio\penv\Scripts\pio.exe" (
+        set "PIO=%USERPROFILE%\.platformio\penv\Scripts\pio.exe"
     ) else (
-        echo [OK] No previous builds to clean
+        echo [ERROR] PlatformIO not found! Install it or set PIO=path\to\pio.exe
+        echo Install from: https://platformio.org/install
+        goto :fail
+    )
+)
+echo [OK] PlatformIO: %PIO%
+
+if %YES% EQU 0 (
+    echo.
+    set /p CLEAN="Clean previous builds? (y/N): "
+    if /i "!CLEAN!"=="y" (
+        echo [STEP] Cleaning previous builds...
+        if exist .pio\build rmdir /s /q .pio\build
+        echo [OK] Build directory cleaned
     )
 )
 
-REM Build firmware for version 1
-echo.
-echo ============================================================
-echo    Building Firmware for Hardware Version 1
-echo ============================================================
-echo.
-echo [STEP] Building esp_lora_v1 firmware...
-pio run -e esp_lora_v1
-if %ERRORLEVEL% NEQ 0 (
-    echo [ERROR] Build failed for version 1!
-    pause
-    exit /b 1
+for %%v in (1 2) do (
+    echo.
+    echo ============================================================
+    echo    Building Hardware Version %%v ^(esp_lora_v%%v_release^)
+    echo ============================================================
+    "%PIO%" run -e esp_lora_v%%v_release
+    if !ERRORLEVEL! NEQ 0 (
+        echo [ERROR] Firmware build failed for version %%v!
+        goto :fail
+    )
+    "%PIO%" run -e esp_lora_v%%v_release --target buildfs
+    if !ERRORLEVEL! NEQ 0 (
+        echo [ERROR] Filesystem build failed for version %%v!
+        goto :fail
+    )
+    echo [OK] Version %%v firmware and filesystem built
 )
-echo [OK] Version 1 firmware built successfully
 
-REM Build firmware for version 2
-echo.
-echo ============================================================
-echo    Building Firmware for Hardware Version 2
-echo ============================================================
-echo.
-echo [STEP] Building esp_lora_v2 firmware...
-pio run -e esp_lora_v2
-if %ERRORLEVEL% NEQ 0 (
-    echo [ERROR] Build failed for version 2!
-    pause
-    exit /b 1
-)
-echo [OK] Version 2 firmware built successfully
-
-REM Build filesystem
-echo.
-echo ============================================================
-echo    Building LittleFS Filesystem
-echo ============================================================
-echo.
-echo [STEP] Building LittleFS filesystem...
-pio run -e esp_lora_v1 --target buildfs
-if %ERRORLEVEL% NEQ 0 (
-    echo [ERROR] Filesystem build failed!
-    pause
-    exit /b 1
-)
-echo [OK] Filesystem built successfully
-
-REM Create webflash directory if it doesn't exist
 if not exist webflash mkdir webflash
 
-REM Copy files to webflash directory
 echo.
 echo ============================================================
 echo    Copying Files to WebFlash Directory
 echo ============================================================
-echo.
 
-REM Copy version 1 files
-echo [STEP] Copying files for version 1...
-if exist .pio\build\esp_lora_v1\firmware.bin (
-    copy /y .pio\build\esp_lora_v1\firmware.bin webflash\firmware-1.bin >nul
-    echo [OK] Copied firmware-1.bin
-) else (
-    echo [ERROR] firmware.bin not found for version 1!
-)
+set "B1=.pio\build\esp_lora_v1_release"
+set "B2=.pio\build\esp_lora_v2_release"
+set "BOOT_APP0=%USERPROFILE%\.platformio\packages\framework-arduinoespressif32\tools\partitions\boot_app0.bin"
+if defined PLATFORMIO_CORE_DIR set "BOOT_APP0=%PLATFORMIO_CORE_DIR%\packages\framework-arduinoespressif32\tools\partitions\boot_app0.bin"
 
-if exist .pio\build\esp_lora_v1\littlefs.bin (
-    copy /y .pio\build\esp_lora_v1\littlefs.bin webflash\littlefs-1.bin >nul
-    echo [OK] Copied littlefs-1.bin
-) else (
-    echo [WARNING] littlefs.bin not found for version 1!
-)
+call :copyfile "%B1%\firmware.bin"   "webflash\firmware-1.bin" || goto :fail
+call :copyfile "%B1%\littlefs.bin"   "webflash\littlefs-1.bin" || goto :fail
+call :copyfile "%B2%\firmware.bin"   "webflash\firmware-2.bin" || goto :fail
+call :copyfile "%B2%\littlefs.bin"   "webflash\littlefs-2.bin" || goto :fail
+call :copyfile "%B1%\bootloader.bin" "webflash\bootloader.bin" || goto :fail
+call :copyfile "%B1%\partitions.bin" "webflash\partitions.bin" || goto :fail
+call :copyfile "%BOOT_APP0%"         "webflash\boot_app0.bin"  || goto :fail
 
-REM Copy version 2 files
-echo [STEP] Copying files for version 2...
-if exist .pio\build\esp_lora_v2\firmware.bin (
-    copy /y .pio\build\esp_lora_v2\firmware.bin webflash\firmware-2.bin >nul
-    echo [OK] Copied firmware-2.bin
-) else (
-    echo [ERROR] firmware.bin not found for version 2!
-)
-
-if exist .pio\build\esp_lora_v2\littlefs.bin (
-    copy /y .pio\build\esp_lora_v2\littlefs.bin webflash\littlefs-2.bin >nul
-    echo [OK] Copied littlefs-2.bin
-) else (
-    echo [WARNING] littlefs.bin not found for version 2!
-)
-
-REM Copy common files (bootloader, partitions, boot_app0)
-echo [STEP] Copying common files...
-if exist .pio\build\esp_lora_v1\bootloader.bin (
-    copy /y .pio\build\esp_lora_v1\bootloader.bin webflash\bootloader.bin >nul
-    echo [OK] Copied bootloader.bin
-) else (
-    echo [WARNING] bootloader.bin not found!
-)
-
-if exist .pio\build\esp_lora_v1\partitions.bin (
-    copy /y .pio\build\esp_lora_v1\partitions.bin webflash\partitions.bin >nul
-    echo [OK] Copied partitions.bin
-) else (
-    echo [WARNING] partitions.bin not found!
-)
-
-REM Try to find boot_app0.bin
-if exist .pio\build\esp_lora_v1\boot_app0.bin (
-    copy /y .pio\build\esp_lora_v1\boot_app0.bin webflash\boot_app0.bin >nul
-    echo [OK] Copied boot_app0.bin
-) else if exist .platformio\packages\framework-arduinoespressif32\tools\partitions\boot_app0.bin (
-    copy /y .platformio\packages\framework-arduinoespressif32\tools\partitions\boot_app0.bin webflash\boot_app0.bin >nul
-    echo [OK] Copied boot_app0.bin
-) else (
-    echo [WARNING] boot_app0.bin not found!
-)
-
-REM Verify files
 echo.
 echo ============================================================
 echo    Verifying WebFlash Files
 echo ============================================================
-echo.
-
 set MISSING=0
-
 for %%f in (bootloader.bin partitions.bin boot_app0.bin firmware-1.bin firmware-2.bin littlefs-1.bin littlefs-2.bin manifest-1.json manifest-2.json) do (
     if exist webflash\%%f (
         echo [OK] %%f
@@ -168,24 +103,28 @@ for %%f in (bootloader.bin partitions.bin boot_app0.bin firmware-1.bin firmware-
         set MISSING=1
     )
 )
-
-echo.
 if %MISSING% EQU 1 (
-    echo [WARNING] Some files are missing from webflash directory!
-) else (
-    echo [SUCCESS] All files present in webflash directory!
+    echo [ERROR] Some files are missing from webflash directory!
+    goto :fail
 )
 
-REM Success message
 echo.
-echo ============================================================
-echo    Build Complete!
-echo ============================================================
-echo.
-echo All firmware and filesystem files have been built and copied to:
-echo %CD%\webflash
-echo.
-echo You can now use these files with the ESP Web Tools flasher.
-echo.
+echo [SUCCESS] Binaries copied to %CD%\webflash
+echo NOTE: manifests were not regenerated; run scripts\build_webflash.py for that.
+popd
+if %YES% EQU 0 pause
+exit /b 0
 
-pause
+:copyfile
+if not exist "%~1" (
+    echo [ERROR] Missing: %~1
+    exit /b 1
+)
+copy /y "%~1" "%~2" >nul || exit /b 1
+echo [OK] %~1 -^> %~2
+exit /b 0
+
+:fail
+popd
+if %YES% EQU 0 pause
+exit /b 1

@@ -1,13 +1,9 @@
-#ifndef web_server
-    #define web_server
+// HTTP API, static UI and OTA (Contract 2). Owner: web-api-engineer.
+#ifndef WEB_SERVER_H
+#define WEB_SERVER_H
     #include <Arduino.h>
     #include <WiFi.h>
-
-    #ifdef ESP32
-        #include <AsyncTCP.h>
-    #else
-        #include <ESPAsyncTCP.h>
-    #endif
+    #include <AsyncTCP.h>
     #include <ESPAsyncWebServer.h>
     #include <support_method.h>
     #include <Update.h>
@@ -17,17 +13,21 @@
     #include "freertos/task.h"
     #include "freertos/queue.h"
 
-    // Use U_SPIFFS for filesystem updates (works for both SPIFFS and LittleFS)
     #ifndef U_SPIFFS
         #define U_SPIFFS 100
     #endif
-    #define UPDATE_SIZE_UNKNOWN 0xFFFFFFFF
+    #ifndef UPDATE_SIZE_UNKNOWN
+        #define UPDATE_SIZE_UNKNOWN 0xFFFFFFFF
+    #endif
+
+    // Defined in web_server.cpp, created (and checked) in main.cpp setup().
     extern QueueHandle_t serial_packet_send;
     extern QueueHandle_t serial_packet_rec;
     extern QueueHandle_t send_packets;
     extern QueueHandle_t recv_packets;
     extern QueueHandle_t debug_msg;
     extern AsyncWebServer server;
+
     void firmware_web_updater();
-    void define_api(void *param);
+    void define_api(void *param);   // task: registers routes, starts the server, deletes itself
 #endif

@@ -1,107 +1,47 @@
-#ifndef oled_display
-    #define oled_display
-    #include <Arduino.h>
-    #include <support_method.h>
-    #include <SPI.h>
-    #include <Wire.h>
-    #include <Adafruit_GFX.h>
-    #include <Adafruit_SSD1306.h>
+// OLED UI (owner: oled-display-engineer). Implements Contract 7.
+//
+// Every call below is non-blocking and safe from any task (not from ISRs: ISR calls
+// are ignored). Arguments are copied into a fixed-size queue message, so callers'
+// strings need not outlive the call. All I2C drawing happens on one display task.
+// If the queue is full the update is dropped. If no panel was found at boot, or
+// memory ran out, every call is a no-op.
+#ifndef OLED_DISPLAY_H
+#define OLED_DISPLAY_H
 
-    // Display dimensions
-    #define SCREEN_WIDTH 128
-    #define SCREEN_HEIGHT 64
-    #define OLED_RESET -1
-    #define SCREEN_ADDRESS 0x3C
-    #define SCL OSCL
-    #define SDA OSDA
+#include <stdint.h>
 
-    // Layout constants
-    #define HEADER_HEIGHT 12
-    #define STATUS_BAR_HEIGHT 10
-    #define CONTENT_Y_START (HEADER_HEIGHT + 2)
-    #define LINE_HEIGHT 12
-    #define MARGIN_LEFT 2
-    #define MARGIN_RIGHT 2
+// Status indicators (kept here for callers).
+enum WiFiStatus {
+    WIFI_DISCONNECTED,
+    WIFI_CONNECTING,
+    WIFI_CONNECTED_AP,
+    WIFI_CONNECTED_STA
+};
 
-    // Display modes
-    enum DisplayMode {
-        MODE_SPLASH,
-        MODE_STATUS,
-        MODE_CONNECTING,
-        MODE_ERROR,
-        MODE_MESSAGE
-    };
+enum LoRaStatus {
+    LORA_IDLE,
+    LORA_TRANSMITTING,
+    LORA_RECEIVING,
+    LORA_ERROR
+};
 
-    // Status indicators
-    enum WiFiStatus {
-        WIFI_DISCONNECTED,
-        WIFI_CONNECTING,
-        WIFI_CONNECTED_AP,
-        WIFI_CONNECTED_STA
-    };
+// Probes the panel at 0x3C, then starts the display task (boot animation <= 1.5 s
+// runs on that task, so this returns quickly). No panel / no memory: API is a no-op.
+void init_oled();
 
-    enum LoRaStatus {
-        LORA_IDLE,
-        LORA_TRANSMITTING,
-        LORA_RECEIVING,
-        LORA_ERROR
-    };
+void oled_set_wifi(WiFiStatus s, const char* ssid, const char* ip);
+void oled_set_ap(const char* ssid, const char* pass, const char* ip);  // AP details for the Network page
+void oled_set_wifi_rssi(int rssi);
+void oled_set_lora(LoRaStatus s);
+void oled_lora_packet(bool tx, bool ok, int rssi, float snr);  // counters + last RSSI/SNR (rssi/snr ignored for tx)
+void oled_message(const char* from, const char* text);         // overlay, then Messages page (last 5)
+void oled_alert(const char* title, const char* text, uint32_t ms);  // priority overlay; ms==0: until a button press
+void oled_progress(const char* title, uint8_t pct);            // pct 0-100 shows it (clamped), 255 hides it
+void oled_button(uint8_t btn, bool long_press);                // input from core's button task
+void oled_status(const char* text);                            // one-line status on the Status page
 
-    struct DisplayState {
-        DisplayMode mode;
-        WiFiStatus wifi_status;
-        LoRaStatus lora_status;
-        String title;
-        String line1;
-        String line2;
-        String line3;
-        String line4;
-        String status_message;
-        uint8_t signal_strength; // 0-4
-        unsigned long last_update;
-    };
+// Contract addition (oled-display-engineer): radio parameters for the LoRa page.
+// freq in Hz (e.g. 510000000), sf 6-12, bw in Hz (e.g. 125000).
+void oled_set_lora_params(long freq, int sf, long bw);
 
-    // Global display state
-    extern DisplayState display_state;
-    extern Adafruit_SSD1306 display;
-
-    // Core functions
-    void init_oled();
-    void update_display();
-    void clear_oled_display();
-
-    // High-level display functions
-    void show_splash_screen();
-    void show_status_screen();
-    void show_connecting_screen(const char* message, uint8_t progress);
-    void show_error_screen(const char* error_message);
-    void show_message_screen(const char* title, const char* message);
-
-    // Status update functions
-    void set_wifi_status(WiFiStatus status, const char* ssid = nullptr, const char* ip = nullptr);
-    void set_lora_status(LoRaStatus status);
-    void set_status_message(const char* message);
-    void set_signal_strength(uint8_t strength); // 0-4 bars
-
-    // Drawing helper functions
-    void draw_header();
-    void draw_status_bar();
-    void draw_wifi_icon(int16_t x, int16_t y, WiFiStatus status);
-    void draw_lora_icon(int16_t x, int16_t y, LoRaStatus status);
-    void draw_signal_bars(int16_t x, int16_t y, uint8_t strength);
-    void draw_progress_bar(int16_t x, int16_t y, int16_t width, int16_t height, uint8_t progress);
-    void draw_centered_text(const char* text, int16_t y, uint8_t size = 1);
-    void draw_wrapped_text(const char* text, int16_t x, int16_t y, int16_t max_width, uint8_t size = 1);
-
-    // Animation functions
-    void show_boot_animation();
-    void show_connecting_animation();
-
-    // Legacy compatibility (for gradual migration)
-    struct oled_buffer {
-        String msg = "";
-    };
-    extern oled_buffer display_buffer[6];
-    void display_text_oled(); // Legacy function
-
-#endif
+#endif  // OLED_DISPLAY_H

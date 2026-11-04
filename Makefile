@@ -3,7 +3,14 @@
 # Author: Aviral Verma
 # Repository: https://github.com/aviralverma-8877/Project-Voyager
 
-.PHONY: help build build-v1 build-v2 buildfs upload upload-v1 upload-v2 uploadfs monitor clean webflash
+.PHONY: help build build-v1 build-v2 buildfs upload upload-v1 upload-v2 uploadfs monitor clean webflash \
+	test test-web release all flash-v1 flash-v2 full-v1 full-v2
+
+# PlatformIO CLI: honour $(PIO) from the environment, else `pio` on PATH,
+# else the default PlatformIO Core install location.
+PIO ?= $(shell command -v pio 2>/dev/null || echo $(HOME)/.platformio/penv/bin/pio)
+PYTHON ?= python3
+DEFAULT_ENV ?= esp_lora_v1
 
 # Default target
 help:
@@ -14,13 +21,17 @@ help:
 	@echo "  make build-v1     - Build firmware for version 1"
 	@echo "  make build-v2     - Build firmware for version 2"
 	@echo "  make buildfs      - Build LittleFS filesystem"
-	@echo "  make upload       - Upload firmware (default environment)"
+	@echo "  make release      - Build release firmware (DEBUG=false) for all versions"
+	@echo "  make test         - Run native unit tests (pio test -e native)"
+	@echo "  make test-web     - Run web UI tests (test/web/run.sh)"
+	@echo "  make upload       - Upload firmware (default environment: $(DEFAULT_ENV))"
 	@echo "  make upload-v1    - Upload firmware to version 1"
 	@echo "  make upload-v2    - Upload firmware to version 2"
-	@echo "  make uploadfs     - Upload filesystem"
+	@echo "  make uploadfs     - Upload filesystem (default environment: $(DEFAULT_ENV))"
 	@echo "  make monitor      - Open serial monitor"
 	@echo "  make clean        - Clean build artifacts"
-	@echo "  make webflash     - Build and prepare webflash binaries"
+	@echo "  make webflash     - Build release + fs for both boards into webflash/"
+	@echo "                      (WEBFLASH_ARGS=--yes to skip the prompt)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make build-v1     # Build version 1 firmware"
@@ -32,59 +43,75 @@ help:
 # Build targets
 build:
 	@echo "Building firmware for all versions..."
-	pio run -e esp_lora_v1
-	pio run -e esp_lora_v2
+	$(PIO) run -e esp_lora_v1
+	$(PIO) run -e esp_lora_v2
 
 build-v1:
 	@echo "Building firmware for version 1..."
-	pio run -e esp_lora_v1
+	$(PIO) run -e esp_lora_v1
 
 build-v2:
 	@echo "Building firmware for version 2..."
-	pio run -e esp_lora_v2
+	$(PIO) run -e esp_lora_v2
 
 buildfs:
 	@echo "Building LittleFS filesystem..."
-	pio run -e esp_lora_v1 --target buildfs
+	$(PIO) run -e esp_lora_v1 --target buildfs
+	$(PIO) run -e esp_lora_v2 --target buildfs
 
 # Upload targets
 upload:
 	@echo "Uploading firmware (default)..."
-	pio run --target upload
+	$(PIO) run -e $(DEFAULT_ENV) --target upload
 
 upload-v1:
 	@echo "Uploading firmware for version 1..."
-	pio run -e esp_lora_v1 --target upload
+	$(PIO) run -e esp_lora_v1 --target upload
 
 upload-v2:
 	@echo "Uploading firmware for version 2..."
-	pio run -e esp_lora_v2 --target upload
+	$(PIO) run -e esp_lora_v2 --target upload
 
 uploadfs:
 	@echo "Uploading LittleFS filesystem..."
-	pio run -e esp_lora_v1 --target uploadfs
+	$(PIO) run -e $(DEFAULT_ENV) --target uploadfs
 
 # Monitor
 monitor:
 	@echo "Opening serial monitor..."
-	pio device monitor -b 115200
+	$(PIO) device monitor -b 115200
 
 # Clean
 clean:
 	@echo "Cleaning build artifacts..."
-	pio run --target clean
+	-$(PIO) run --target clean
 	@if [ -d .pio ]; then rm -rf .pio; fi
 	@echo "Clean complete!"
 
 # Webflash preparation
 webflash:
 	@echo "Building and preparing webflash binaries..."
-	@if [ -f build_webflash.py ]; then \
-		python build_webflash.py; \
+	@if [ -f scripts/build_webflash.py ]; then \
+		PIO="$(PIO)" $(PYTHON) scripts/build_webflash.py $(WEBFLASH_ARGS); \
 	else \
-		@echo "Error: build_webflash.py not found!"; \
+		echo "Error: scripts/build_webflash.py not found!"; \
 		exit 1; \
 	fi
+
+# Release firmware (DEBUG=false); these are what webflash packages
+release:
+	@echo "Building release firmware for all versions..."
+	$(PIO) run -e esp_lora_v1_release
+	$(PIO) run -e esp_lora_v2_release
+
+# Tests
+test:
+	@echo "Running native unit tests..."
+	$(PIO) test -e native
+
+test-web:
+	@echo "Running web UI tests..."
+	bash test/web/run.sh
 
 # Combined workflows
 all: build buildfs

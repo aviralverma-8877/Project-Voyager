@@ -8,40 +8,91 @@
 #include <web_sockets.h>
 #include "FS.h"
 #include "LittleFS.h"
-// put function declarations here:
+
+// Contract 6: queue depths (all queues carry pointers).
+#define SEND_QUEUE_DEPTH    20
+#define RECV_QUEUE_DEPTH    20
+#define DEBUG_QUEUE_DEPTH   20
+#define SERIAL_QUEUE_DEPTH  20
+// How long setup() waits for config_wifi before starting the API anyway
+// (STA attempt is ~20 s, then AP fallback).
+#define WIFI_WAIT_MS        45000
+
+static void halt(const char* title, const char* text)
+{
+    Serial.printf("FATAL: %s: %s\n", title, text);
+    oled_alert(title, text, 0);
+    while (true)
+        vTaskDelay(pdMS_TO_TICKS(1000));
+}
+
+static QueueHandle_t create_queue(UBaseType_t depth, const char* name)
+{
+    QueueHandle_t q = xQueueCreate(depth, sizeof(void*));
+    if (q == NULL)
+        halt("Boot error", name);
+    return q;
+}
+
+static void create_task(TaskFunction_t fn, const char* name, uint32_t stack,
+                        UBaseType_t prio, TaskHandle_t* handle)
+{
+    if (xTaskCreatePinnedToCore(fn, name, stack, NULL, prio, handle, 1) != pdPASS)
+        halt("Boot error", name);
+}
 
 void setup() {
   Serial.begin(BAUD);
-  send_packets = xQueueCreate(20, sizeof(QueueParam*));
-  recv_packets = xQueueCreate(20, sizeof(QueueParam*));
-  debug_msg = xQueueCreate(20, sizeof(DebugQueueParam*));
-  serial_packet_send = xQueueCreate(20, sizeof(DebugQueueParam*));
-  serial_packet_rec = xQueueCreate(20, sizeof(DebugQueueParam*));
-  xTaskCreatePinnedToCore(debugger_print, "debugger_print", 6000, NULL, 1, &debug_handler, 1);
-  if (!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED))
+  init_oled();   // no-op without a panel; never hangs
+  oled_status("Booting");
+
+  send_packets       = create_queue(SEND_QUEUE_DEPTH,   "send queue");
+  recv_packets       = create_queue(RECV_QUEUE_DEPTH,   "recv queue");
+  debug_msg          = create_queue(DEBUG_QUEUE_DEPTH,  "debug queue");
+  serial_packet_send = create_queue(SERIAL_QUEUE_DEPTH, "serial tx queue");
+  serial_packet_rec  = create_queue(SERIAL_QUEUE_DEPTH, "serial rx queue");
+  create_task(debugger_print, "debugger_print", 4096, 1, &debug_handler);
+
+  oled_status("Mounting storage");
+  fs_mounted = LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED);
+  if (!fs_mounted)
   {
+    // Keep going: WiFi + API come up with defaults so OTA (/update_littlefs) can recover.
     serial_print("LittleFS Mount Failed");
-    return;
+    oled_alert("Storage error", "FS mount failed, OTA to recover", 10000);
   }
-  get_lora_serial();
-  get_username();
+
   config_gpios();
-  init_oled();
+  get_lora_serial();     // defaults to false without FS
+  load_username();       // defaults to MAC without FS
   String device_mode = get_device_mode();
   serial_print("device_mode : " + device_mode);
-  // Config in WiFi mode.
+  if (device_mode != "WiFi")
+    serial_print("device_mode '" + device_mode + "' not supported, using WiFi");
+
+  // LED, buttons and telemetry first so led_nortifier() has a target before the radio starts.
+  setupTasks();
+
+  oled_status("Starting WiFi");
   WiFi.onEvent(onWifiConnect, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
   WiFi.onEvent(onWifiDisconnect, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
-  // WiFi.onEvent(onWifiConnect, SYSTEM_EVENT_STA_GOT_IP);
-  // WiFi.onEvent(onWifiDisconnect, SYSTEM_EVENT_STA_DISCONNECTED);
+  create_task(config_wifi, "config_wifi", 6000, 2, NULL);
 
-  xTaskCreatePinnedToCore(config_wifi, "config_wifi", 6000, NULL, 2, NULL, 1);
-  xTaskCreatePinnedToCore(define_api, "define_api", 6000, NULL, 2, NULL, 1);
-  config_lora();
-  setupTasks();
+  oled_status("Starting LoRa");
+  config_lora();          // creates lora_write_mutex
+  start_serial_bridge();  // needs the radio mutex and the serial queues
+
+  // server.begin() (inside define_api) must run after the network stack is up.
+  uint32_t start = millis();
+  while (!WiFi_setup_done && (millis() - start) < WIFI_WAIT_MS)
+    vTaskDelay(pdMS_TO_TICKS(100));
+  if (!WiFi_setup_done)
+    serial_print("WiFi setup still pending, starting API anyway");
+  create_task(define_api, "define_api", 6000, 2, NULL);
+
   serial_print("config done");
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
+  vTaskDelete(NULL);   // all work happens in tasks
 }
