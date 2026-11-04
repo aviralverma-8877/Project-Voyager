@@ -1,9 +1,9 @@
-#include <web_server.h>
-#include <web_sockets.h>
-#include <auth.h>
-#include <web_validate.h>
-#include <lora_support.h>
-#include <wifi_support.h>
+#include "web_server.h"
+#include "web_sockets.h"
+#include "auth.h"
+#include "web_validate.h"
+#include <lora/lora_support.h>
+#include <wifi/wifi_support.h>
 #include <atomic>
 #include <new>
 
@@ -41,8 +41,8 @@ static bool guard(AsyncWebServerRequest* r, bool state_changing) {
 
 static bool is_ota_url(const String& u) { return u == "/update_flash" || u == "/update_littlefs"; }
 
-// First handler: refuses /config/** (403) and oversized non-OTA bodies (413) before
-// anything is parsed. Trivial, so the library discards the body unparsed.
+// First handler in the chain: blocks /config/** and oversized bodies before any
+// parsing or later handlers run. Must be registered first via server.addHandler.
 class PreGate : public AsyncWebHandler {
  public:
   bool canHandle(AsyncWebServerRequest* r) override {
@@ -60,6 +60,8 @@ static PreGate pre_gate;
 /* LoRa TX (Contract 2: 202 {id}, result later as WS tx_result)        */
 /* ------------------------------------------------------------------ */
 
+// Atomic TX id counter. Uses CAS loop because tx_id_after skips 0 (reserved for
+// device-originated packets like SOS).
 static std::atomic<uint32_t> g_tx_id{0};
 
 static uint32_t next_tx_id() {
@@ -285,20 +287,25 @@ void define_api(void* param) {
 /* OTA (/update, /update_flash, /update_littlefs)                      */
 /* ------------------------------------------------------------------ */
 
+// OTA state machine: only one upload can run at a time. ota_owner tracks the active
+// request; ota_radio_held tracks whether we hold lora_write_mutex. Both are only
+// touched from the AsyncTCP task (upload/request/disconnect callbacks run there).
+// Per-request state lives in _tempObject so the library frees it when the request ends.
+
 enum OtaStatus : uint8_t { OTA_RUNNING = 0, OTA_DONE, OTA_ORIGIN, OTA_SETUP, OTA_UNAUTH, OTA_BUSY, OTA_FAIL };
 
-struct OtaReqState {          // lives in request->_tempObject (the library free()s it)
+struct OtaReqState {
   uint8_t status;
   char error[64];
 };
 
-// Only touched from the AsyncTCP task (upload, request and disconnect callbacks).
 static AsyncWebServerRequest* ota_owner = nullptr;
 static bool ota_radio_held = false;
 
-// LittleFS OTA: user settings read before the first write, restored after the
-// remount by ota_finish_task. Only one OTA runs at a time (ota_owner / the radio
-// mutex), so a single static set is enough.
+// LittleFS OTA: user settings (wifi, lora, user_data, lora_serial) are snapshotted
+// before the first write and restored after the remount. Only one OTA runs at a time,
+// so a single static set is enough. wifi_config also has a boot-time backup as a
+// fallback if the snapshot fails or the file was larger than the limit.
 static String ota_keep_data[wv::OTA_KEEP_COUNT];
 static bool ota_keep_present[wv::OTA_KEEP_COUNT] = {false};
 

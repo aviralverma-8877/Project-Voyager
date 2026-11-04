@@ -1,6 +1,6 @@
-#include <web_sockets.h>
-#include <auth.h>
-#include <web_validate.h>
+#include "web_sockets.h"
+#include "auth.h"
+#include "web_validate.h"
 
 #define WS_RX_QUEUE_LEN    8
 #define WS_OUT_QUEUE_LEN   32
@@ -35,8 +35,9 @@ static GateResult gate_check(AsyncWebServerRequest* r) {
   return GATE_OK;
 }
 
-// Registered before webSocket/rawEvents. It claims only handshakes that must be
-// refused, so allowed ones fall through to the library handlers.
+// Auth gate for /ws and /rawEvents. Registered before the library handlers. It claims
+// only handshakes that must be refused (origin mismatch, no password set, bad creds),
+// letting allowed ones fall through to the WebSocket/EventSource handlers.
 class StreamGate : public AsyncWebHandler {
  public:
   bool canHandle(AsyncWebServerRequest* r) override {
@@ -68,6 +69,8 @@ static StreamGate stream_gate;
 
 /* ---------------- inbound: AsyncTCP callback -> worker task ---------------- */
 
+// Worker task: parses WS messages off the RX queue and dispatches to handle_operations
+// (system-core-engineer). Runs on a separate task so the AsyncTCP callback never blocks.
 static void ws_rx_worker(void* param) {
   for (;;) {
     char* msg = NULL;
@@ -87,6 +90,8 @@ static void ws_rx_worker(void* param) {
   }
 }
 
+// Called from the AsyncTCP task when a WS frame arrives. Copies valid messages to the
+// RX queue for the worker task. Rejects fragmented, binary, or oversized messages.
 static void ws_handle_data(AsyncWebSocketClient* client, void* arg, uint8_t* data, size_t len) {
   AwsFrameInfo* info = (AwsFrameInfo*)arg;
   if (info == NULL ||
@@ -146,6 +151,10 @@ static void onRawEventsDisconnect(AsyncEventSource* source, AsyncEventSourceClie
 
 /* ---------------- outbound: one sender task ---------------- */
 
+// Enqueues a copy for the sender task. The early client-count check is an optimization
+// to avoid allocation when nobody is listening. A client may disconnect between this
+// check and the actual send - the sender task rechecks before sending, and the
+// AsyncWebSocket/EventSource APIs handle vanished clients gracefully. No memory leaks.
 static void enqueue_out(bool to_ws, const String& data, const String& topic) {
   if (ws_out_queue == NULL) return;
   if (to_ws ? ws_client_count == 0 : sse_client_count == 0) return;
@@ -161,13 +170,14 @@ void send_to_ws(const String& message) { enqueue_out(true, message, String()); }
 
 void send_to_events(const String& data, const String& topic) { enqueue_out(false, data, topic); }
 
-// No serial_print in here: DEBUG events are produced from serial_print and come
-// back through this task.
+// Sender task: drains the outbound queue and periodically cleans up stale WS clients.
+// No serial_print here - DEBUG events are produced from serial_print and would recurse.
 static void ws_sender_task(void* param) {
   TickType_t last_cleanup = xTaskGetTickCount();
   for (;;) {
     OutMsg* m = NULL;
     if (xQueueReceive(ws_out_queue, &m, pdMS_TO_TICKS(WS_CLEANUP_MS)) == pdTRUE && m != NULL) {
+      // Recheck client count: a client may have disconnected since enqueue.
       if (m->to_ws) {
         if (ws_client_count > 0) webSocket.textAll(m->data);
       } else if (sse_client_count > 0) {

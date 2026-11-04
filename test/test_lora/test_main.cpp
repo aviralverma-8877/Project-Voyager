@@ -3,7 +3,7 @@
 #include <unity.h>
 #include <string.h>
 #include <string>
-#include "lora_proto.h"
+#include "lora/lora_proto.h"
 
 using namespace lora_proto;
 
@@ -208,6 +208,80 @@ static void test_dedup_uncommitted_not_duplicate() {
     TEST_ASSERT_FALSE(rx_is_duplicate(d, 6));
 }
 
+// ---- per-source dedup (multi-peer) ------------------------------------------------
+static void test_dedup_multi_basic() {
+    RxDedupMulti d;
+    uint32_t mac1 = hash_mac("AABBCCDD");
+    uint32_t mac2 = hash_mac("11223344");
+    TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, mac1, 42));  // first packet from peer 1
+    rx_commit_multi(d, mac1, 42);
+    TEST_ASSERT_TRUE(rx_is_duplicate_multi(d, mac1, 42));   // retry from peer 1
+    TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, mac2, 42));  // same seq, different peer
+    rx_commit_multi(d, mac2, 42);
+    TEST_ASSERT_TRUE(rx_is_duplicate_multi(d, mac1, 42));   // peer 1 still tracked
+    TEST_ASSERT_TRUE(rx_is_duplicate_multi(d, mac2, 42));   // peer 2 now tracked
+}
+
+static void test_dedup_multi_new_seq_accepted() {
+    RxDedupMulti d;
+    uint32_t mac1 = hash_mac("AABBCCDD");
+    rx_commit_multi(d, mac1, 10);
+    TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, mac1, 11));  // new seq from same peer
+    rx_commit_multi(d, mac1, 11);
+    TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, mac1, 10));  // old seq no longer tracked
+}
+
+static void test_dedup_multi_lru_eviction() {
+    RxDedupMulti d;
+    // Fill all DEDUP_SLOTS
+    for (size_t i = 0; i < DEDUP_SLOTS; ++i) {
+        rx_commit_multi(d, (uint32_t)(i + 1), (uint8_t)(i * 10));
+    }
+    // New peer evicts oldest
+    uint32_t new_mac = (uint32_t)(DEDUP_SLOTS + 1);
+    TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, new_mac, 99));
+    rx_commit_multi(d, new_mac, 99);
+    TEST_ASSERT_TRUE(rx_is_duplicate_multi(d, new_mac, 99));
+    // Slot 0 (key 1) was evicted
+    TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, 1, 0));
+}
+
+static void test_dedup_multi_raw_data_key() {
+    RxDedupMulti d;
+    // RAW_DATA uses DEDUP_KEY_RAW (0)
+    TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, DEDUP_KEY_RAW, 50));
+    rx_commit_multi(d, DEDUP_KEY_RAW, 50);
+    TEST_ASSERT_TRUE(rx_is_duplicate_multi(d, DEDUP_KEY_RAW, 50));
+    // Different peer (LORA_MSG) doesn't collide
+    uint32_t mac = hash_mac("AABBCCDD");
+    TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, mac, 50));
+}
+
+static void test_extract_mac_key() {
+    // Valid LORA_MSG payload
+    uint32_t k1 = extract_mac_key("{\"name\":\"bob\",\"mac\":\"AABBCCDD\",\"data\":\"{}\"}");
+    uint32_t k2 = extract_mac_key("{\"name\":\"alice\",\"mac\":\"11223344\",\"data\":\"{}\"}");
+    TEST_ASSERT_NOT_EQUAL(0u, k1);
+    TEST_ASSERT_NOT_EQUAL(0u, k2);
+    TEST_ASSERT_NOT_EQUAL(k1, k2);
+    // Same MAC produces same key
+    uint32_t k3 = extract_mac_key("{\"name\":\"charlie\",\"mac\":\"AABBCCDD\",\"data\":\"{}\"}");
+    TEST_ASSERT_EQUAL_UINT32(k1, k3);
+    // Missing MAC: fallback key (non-zero)
+    uint32_t k4 = extract_mac_key("{\"name\":\"bob\",\"data\":\"{}\"}");
+    TEST_ASSERT_NOT_EQUAL(0u, k4);
+    // Invalid JSON: fallback key
+    TEST_ASSERT_NOT_EQUAL(0u, extract_mac_key("garbage"));
+    TEST_ASSERT_NOT_EQUAL(0u, extract_mac_key(nullptr));
+}
+
+static void test_hash_mac() {
+    TEST_ASSERT_NOT_EQUAL(0u, hash_mac("AABBCCDD"));
+    TEST_ASSERT_NOT_EQUAL(0u, hash_mac(""));
+    TEST_ASSERT_NOT_EQUAL(0u, hash_mac(nullptr));
+    TEST_ASSERT_NOT_EQUAL(hash_mac("AA"), hash_mac("BB"));
+}
+
 // ---- config ----------------------------------------------------------------------------
 static void test_config_valid_and_roundtrip() {
     LoraConfig c;
@@ -320,6 +394,12 @@ int main(int, char**) {
     RUN_TEST(test_dedup);
     RUN_TEST(test_dedup_seq_wraps);
     RUN_TEST(test_dedup_uncommitted_not_duplicate);
+    RUN_TEST(test_dedup_multi_basic);
+    RUN_TEST(test_dedup_multi_new_seq_accepted);
+    RUN_TEST(test_dedup_multi_lru_eviction);
+    RUN_TEST(test_dedup_multi_raw_data_key);
+    RUN_TEST(test_extract_mac_key);
+    RUN_TEST(test_hash_mac);
     RUN_TEST(test_config_valid_and_roundtrip);
     RUN_TEST(test_config_rejects);
     RUN_TEST(test_parse_lora_msg);

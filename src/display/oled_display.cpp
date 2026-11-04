@@ -47,11 +47,23 @@ const uint32_t BLINK_MS = 500;
 
 // Screen layout (size-1 font: 6x8 px, 21 chars per 128 px line)
 const int LINE_CHARS = SCREEN_W / CHAR_W;  // 21
+const int HEADER_TITLE_MAX = 13;           // max chars for page title (leaves room for icons)
 const int HEADER_LINE_Y = 9;
 const int CONTENT_Y = 11;
 const int LINE_STEP = 9;
 const int CONTENT_LINES = 5;  // y = 11, 20, 29, 38, 47
 const int DOTS_Y = 60;
+
+// Header icon positions (right-aligned: WiFi, LoRa, signal bars)
+const int ICON_WIFI_X = 86;
+const int ICON_LORA_X = 103;
+const int ICON_BARS_X = 116;
+const int ICON_Y = 1;
+
+// Overlay layout
+const int OVERLAY_MARGIN = 4;              // padding from screen edge for text
+const int OVERLAY_TITLE_H = 11;            // alert title bar height
+const int PROGRESS_BAR_H = 10;             // progress bar height
 
 // ---------------------------------------------------------------------------
 // Queue message
@@ -254,11 +266,11 @@ void draw_progress_bar(int x, int y, int w, int h, uint8_t pct) {
 
 // Header: page title on the left; WiFi, LoRa and signal icons on the right.
 void draw_header(const char* title, uint32_t now) {
-    print_at(0, 0, title, 13);
-    draw_wifi_icon(86, 1, ui.wifi, now);
-    draw_lora_icon(103, 1, ui.lora);
+    print_at(0, 0, title, HEADER_TITLE_MAX);
+    draw_wifi_icon(ICON_WIFI_X, ICON_Y, ui.wifi, now);
+    draw_lora_icon(ICON_LORA_X, ICON_Y, ui.lora);
     uint8_t bars = ui.wifi == WIFI_CONNECTED_STA ? rssi_to_bars(ui.wifi_rssi) : 0;
-    draw_signal_bars(116, 1, bars);
+    draw_signal_bars(ICON_BARS_X, ICON_Y, bars);
     display.drawFastHLine(0, HEADER_LINE_Y, SCREEN_W, SSD1306_WHITE);
 }
 
@@ -408,17 +420,17 @@ void page_system(uint32_t now) {
 // ---------------------------------------------------------------------------
 void overlay_alert() {
     display.drawRect(0, 0, SCREEN_W, SCREEN_H, SSD1306_WHITE);
-    display.fillRect(0, 0, SCREEN_W, 11, SSD1306_WHITE);
+    display.fillRect(0, 0, SCREEN_W, OVERLAY_TITLE_H, SSD1306_WHITE);
     display.setTextColor(SSD1306_BLACK);
     print_centered(2, ui.alert_title[0] ? ui.alert_title : "Alert");
     display.setTextColor(SSD1306_WHITE);
-    draw_wrapped(4, 14, SCREEN_W - 8, 5, ui.alert_text);
+    draw_wrapped(OVERLAY_MARGIN, OVERLAY_TITLE_H + 3, SCREEN_W - OVERLAY_MARGIN * 2, 5, ui.alert_text);
 }
 
 void overlay_progress() {
     display.drawRect(0, 0, SCREEN_W, SCREEN_H, SSD1306_WHITE);
-    draw_wrapped(4, 8, SCREEN_W - 8, 2, ui.prog_title);
-    draw_progress_bar(8, 30, SCREEN_W - 16, 10, ui.prog_pct);
+    draw_wrapped(OVERLAY_MARGIN, 8, SCREEN_W - OVERLAY_MARGIN * 2, 2, ui.prog_title);
+    draw_progress_bar(OVERLAY_MARGIN * 2, 30, SCREEN_W - OVERLAY_MARGIN * 4, PROGRESS_BAR_H, ui.prog_pct);
     char buf[8];
     snprintf(buf, sizeof(buf), "%u%%", (unsigned)ui.prog_pct);
     print_centered(46, buf);
@@ -428,7 +440,7 @@ void overlay_message() {
     display.drawRect(0, 0, SCREEN_W, SCREEN_H, SSD1306_WHITE);
     print_centered(5, "New message from");
     const char* from = ui.msgov_from[0] ? ui.msgov_from : "?";
-    if (text_width(from, 2) <= SCREEN_W - 4) print_centered(20, from, 2);
+    if (text_width(from, 2) <= SCREEN_W - OVERLAY_MARGIN) print_centered(20, from, 2);
     else print_centered(24, from);
     char buf[MSG_TEXT_LEN];
     safe_copy(buf, sizeof(buf), ui.msgov_text);
@@ -505,6 +517,7 @@ void apply(const OledMsg& m, uint32_t now) {
             ui.wifi_rssi = m.i0;
             break;
         case CMD_LORA:
+            if (ui.lora == (LoRaStatus)m.u8) return;  // skip redraw if unchanged
             ui.lora = (LoRaStatus)m.u8;
             break;
         case CMD_LORA_PKT:

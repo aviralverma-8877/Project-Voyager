@@ -1,4 +1,4 @@
-#include <wifi_support.h>
+#include "wifi_support.h"
 #include "esp_system.h"
 
 // ---------------------------------------------------------------------------
@@ -419,7 +419,7 @@ void scan_ssid(void* args)
 
     wifi_mode_t prev_mode = WiFi.getMode();
     int n = WiFi.scanNetworks();
-    if (n < 0)
+    if (n < 0)   // scan busy or failed: clear state and retry once
     {
         WiFi.scanDelete();
         vTaskDelay(500 / portTICK_PERIOD_MS);

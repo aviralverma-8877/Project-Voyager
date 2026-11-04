@@ -135,6 +135,7 @@ inline TxAction tx_on_timeout(TxRetry& t) {
 }
 
 // ---- receiver seq dedup ---------------------------------------------------------
+// Simple single-source dedup (legacy, kept for test compatibility).
 struct RxDedup {
     bool have = false;
     uint8_t last_seq = 0;
@@ -144,6 +145,70 @@ struct RxDedup {
 inline bool rx_is_duplicate(const RxDedup& d, uint8_t seq) { return d.have && d.last_seq == seq; }
 // Call after the packet was actually delivered (queued).
 inline void rx_commit(RxDedup& d, uint8_t seq) { d.have = true; d.last_seq = seq; }
+
+// ---- per-source dedup (multi-peer) -----------------------------------------------
+// Tracks the last accepted seq for up to N sources, identified by a 32-bit key
+// (MAC hash). Uses LRU replacement when full. Key 0 is reserved for RAW_DATA.
+constexpr size_t DEDUP_SLOTS = 4;
+constexpr uint32_t DEDUP_KEY_RAW = 0;  // RAW_DATA packets share this slot
+
+struct RxDedupEntry {
+    uint32_t key = 0;
+    uint8_t seq = 0;
+    bool used = false;
+};
+
+struct RxDedupMulti {
+    RxDedupEntry entries[DEDUP_SLOTS] = {};
+    size_t lru = 0;  // next slot to replace when all are used
+};
+
+// Simple hash for MAC string (e.g., "AABBCCDD"). Returns non-zero for valid input.
+inline uint32_t hash_mac(const char* mac) {
+    if (mac == nullptr || mac[0] == '\0') return 1;  // fallback, distinct from DEDUP_KEY_RAW
+    uint32_t h = 5381;
+    for (const char* p = mac; *p; ++p)
+        h = ((h << 5) + h) ^ (uint8_t)*p;
+    return h ? h : 1;  // never return 0
+}
+
+// Extract MAC from LORA_MSG payload JSON. Returns hash, or 1 if parsing fails.
+inline uint32_t extract_mac_key(const char* payload) {
+    if (payload == nullptr) return 1;
+    JsonDocument doc;
+    if (deserializeJson(doc, payload)) return 1;
+    const char* mac = doc["mac"] | (const char*)nullptr;
+    return hash_mac(mac);
+}
+
+// Find or allocate a slot for the given key.
+inline RxDedupEntry* rx_dedup_find(RxDedupMulti& d, uint32_t key) {
+    // First pass: exact match
+    for (size_t i = 0; i < DEDUP_SLOTS; ++i)
+        if (d.entries[i].used && d.entries[i].key == key)
+            return &d.entries[i];
+    // Second pass: unused slot
+    for (size_t i = 0; i < DEDUP_SLOTS; ++i)
+        if (!d.entries[i].used)
+            return &d.entries[i];
+    // All used: LRU replacement
+    RxDedupEntry* e = &d.entries[d.lru];
+    d.lru = (d.lru + 1) % DEDUP_SLOTS;
+    e->used = false;
+    return e;
+}
+
+inline bool rx_is_duplicate_multi(RxDedupMulti& d, uint32_t key, uint8_t seq) {
+    RxDedupEntry* e = rx_dedup_find(d, key);
+    return e->used && e->key == key && e->seq == seq;
+}
+
+inline void rx_commit_multi(RxDedupMulti& d, uint32_t key, uint8_t seq) {
+    RxDedupEntry* e = rx_dedup_find(d, key);
+    e->key = key;
+    e->seq = seq;
+    e->used = true;
+}
 
 // ---- Contract 5: LoRa radio config --------------------------------------------
 struct LoraConfig {

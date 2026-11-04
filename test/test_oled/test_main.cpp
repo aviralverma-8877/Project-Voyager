@@ -3,7 +3,7 @@
 #include <unity.h>
 #include <string.h>
 #include <string>
-#include "oled_layout.h"
+#include "display/oled_layout.h"
 
 using namespace oled_layout;
 

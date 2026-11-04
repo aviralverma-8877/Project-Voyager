@@ -5,7 +5,7 @@
     #include <Arduino.h>
     #include <SPI.h>
     #include <LoRa.h>
-    #include <support_method.h>
+    #include <core/support_method.h>
     #include "lora_proto.h"
     #define SCK             LSCK
     #define MISO            LMISO
@@ -43,22 +43,33 @@
 
     extern SemaphoreHandle_t lora_write_mutex;   // guards every SPI access to the radio
 
+    // Initialize radio, create tasks and attach interrupt. Call once from setup().
     void config_lora();
+    // Load config from LittleFS (or defaults) and apply to radio.
     void set_lora_parameters();
-    bool save_lora_config(String value);         // validate, write atomically, apply. false + alert on error
-    uint8_t get_checksum(uint8_t seq, const String& data);
+    // Validate JSON config, write atomically, apply to radio. Returns false + alert on error.
+    bool save_lora_config(String value);
 
-    // Frames and transmits one packet (blocking). false if > LORA_MAX_PAYLOAD,
-    // bad type, or the radio is busy. The 2-argument form takes a new seq.
+    // Frame and transmit a data packet (blocking). Returns false if payload too large,
+    // invalid type, or radio busy. The 2-arg form uses a new seq; 3-arg uses provided seq.
     bool LoRa_send(const String& data, uint8_t type);
     bool LoRa_send(const String& data, uint8_t type, uint8_t seq);
+    // Send an ACK/NACK for a received packet (blocking).
     void LoRa_sendAkn(uint8_t seq, uint8_t result);
-    void LoRa_sendRaw(void* param);              // TX task: send_packets, ACK/retry, tx_result
-    void lora_rx_task(void* param);              // RX task: FIFO read, validate, dedup, queue, ACK
-    void manage_recv_queue(void* param);         // recv_packets -> WS / SSE / OLED
+    // TX task: drains send_packets queue, handles ACK/retry, sends tx_result to WS.
+    void LoRa_sendRaw(void* param);
+    // RX task: reads FIFO on interrupt, validates, deduplicates, queues, ACKs.
+    void lora_rx_task(void* param);
+    // Forwarding task: drains recv_packets queue and sends to WS/SSE/OLED.
+    void manage_recv_queue(void* param);
+    // Switch radio to continuous receive mode.
     void LoRa_rxMode();
+    // Switch radio to idle/transmit mode.
     void LoRa_txMode();
-    void onReceive();                            // DIO0 ISR: only notifies lora_rx_task
+    // DIO0 ISR: only signals lora_rx_task (no SPI, no alloc).
+    void onReceive();
+    // Send RAW_DATA event to SSE (for file chunks).
     void send_msg_to_events(const String& data);
+    // Send lora_rx message to WebSocket (for chat/actions).
     void send_msg_to_ws(const String& data);
 #endif

@@ -1,7 +1,7 @@
 // L2 tests for src/wifi_config.h (wifi-network-engineer).
 #include <unity.h>
 #include <string>
-#include "wifi_config.h"
+#include "wifi/wifi_config.h"
 
 void setUp() {}
 void tearDown() {}

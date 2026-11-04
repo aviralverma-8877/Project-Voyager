@@ -1,4 +1,4 @@
-#include <lora_support.h>
+#include "lora_support.h"
 #include <new>
 #include <esp_random.h>
 
@@ -147,22 +147,22 @@ bool save_lora_config(String value)
 }
 
 // ---------------------------------------------------------------- radio modes
-// IQ inversion is intentionally unchanged (RX inverted, TX normal) until the
-// two-board hardware test confirms it (Contract 1).
+// IQ inversion: RX inverted, TX normal. This asymmetry is intentional for
+// gateway-to-node scenarios but means two identical peers may not hear each
+// other. DO NOT CHANGE without L4 hardware testing (voyager-test scenarios 2-5)
+// with two boards to confirm peer-to-peer communication still works. If symmetric
+// operation is needed, both enableInvertIQ() calls below should match.
 
+// Switch radio to continuous receive mode.
 void LoRa_rxMode(){
-    LoRa.enableInvertIQ();                // active invert I and Q signals
+    LoRa.enableInvertIQ();                // inverted IQ for RX
     LoRa.receive();                       // continuous RX, DIO0 => RxDone
 }
 
+// Switch radio to idle/transmit mode.
 void LoRa_txMode(){
     LoRa.idle();                          // set standby mode
-    LoRa.disableInvertIQ();               // normal mode
-}
-
-uint8_t get_checksum(uint8_t seq, const String& data)
-{
-    return packet_crc(seq, (const uint8_t*)data.c_str(), data.length());
+    LoRa.disableInvertIQ();               // normal IQ for TX
 }
 
 // ---------------------------------------------------------------- TX
@@ -308,7 +308,7 @@ void IRAM_ATTR onReceive()
     portYIELD_FROM_ISR(woken);
 }
 
-static RxDedup rx_dedup;                  // only touched by lora_rx_task
+static RxDedupMulti rx_dedup;             // only touched by lora_rx_task, per-source tracking
 
 static void handle_rx_frame(const uint8_t* buf, size_t n, int rssi, float snr)
 {
@@ -343,7 +343,9 @@ static void handle_rx_frame(const uint8_t* buf, size_t n, int rssi, float snr)
         return;
     }
     default: {   // LORA_MSG / RAW_DATA
-        if (rx_is_duplicate(rx_dedup, p.seq)) {
+        // Per-source dedup: LORA_MSG uses MAC hash, RAW_DATA uses a shared key.
+        uint32_t dedup_key = (p.type == LORA_MSG) ? extract_mac_key(text) : DEDUP_KEY_RAW;
+        if (rx_is_duplicate_multi(rx_dedup, dedup_key, p.seq)) {
             LoRa_sendAkn(p.seq, ACK_OK);
             serial_print("LoRa RX duplicate seq=" + String(p.seq) + ", re-ACKed");
             return;
@@ -357,7 +359,7 @@ static void handle_rx_frame(const uint8_t* buf, size_t n, int rssi, float snr)
             queued = q->message.length() == p.len && xQueueSend(recv_packets, &q, 0) == pdTRUE;
             if (!queued) delete q;
         }
-        if (queued) rx_commit(rx_dedup, p.seq);
+        if (queued) rx_commit_multi(rx_dedup, dedup_key, p.seq);
         LoRa_sendAkn(p.seq, queued ? ACK_OK : ACK_RETRY);
         oled_lora_packet(false, queued, rssi, snr);
         serial_print("LoRa RX type=" + String(p.type) + " seq=" + String(p.seq) + " len=" + String(p.len) +

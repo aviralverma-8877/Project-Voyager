@@ -1,7 +1,7 @@
-#include <support_method.h>
-#include <core_dispatch.h>
-#include <web_sockets.h>
-#include <auth.h>
+#include "support_method.h"
+#include "core_dispatch.h"
+#include <web/web_sockets.h>
+#include <web/auth.h>
 #include <mutex>
 
 volatile bool lora_serial = false;
@@ -12,6 +12,15 @@ TaskHandle_t debug_handler = NULL;
 
 static String s_username;
 static std::mutex s_username_lock;
+
+// Halts boot with an OLED alert. Used for critical task/queue failures.
+static void halt_boot(const char* text)
+{
+    Serial.printf("FATAL: Boot error: %s\n", text);
+    oled_alert("Boot error", text, 0);
+    while (true)
+        vTaskDelay(pdMS_TO_TICKS(1000));
+}
 
 // ------------------------------------------------------------------ file I/O
 
@@ -176,7 +185,9 @@ void send_to_lora(void *param)
         DebugQueueParam *p = NULL;
         if (xQueueReceive(serial_packet_send, &p, portMAX_DELAY) == pdTRUE && p)
         {
-            if (lora_serial)
+            // Snapshot the flag once per message to avoid partial-send if toggled mid-packet.
+            bool enabled = lora_serial;
+            if (enabled)
                 LoRa_send(p->message, LORA_SERIAL);
             delete p;
         }
@@ -188,7 +199,9 @@ void serial_to_lora(void* param)
 {
     while (true)
     {
-        if (lora_serial)
+        // Snapshot the flag once per iteration to avoid inconsistent behavior mid-loop.
+        bool enabled = lora_serial;
+        if (enabled)
         {
             if (Serial.available())
             {
@@ -215,14 +228,15 @@ void serial_to_lora(void* param)
 }
 
 // Must run after config_lora() (radio mutex) and after the queues exist.
+// Halts on failure: the serial bridge is core functionality (Contract 6).
 void start_serial_bridge()
 {
     if (xTaskCreatePinnedToCore(send_to_serial, "send_to_serial", 4096, NULL, 1, NULL, 1) != pdPASS)
-        oled_alert("Boot error", "serial rx task", 0);
+        halt_boot("serial rx task");
     if (xTaskCreatePinnedToCore(send_to_lora, "send_to_lora", 6000, NULL, 1, NULL, 1) != pdPASS)
-        oled_alert("Boot error", "serial tx task", 0);
+        halt_boot("serial tx task");
     if (xTaskCreatePinnedToCore(serial_to_lora, "serial_to_lora", 4096, NULL, 1, NULL, 1) != pdPASS)
-        oled_alert("Boot error", "serial in task", 0);
+        halt_boot("serial in task");
 }
 
 void get_lora_serial()
@@ -400,6 +414,7 @@ void debugger_print(void *param)
     }
 }
 
+// Reserved for future device modes (e.g., BLE, LoRa-only). Currently unused at boot.
 String get_device_mode()
 {
     String cfg;
@@ -410,10 +425,15 @@ String get_device_mode()
 void setupTasks()
 {
     // LED task first so led_nortifier() has a target as early as possible.
+    // Non-critical: failure just means no LED blink feedback.
     if (xTaskCreatePinnedToCore(async_led_notifier, "led_notifier", 2048, NULL, 1, &led_task_handle, 1) != pdPASS)
         serial_print("led task create failed");
+
+    // Button task is critical: provides SOS and OLED navigation.
     if (xTaskCreatePinnedToCore(btn_intrupt, "buttons", 4096, NULL, 2, NULL, 1) != pdPASS)
-        oled_alert("Boot error", "button task", 0);
+        halt_boot("button task");
+
+    // Telemetry tasks are non-critical: failure just disables SSE updates.
     if (xTaskCreatePinnedToCore(get_heap_info, "get_heap_info", 4096, NULL, 1, NULL, 1) != pdPASS)
         serial_print("heap task create failed");
     if (xTaskCreatePinnedToCore(get_wifi_rssi, "get_wifi_rssi", 4096, NULL, 1, NULL, 1) != pdPASS)
@@ -423,17 +443,11 @@ void setupTasks()
 // ------------------------------------- wifi-network-engineer owned functions
 // Owner: wifi-network-engineer. Starts mDNS once per boot; the IDF responder
 // follows AP/STA interfaces by itself, so reconnects need no new begin().
-// The hostname is set by wifi_support before WiFi.mode()/begin().
+// Precondition: wifi_init_hostname() has already set hostname.
 void setup_mdns()
 {
     static bool mdns_started = false;
     if (mdns_started) return;
-    if (hostname.length() == 0)
-    {
-        String mac = WiFi.macAddress();
-        mac.replace(":","_");
-        hostname = "project-voyager-"+mac;
-    }
     if (MDNS.begin(hostname.c_str())) {
         MDNS.addService("http", "tcp", 80);
         mdns_started = true;

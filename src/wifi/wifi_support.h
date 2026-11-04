@@ -2,9 +2,9 @@
     #define wifi_support
     #include <Arduino.h>
     #include <WiFi.h>
-    #include <support_method.h>
+    #include <core/support_method.h>
     #include <ArduinoJson.h>
-    #include <web_sockets.h>
+    #include <web/web_sockets.h>
     #include "wifi_config.h"
 
     #define WIFI_CONFIG_PATH  "/config/wifi_config.json"

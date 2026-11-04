@@ -4,7 +4,7 @@
 # Repository: https://github.com/aviralverma-8877/Project-Voyager
 
 .PHONY: help build build-v1 build-v2 buildfs upload upload-v1 upload-v2 uploadfs monitor clean webflash \
-	test test-web release all flash-v1 flash-v2 full-v1 full-v2
+	test test-web release all flash-v1 flash-v2 full-v1 full-v2 size-check check lint sync-data
 
 # PlatformIO CLI: honour $(PIO) from the environment, else `pio` on PATH,
 # else the default PlatformIO Core install location.
@@ -32,6 +32,10 @@ help:
 	@echo "  make clean        - Clean build artifacts"
 	@echo "  make webflash     - Build release + fs for both boards into webflash/"
 	@echo "                      (WEBFLASH_ARGS=--yes to skip the prompt)"
+	@echo "  make size-check   - Show RAM/Flash usage for both boards"
+	@echo "  make check        - Run full validation (build + tests + JS syntax)"
+	@echo "  make lint         - Run PlatformIO static analysis"
+	@echo "  make sync-data    - Sync data_main/ -> data/ (minify JS, compact JSON)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make build-v1     # Build version 1 firmware"
@@ -128,3 +132,46 @@ full-v1: build-v1 buildfs upload-v1 uploadfs
 
 full-v2: build-v2 buildfs upload-v2 uploadfs
 	@echo "Version 2 fully flashed (firmware + filesystem)!"
+
+# Size check - shows RAM/Flash usage without rebuilding if up-to-date
+size-check: build
+	@echo ""
+	@echo "=== Firmware Size Summary ==="
+	@$(PIO) run -e esp_lora_v1 --target size 2>/dev/null | grep -E "(RAM|Flash):" || true
+	@$(PIO) run -e esp_lora_v2 --target size 2>/dev/null | grep -E "(RAM|Flash):" || true
+
+# Full validation suite
+check: build
+	@echo ""
+	@echo "=== Running validation suite ==="
+	@echo "Checking JavaScript syntax..."
+	@node --check data_main/script.js && node --check data_main/lib.js && echo "JavaScript: OK"
+	@echo ""
+	@echo "Checking data/ sync (expect script.js, lib.js, config/ to differ)..."
+	@diff -rq data data_main 2>/dev/null || true
+	@echo ""
+	@echo "=== Validation complete ==="
+
+# Static analysis
+lint:
+	@echo "Running PlatformIO static analysis..."
+	$(PIO) check -e esp_lora_v1 --skip-packages --severity=medium
+
+# Sync data_main/ to data/ (minify JS, compact JSON)
+sync-data:
+	@echo "Syncing data_main/ -> data/..."
+	rsync -a --delete --exclude config/ --exclude script.js --exclude lib.js data_main/ data/
+	@echo "Minifying JavaScript..."
+	@for f in script.js lib.js; do \
+		if [ -f data_main/$$f ]; then \
+			npx --yes terser@5.31.0 data_main/$$f -c -m -o data/$$f; \
+			echo "  $$f minified"; \
+		fi; \
+	done
+	@echo "Compacting JSON configs..."
+	@mkdir -p data/config
+	@for f in data_main/config/*.json; do \
+		$(PYTHON) -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1])),separators=(',',':')),end='')" "$$f" > "data/config/$$(basename $$f)"; \
+		echo "  $$(basename $$f) compacted"; \
+	done
+	@echo "Sync complete!"

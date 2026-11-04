@@ -9,8 +9,17 @@
 "use strict";
 
 const L = VoyagerLib;
+
+// UI timing constants (milliseconds)
 const AJAX_TIMEOUT_MS = 10000;
 const DEBUG_MAX_CHARS = 20000;
+const WS_RECONNECT_DELAY_MS = 1000;
+const SSE_RECONNECT_DELAY_MS = 2000;
+const SCAN_TIMEOUT_MS = 20000;
+const REDIRECT_DELAY_MS = 10000;
+const MODAL_HIDE_DELAY_MS = 600;
+const RETRY_DELAY_MS = 1000;
+const URL_REVOKE_DELAY_MS = 1000;
 
 const state = {
   socket: null,
@@ -147,6 +156,10 @@ function redirect_home() {
   window.location.replace(state.hostnameUrl || "/");
 }
 
+function schedule_redirect() {
+  setTimeout(redirect_home, REDIRECT_DELAY_MS);
+}
+
 /* ------------------------------------------------------------------ */
 /* First-boot password setup / admin password change (Contract 2)      */
 /* ------------------------------------------------------------------ */
@@ -267,7 +280,7 @@ function hide_loading() {
   loadingModal.hide();
   setTimeout(function () {
     loadingModal.hide();
-  }, 600);
+  }, MODAL_HIDE_DELAY_MS);
 }
 
 function render_kv(selector, rows) {
@@ -403,7 +416,7 @@ function reset() {
     "Device Reset",
     "Are you sure you want to reset the device? WiFi, LoRa settings, the username and the admin password go back to factory defaults.",
     function () {
-      if (ws_send({ "request-type": "reset_device" })) setTimeout(redirect_home, 10000);
+      if (ws_send({ "request-type": "reset_device" })) schedule_redirect();
     }
   );
 }
@@ -466,7 +479,7 @@ function reconnect_socket(needSession) {
         if (state.setupMode || xhr.status === 401) return;
         reconnect_socket(true); // device still down: keep trying
       });
-  }, 1000);
+  }, WS_RECONNECT_DELAY_MS);
 }
 
 function ws_send(obj, quiet) {
@@ -601,7 +614,7 @@ function reconnect_events() {
         if (state.setupMode || xhr.status === 401) return;
         reconnect_events();
       });
-  }, 2000);
+  }, SSE_RECONNECT_DELAY_MS);
 }
 
 /* ------------------------------------------------------------------ */
@@ -665,7 +678,7 @@ function lora_tx_retry(url, payload, retries, cb) {
     else
       setTimeout(function () {
         lora_tx_retry(url, payload, retries - 1, cb);
-      }, 1000);
+      }, RETRY_DELAY_MS);
   });
 }
 
@@ -781,7 +794,7 @@ function file_broadcast() {
     const sender = L.createChunkSender({
       chunks: chunks,
       waitMs: waitTime,
-      retryDelayMs: 1000,
+      retryDelayMs: RETRY_DELAY_MS,
       maxRetries: L.CHUNK_MAX_RETRIES,
       schedule: function (fn, ms) {
         setTimeout(fn, ms);
@@ -809,7 +822,7 @@ function file_broadcast() {
       }
       // Give the receiving browser time to process enable_file_tx_mode (WS)
       // before the first chunk arrives on SSE.
-      setTimeout(sender.start, 1000);
+      setTimeout(sender.start, RETRY_DELAY_MS);
     });
   };
   reader.readAsDataURL(file);
@@ -925,7 +938,7 @@ function downloadFile() {
   link.click();
   setTimeout(function () {
     URL.revokeObjectURL(link.href);
-  }, 1000);
+  }, URL_REVOKE_DELAY_MS);
 }
 
 /* ------------------------------------------------------------------ */
@@ -939,7 +952,7 @@ function scan_ssid() {
   clearTimeout(state.scanTimer);
   state.scanTimer = setTimeout(function () {
     $("#wifi_scan_btn").text("Scan SSID").prop("disabled", false);
-  }, 20000);
+  }, SCAN_TIMEOUT_MS);
 }
 
 function render_wifi_scan(list) {
@@ -985,7 +998,7 @@ function wifi_connect() {
   const go = function () {
     if (!ws_send({ "request-type": "connect_wifi", wifi_ssid: ssid, wifi_pass: psk })) return;
     set_loading("Connecting to WiFi...");
-    setTimeout(redirect_home, 10000);
+    schedule_redirect();
   };
   if (psk === "")
     confirm_prompt("Open network", 'Connect to "' + ssid + '" without a password?', go);
@@ -1002,7 +1015,7 @@ function wifi_ap_mode() {
           'Switched to AP mode.\nConnect to the "' + ap +
             '" access point. Its password is shown on the device OLED Network page.'
         );
-        setTimeout(redirect_home, 10000);
+        schedule_redirect();
       });
   });
 }
@@ -1116,7 +1129,7 @@ function JSONToFile(obj, filename) {
   a.click();
   setTimeout(function () {
     URL.revokeObjectURL(a.href);
-  }, 1000);
+  }, URL_REVOKE_DELAY_MS);
 }
 
 function set_freq_range(val) {

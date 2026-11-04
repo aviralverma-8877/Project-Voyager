@@ -5,7 +5,7 @@
     #include <WiFi.h>
     #include <AsyncTCP.h>
     #include <ESPAsyncWebServer.h>
-    #include <support_method.h>
+    #include <core/support_method.h>
     #include <Update.h>
     #include "FS.h"
     #include "LittleFS.h"

@@ -1,11 +1,11 @@
 #include <Arduino.h>
-#include <oled_display.h>
-#include <tasks.h>
-#include <wifi_support.h>
-#include <lora_support.h>
-#include <support_method.h>
-#include <web_server.h>
-#include <web_sockets.h>
+#include <display/oled_display.h>
+#include "tasks.h"
+#include <wifi/wifi_support.h>
+#include <lora/lora_support.h>
+#include "support_method.h"
+#include <web/web_server.h>
+#include <web/web_sockets.h>
 #include "FS.h"
 #include "LittleFS.h"
 
@@ -65,10 +65,8 @@ void setup() {
   config_gpios();
   get_lora_serial();     // defaults to false without FS
   load_username();       // defaults to MAC without FS
-  String device_mode = get_device_mode();
-  serial_print("device_mode : " + device_mode);
-  if (device_mode != "WiFi")
-    serial_print("device_mode '" + device_mode + "' not supported, using WiFi");
+  // Note: device_mode config exists but is reserved for future use (e.g., BLE, LoRa-only).
+  // Currently only "WiFi" is supported, so we don't read it at boot.
 
   // LED, buttons and telemetry first so led_nortifier() has a target before the radio starts.
   setupTasks();

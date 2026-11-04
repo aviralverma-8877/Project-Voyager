@@ -29,10 +29,10 @@ enum LoRaStatus {
 // runs on that task, so this returns quickly). No panel / no memory: API is a no-op.
 void init_oled();
 
-void oled_set_wifi(WiFiStatus s, const char* ssid, const char* ip);
+void oled_set_wifi(WiFiStatus s, const char* ssid, const char* ip);  // WiFi state for header icon and pages
 void oled_set_ap(const char* ssid, const char* pass, const char* ip);  // AP details for the Network page
-void oled_set_wifi_rssi(int rssi);
-void oled_set_lora(LoRaStatus s);
+void oled_set_wifi_rssi(int rssi);              // RSSI in dBm for signal bars (STA mode only)
+void oled_set_lora(LoRaStatus s);               // LoRa state for header icon
 void oled_lora_packet(bool tx, bool ok, int rssi, float snr);  // counters + last RSSI/SNR (rssi/snr ignored for tx)
 void oled_message(const char* from, const char* text);         // overlay, then Messages page (last 5)
 void oled_alert(const char* title, const char* text, uint32_t ms);  // priority overlay; ms==0: until a button press

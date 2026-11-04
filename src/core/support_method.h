@@ -2,14 +2,14 @@
 #define SUPPORT_METHOD_H
     #include <Arduino.h>
     #include <string.h>
-    #include <oled_display.h>
-    #include <tasks.h>
+    #include <display/oled_display.h>
+    #include "tasks.h"
     #include <ESPmDNS.h>
     #include <DNSServer.h>
     #include <WiFi.h>
     #include <ArduinoJson.h>
-    #include <lora_support.h>
-    #include <wifi_support.h>
+    #include <lora/lora_support.h>
+    #include <wifi/wifi_support.h>
     #include "LittleFS.h"
     #define INTERRUPT_ATTR IRAM_ATTR
     #define DEBUGGING DEBUG

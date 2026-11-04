@@ -5,8 +5,8 @@
     #include <WiFi.h>
     #include <AsyncTCP.h>
     #include <ESPAsyncWebServer.h>
-    #include <support_method.h>
-    #include <web_server.h>
+    #include <core/support_method.h>
+    #include "web_server.h"
     #include <ArduinoJson.h>
 
     extern AsyncWebSocket webSocket;

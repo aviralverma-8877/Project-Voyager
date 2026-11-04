@@ -83,11 +83,11 @@ inline std::string wifi_derive_ap_pass(const uint8_t mac[6]) {
     return out;
 }
 
-// Reconnect backoff: 5 s, 10 s, 20 s, 40 s, 60 s, 60 s ...
+// Reconnect backoff: doubles each retry (5s -> 10s -> 20s -> 40s -> 60s), capped at 60s.
 inline uint32_t wifi_next_backoff(uint32_t current_ms) {
-    if (current_ms < WIFI_BACKOFF_MIN_MS) return WIFI_BACKOFF_MIN_MS;
-    if (current_ms >= WIFI_BACKOFF_MAX_MS / 2) return WIFI_BACKOFF_MAX_MS;
-    return current_ms * 2;
+    if (current_ms < WIFI_BACKOFF_MIN_MS) return WIFI_BACKOFF_MIN_MS;        // first retry: 5s
+    if (current_ms >= WIFI_BACKOFF_MAX_MS / 2) return WIFI_BACKOFF_MAX_MS;   // cap at 60s
+    return current_ms * 2;                                                    // double each retry
 }
 
 // Parse a Contract 5 wifi config. Never throws, never crashes.
