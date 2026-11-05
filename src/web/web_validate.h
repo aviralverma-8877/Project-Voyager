@@ -5,6 +5,7 @@
 
 #include <ArduinoJson.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -40,6 +41,19 @@ inline size_t lora_msg_wrapped_len(const char* name, const char* mac, const char
   JsonDocument doc;
   fill_lora_msg(doc, name, mac, data);
   return measureJson(doc);
+}
+
+// 202 body for an accepted TX request: {"id":N,"queued":Q}. Returns the length
+// written (0 if out_size is too small; out is then "").
+inline size_t tx_accepted_body(uint32_t id, uint32_t queued, char* out, size_t out_size) {
+  if (out == nullptr || out_size == 0) return 0;
+  int n = snprintf(out, out_size, "{\"id\":%lu,\"queued\":%lu}", (unsigned long)id,
+                   (unsigned long)queued);
+  if (n < 0 || (size_t)n >= out_size) {
+    out[0] = '\0';
+    return 0;
+  }
+  return (size_t)n;
 }
 
 // /lora_transmit: data = inner JSON string (nullptr when the param is missing).
@@ -112,6 +126,50 @@ inline bool path_is_blocked(const char* url) {
   return false;
 }
 
+// True for URLs a browser navigates to as a page: "/", "*.html" (any case) and the
+// OTA form "/update". While no admin password is set these redirect to /setup.
+// The query string, if present, is ignored.
+inline bool is_page_request(const char* url) {
+  if (url == nullptr || url[0] != '/') return false;
+  size_t n = 0;
+  while (url[n] && url[n] != '?') n++;
+  if (n == 1) return true;
+  if (n == 7 && ieq_n(url, "/update", 7)) return true;
+  return n > 5 && ieq_n(url + n - 5, ".html", 5);
+}
+
+// Path part of a URL (query string ignored) ends in a segment with a file extension
+// other than ".html": "/bootstrap.min.css", "/a/b.js". Such a URL is a missing asset,
+// so the not-found handler answers 404 instead of the index.html SPA shell.
+inline bool is_missing_asset(const char* url) {
+  if (url == nullptr) return false;
+  size_t n = 0;
+  while (url[n] && url[n] != '?') n++;
+  size_t seg = n;
+  while (seg > 0 && url[seg - 1] != '/' && url[seg - 1] != '\\') seg--;
+  for (size_t i = n; i > seg + 1; i--) {   // a dot after the segment's first char
+    if (url[i - 1] == '.') {
+      if (i - 1 == n - 1) return false;    // "name." : no extension
+      return !(n - (i - 1) == 5 && ieq_n(url + i - 1, ".html", 5));
+    }
+  }
+  return false;
+}
+
+// While a LittleFS image is being written (and until the reboot that follows) only
+// routes that never touch the filesystem are served: the OTA endpoints and form
+// (firmware PROGMEM), /hostname and /api/auth/status. Everything else gets 503.
+inline bool allowed_while_fs_offline(const char* url) {
+  if (url == nullptr) return false;
+  static const char* const ok[] = {"/update", "/update_flash", "/update_littlefs",
+                                   "/hostname", "/api/auth/status"};
+  size_t n = 0;
+  while (url[n] && url[n] != '?') n++;
+  for (const char* a : ok)
+    if (strlen(a) == n && strncmp(a, url, n) == 0) return true;
+  return false;
+}
+
 // Removes secrets from a parsed wifi_config.json. False if it isn't an object.
 inline bool redact_wifi_config(JsonDocument& doc) {
   if (!doc.is<JsonObject>()) return false;
@@ -138,12 +196,27 @@ inline bool origin_allowed(const char* origin, const char* host) {
   return ieq_n(a, host, alen);
 }
 
-// Accept only complete, single-frame text messages of at most max_len bytes.
-// opcode 1 = WS_TEXT.
-inline bool ws_frame_acceptable(bool final, uint64_t index, uint32_t num, uint64_t total_len,
-                                size_t chunk_len, uint8_t opcode, size_t max_len = WS_MAX_MESSAGE) {
-  return final && index == 0 && num == 0 && opcode == 1 && total_len == chunk_len &&
-         chunk_len > 0 && chunk_len <= max_len;
+// WS inbound frames (ESPAsyncWebServer-esphome 3.3.0). Only AwsFrameInfo's final,
+// opcode, len and index are reliable: they are rewritten at the start of every frame.
+// num and message_opcode are only assigned for frames that span TCP segments and are
+// never initialised (garbage for ordinary frames), so they must not be read.
+// One frame can still arrive as several chunks (one per TCP segment): index is the
+// chunk's byte offset in the frame, len the frame's total payload length.
+
+// Frame header check (index == 0): a single-frame (final) text (opcode 1) message of
+// 1..max_len bytes. Fragmented messages (final=0, or continuation opcode 0) and
+// binary frames are refused.
+inline bool ws_frame_start_ok(bool final, uint8_t opcode, uint64_t total_len,
+                              size_t max_len = WS_MAX_MESSAGE) {
+  return final && opcode == 1 && total_len > 0 && total_len <= max_len;
+}
+
+// A chunk continues an accepted frame being reassembled: it starts exactly where the
+// previous chunk ended, belongs to a frame of the same length, and does not overflow.
+inline bool ws_chunk_in_order(uint64_t received, uint64_t expected_total, uint64_t index,
+                              uint64_t total_len, size_t chunk_len) {
+  return index == received && total_len == expected_total && chunk_len > 0 &&
+         received + chunk_len <= expected_total;
 }
 
 inline bool password_valid(const char* p) {
@@ -209,6 +282,15 @@ static const size_t OTA_KEEP_MAX_BYTES = 2048;
 // the image's default.
 inline bool ota_keep_size_ok(bool exists, size_t size) {
   return exists && size > 0 && size <= OTA_KEEP_MAX_BYTES;
+}
+
+// Outbound WS/SSE queue admission. WS replies (alerts, tx_result, set_uname...) and
+// SSE events (RAM_DATA/WIFI_DATA every second, DEBUG per log line, RAW_DATA) share one
+// queue. SSE items may only take a free slot while more than `reserved` slots are
+// free, so a burst of DEBUG/telemetry can never crowd out a WS reply.
+inline bool out_queue_admit(bool to_ws, size_t spaces_free, size_t reserved) {
+  if (spaces_free == 0) return false;
+  return to_ws || spaces_free > reserved;
 }
 
 // Next TX id after `cur`, never 0 (0 is reserved for device-originated packets).

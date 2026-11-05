@@ -1,54 +1,56 @@
-<h1>
-    File Transfer.
-</h1>
-<hr>
+<h2 class="panel-title">File Transfer <small>Broadcast over LoRa</small></h2>
 <fieldset class="file_tx_controls">
-    <div class="mb-3">
+    <div class="field">
+        <label for="broadcastFile" class="label">File</label>
         <input
             type="file"
-            class="form-control"
+            class="input"
             onchange="reset_progress_bar()"
             id="broadcastFile"
         >
+        <div class="hint">Small files only: every 200 characters of the encoded file is one radio packet.</div>
     </div>
-    <div class="mb-3">
-        <h5>Wait time between packets (ms):</h5>
-        <input
-            class="form-control form-control-sm"
-            id="wait_time"
-            value="10"
-            min="10"
-            step="1"
-            type="number"
-            placeholder="Delay between packets in milliseconds (at least 10)"
-        >
-    </div>
-    <div class="mb-3">
-        <h5>Size of each packet (1-200 characters):</h5>
-        <input
-            class="form-control form-control-sm"
-            id="chunk_size"
-            value="200"
-            min="1"
-            max="200"
-            step="1"
-            type="number"
-            placeholder="Packet size (1-200)"
-        >
+    <div class="grid-2">
+        <div class="field">
+            <label for="wait_time" class="label">Wait between packets <span class="unit">ms</span></label>
+            <input
+                class="input"
+                id="wait_time"
+                value="10"
+                min="10"
+                step="1"
+                type="number"
+                placeholder="At least 10"
+            >
+        </div>
+        <div class="field">
+            <label for="chunk_size" class="label">Packet size <span class="unit">1-200 chars</span></label>
+            <input
+                class="input"
+                id="chunk_size"
+                value="200"
+                min="1"
+                max="200"
+                step="1"
+                type="number"
+                placeholder="1-200"
+            >
+        </div>
     </div>
 </fieldset>
-<div class="mb-3">
+<div class="actions">
     <button
         type="button"
         id="fileBroadcastButton"
-        class="btn btn-primary"
+        class="btn primary"
         onclick="file_broadcast()"
     >Broadcast</button>
     <button
         type="button"
         id="stopBroadcastButton"
-        class="btn btn-danger"
+        class="btn danger"
         onclick="stop_broadcast()"
         disabled
     >Stop</button>
 </div>
+<p class="hint mt-2">Progress and the result appear in the Telemetry panel.</p>

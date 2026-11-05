@@ -41,20 +41,89 @@ static bool guard(AsyncWebServerRequest* r, bool state_changing) {
 
 static bool is_ota_url(const String& u) { return u == "/update_flash" || u == "/update_littlefs"; }
 
+// Set when a LittleFS image starts being written; stays set until the reboot that
+// follows (or is cleared if the upload fails before the partition was touched).
+// While set, nothing served over HTTP or WS may touch LittleFS: the partition is being
+// overwritten under the mounted filesystem, and ota_finish_task unmounts/remounts it.
+// A stat() racing LittleFS.end() crashed the board (HIL: LoadProhibited in
+// lfs_bd_read from onNotFound's LittleFS.exists right after "OTA success").
+static std::atomic<bool> g_fs_offline{false};
+
+bool web_fs_offline() { return g_fs_offline.load(); }
+
 // First handler in the chain: blocks /config/** and oversized bodies before any
 // parsing or later handlers run. Must be registered first via server.addHandler.
 class PreGate : public AsyncWebHandler {
  public:
+  // The library has no chunked request-body support: it would see Content-Length 0,
+  // skip the body and run the handler without parameters (HIL: chunked 3 KB POST ->
+  // 400 missing_data instead of 413). Refuse it up front. canHandle runs before the
+  // library drops headers that no handler asked for, so the header is visible here.
+  static bool is_chunked(AsyncWebServerRequest* r) { return r->hasHeader("Transfer-Encoding"); }
+
   bool canHandle(AsyncWebServerRequest* r) override {
     if (wv::path_is_blocked(r->url().c_str())) return true;
+    if (is_chunked(r)) {
+      r->addInterestingHeader("Transfer-Encoding");   // keep it for handleRequest
+      return true;
+    }
+    if (g_fs_offline.load() && !wv::allowed_while_fs_offline(r->url().c_str())) return true;
     return r->contentLength() > API_MAX_BODY && !is_ota_url(r->url());
   }
   void handleRequest(AsyncWebServerRequest* r) override {
     if (wv::path_is_blocked(r->url().c_str())) send_error(r, 403, "forbidden");
+    else if (is_chunked(r)) send_error(r, 411, "length_required");
+    else if (g_fs_offline.load() && !wv::allowed_while_fs_offline(r->url().c_str()))
+      send_error(r, 503, "fs_updating");
     else send_error(r, 413, "too_large");
   }
 };
 static PreGate pre_gate;
+
+// While no admin password is set, page loads ("/", "*.html", "/update") redirect to
+// the built-in /setup page. It lives in firmware, so it works even when LittleFS
+// holds an older web UI without its own setup screen. API calls are untouched and
+// still get 403 {"error":"setup_required"}.
+class SetupGate : public AsyncWebHandler {
+ public:
+  bool canHandle(AsyncWebServerRequest* r) override {
+    return r->method() == HTTP_GET && wv::is_page_request(r->url().c_str()) && !auth_is_set();
+  }
+  void handleRequest(AsyncWebServerRequest* r) override { r->redirect("/setup"); }
+};
+static SetupGate setup_gate;
+
+static const char SETUP_HTML[] PROGMEM =
+    "<!doctype html><html><head><meta charset='utf-8'>"
+    "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+    "<title>Voyager Setup</title><style>"
+    "body{font-family:sans-serif;background:#f4f4f4;margin:0;padding:16px}"
+    ".c{max-width:24rem;margin:3rem auto;background:#fff;padding:24px;border-radius:8px;"
+    "box-shadow:0 1px 4px rgba(0,0,0,.15)}"
+    "h1{font-size:1.4em;margin:0 0 8px}p{color:#555;font-size:.9em}"
+    "input,button{width:100%;box-sizing:border-box;padding:10px;margin:6px 0;font-size:1em}"
+    "button{background:#0d6efd;color:#fff;border:0;border-radius:4px;cursor:pointer}"
+    "button:disabled{opacity:.6}#e{color:#c00;min-height:1.2em;font-size:.9em}"
+    "</style></head><body><div class='c'><h1>Set admin password</h1>"
+    "<p>This device has no admin password yet. Choose one (8-63 characters). "
+    "You will log in as <b>admin</b>.</p>"
+    "<form id='f'><input id='p1' type='password' placeholder='Password' minlength='8' "
+    "maxlength='63' autocomplete='new-password' required>"
+    "<input id='p2' type='password' placeholder='Confirm password' minlength='8' "
+    "maxlength='63' autocomplete='new-password' required>"
+    "<div id='e'></div><button id='b' type='submit'>Save</button></form></div><script>"
+    "var f=document.getElementById('f'),e=document.getElementById('e'),b=document.getElementById('b');"
+    "f.onsubmit=function(ev){ev.preventDefault();"
+    "var a=document.getElementById('p1').value,c=document.getElementById('p2').value;"
+    "if(a.length<8||a.length>63){e.textContent='Password must be 8-63 characters.';return;}"
+    "if(a!==c){e.textContent='Passwords do not match.';return;}"
+    "e.textContent='';b.disabled=true;"
+    "fetch('/api/auth/setup',{method:'POST',body:new URLSearchParams({password:a})})"
+    ".then(function(r){if(r.ok||r.status===409){location.href='/';return;}"
+    "return r.json().then(function(j){e.textContent='Failed: '+(j.error||r.status);});})"
+    ".catch(function(){e.textContent='Device not reachable.';})"
+    ".then(function(){b.disabled=false;});};"
+    "</script></body></html>";
 
 /* ------------------------------------------------------------------ */
 /* LoRa TX (Contract 2: 202 {id}, result later as WS tx_result)        */
@@ -89,7 +158,12 @@ static void enqueue_tx(AsyncWebServerRequest* r, int type, String& message) {
     send_error(r, 503, "queue_full");
     return;
   }
-  r->send(202, "application/json", "{\"id\":" + String(id) + "}");
+  // Contract 2: 202 {"id":N,"queued":Q}. Q (informational) = packets waiting in the
+  // TX queue right after this one was added, including it unless the TX task has
+  // already taken it.
+  char body[48];
+  wv::tx_accepted_body(id, (uint32_t)uxQueueMessagesWaiting(send_packets), body, sizeof(body));
+  r->send(202, "application/json", body);
 }
 
 static const char* tx_error_name(wv::TxCheck c) {
@@ -203,16 +277,16 @@ static void handle_api_config(AsyncWebServerRequest* r) {
   if (p == nullptr || !wv::is_allowed_config_name(p->value().c_str()))
     return send_error(r, 400, "bad_name");
   String path = "/config/" + p->value();
-  if (!LittleFS.exists(path)) return send_error(r, 404, "not_found");
-
+  // read_file (core) takes the FS lock and refuses during a filesystem OTA, so this
+  // handler never touches LittleFS directly. Config files are small (<= 4 KB).
+  String raw;
+  if (!read_file(path.c_str(), raw)) return send_error(r, 404, "not_found");
   if (!wv::is_wifi_config_name(p->value().c_str())) {
-    AsyncWebServerResponse* resp = r->beginResponse(LittleFS, path, "application/json");
+    AsyncWebServerResponse* resp = r->beginResponse(200, "application/json", raw);
     resp->addHeader("Cache-Control", "no-store");
     r->send(resp);
     return;
   }
-  String raw;
-  if (!read_file(path.c_str(), raw)) return send_error(r, 500, "read_failed");
   JsonDocument doc;
   DeserializationError err = deserializeJson(doc, raw);
   raw.clear();
@@ -242,8 +316,16 @@ static void reply_and_spawn(AsyncWebServerRequest* r, TaskFunction_t fn, const c
 
 void define_api(void* param) {
   server.addHandler(&pre_gate);          // must stay first: /config/** 403, body limit
+  server.addHandler(&setup_gate);        // page loads -> /setup until a password is set
   initWebSocket();                       // /ws + /rawEvents behind the auth/Origin gate
   define_auth_routes();
+
+  server.on("/setup", HTTP_GET, [](AsyncWebServerRequest* r) {
+    if (auth_is_set()) return r->redirect("/");
+    AsyncWebServerResponse* resp = r->beginResponse_P(200, "text/html", SETUP_HTML);
+    resp->addHeader("Cache-Control", "no-store");
+    r->send(resp);
+  });
 
   server.on("/hostname", HTTP_GET, [](AsyncWebServerRequest* r) {
     r->send(200, "text/plain", hostname);
@@ -275,7 +357,10 @@ void define_api(void* param) {
       .setFilter([](AsyncWebServerRequest* r) { return !wv::path_is_blocked(r->url().c_str()); });
 
   server.onNotFound([](AsyncWebServerRequest* r) {
-    if (r->method() == HTTP_GET && LittleFS.exists("/index.html")) r->send(LittleFS, "/index.html");
+    // A missing asset (/bootstrap.min.css) is a 404, not the HTML shell.
+    if (r->method() == HTTP_GET && wv::is_missing_asset(r->url().c_str())) r->send(404);
+    else if (r->method() == HTTP_GET && !g_fs_offline.load() && LittleFS.exists("/index.html"))
+      r->send(LittleFS, "/index.html");
     else if (r->method() == HTTP_GET) r->redirect("/update");
     else r->send(404);
   });
@@ -301,6 +386,10 @@ struct OtaReqState {
 
 static AsyncWebServerRequest* ota_owner = nullptr;
 static bool ota_radio_held = false;
+// The LittleFS partition has been (partly) overwritten by a failed upload. The
+// filesystem stays offline and the settings snapshot is kept for the retry, because
+// re-reading the half-written filesystem would snapshot garbage (or crash).
+static bool ota_fs_dirty = false;
 
 // LittleFS OTA: user settings (wifi, lora, user_data, lora_serial) are snapshotted
 // before the first write and restored after the remount. Only one OTA runs at a time,
@@ -346,7 +435,12 @@ static void ota_abort_owner(AsyncWebServerRequest* r) {
   if (ota_owner != r) return;
   Update.abort();
   ota_owner = nullptr;
-  ota_keep_clear();
+  if (ota_fs_dirty) {
+    serial_print("OTA: filesystem image incomplete; upload littlefs.bin again");
+  } else {
+    ota_keep_clear();
+    g_fs_offline.store(false);
+  }
   ota_release_radio(true);
 }
 
@@ -362,6 +456,12 @@ static void ota_finish_task(void* arg) {
   if (cmd == U_SPIFFS) {
     // New filesystem image: remount, then put the user's settings back
     // (snapshotted at index==0). WiFi falls back to the boot-time backup.
+    // Hold core's FS lock across end/begin and the restore so no read_file /
+    // write_file_atomic runs against an unmounted filesystem. Readers fail fast while
+    // web_fs_offline(), so the wait only covers one that was already inside.
+    bool locked = false;
+    for (int i = 0; i < 3 && !locked; i++) locked = fs_maintenance_begin(5000);
+    if (!locked) serial_print("OTA: FS lock busy, remounting anyway");
     LittleFS.end();
     if (!LittleFS.begin(false)) {
       serial_print("OTA: LittleFS remount failed");
@@ -376,6 +476,7 @@ static void ota_finish_task(void* arg) {
                      (write_file_atomic(path, *src) ? " ok" : " FAILED"));
       }
     }
+    if (locked) fs_maintenance_end();
     ota_keep_clear();
   }
   restart(NULL);   // reboots; never returns
@@ -416,10 +517,26 @@ static void ota_upload(AsyncWebServerRequest* r, const String& filename, size_t 
       }
     });
     serial_print(String("OTA start: ") + (cmd == U_FLASH ? "firmware" : "filesystem"));
-    if (cmd == U_SPIFFS) ota_keep_snapshot();   // before Update.begin / any write
+    if (cmd == U_SPIFFS) {
+      // Under core's FS lock (short wait: this is the AsyncTCP task), snapshot the
+      // settings and take the filesystem offline, so no config read/write is midway
+      // when the partition starts being overwritten. After a failed earlier attempt
+      // the filesystem is half-overwritten: reuse that attempt's snapshot instead.
+      if (!fs_maintenance_begin(200)) {
+        st->status = OTA_BUSY;
+        ota_owner = nullptr;
+        ota_release_radio(true);
+        serial_print("OTA: filesystem busy, try again");
+        return;
+      }
+      if (!ota_fs_dirty) ota_keep_snapshot();
+      g_fs_offline.store(true);   // from here on, no HTTP/WS path touches LittleFS
+      fs_maintenance_end();
+    }
     if (!Update.begin(UPDATE_SIZE_UNKNOWN, cmd)) return ota_fail(r, st, Update.errorString());
   }
   if (st == nullptr || st->status != OTA_RUNNING || ota_owner != r) return;
+  if (len && cmd == U_SPIFFS) ota_fs_dirty = true;   // set before the write: it erases first
   if (len && Update.write(data, len) != len) return ota_fail(r, st, Update.errorString());
   if (final) {
     if (!Update.end(true)) return ota_fail(r, st, Update.errorString());
@@ -456,15 +573,15 @@ static void ota_request(AsyncWebServerRequest* r) {
 static const char OTA_FORM_HTML[] PROGMEM =
     "<fieldset class=\"lora_transmission\">"
     "<form method='POST' action='/update_flash' enctype='multipart/form-data'>"
-    "<div class='form-group mx-sm-3 mb-2'>"
-    "<label class='sr-only' for='firmare_file'><h5>firmware.bin</h5></label>"
-    "<input id='firmare_file' type='file' class='form-control row' placeholder='firmware.bin' name='update'>"
-    "</div><input class='btn btn-primary mb-2' type='submit' value='Update'></form><hr />"
+    "<div class='ota'>"
+    "<label for='firmare_file'><h5>firmware.bin</h5></label>"
+    "<input id='firmare_file' type='file' class='input' placeholder='firmware.bin' name='update'>"
+    "</div><input class='btn primary mb-2' type='submit' value='Update'></form><hr />"
     "<form method='POST' action='/update_littlefs' enctype='multipart/form-data'>"
-    "<div class='form-group mx-sm-3 mb-2'>"
-    "<label class='sr-only' for='littlefs_file'><h5>littlefs.bin</h5></label>"
-    "<input id='littlefs_file' type='file' class='form-control row' placeholder='littlefs.bin' name='update'>"
-    "</div><input class='btn btn-primary mb-2' type='submit' value='Update'></form></fieldset>";
+    "<div class='ota'>"
+    "<label for='littlefs_file'><h5>littlefs.bin</h5></label>"
+    "<input id='littlefs_file' type='file' class='input' placeholder='littlefs.bin' name='update'>"
+    "</div><input class='btn primary mb-2' type='submit' value='Update'></form></fieldset>";
 
 void firmware_web_updater() {
   server.on("/update", HTTP_GET, [](AsyncWebServerRequest* r) {

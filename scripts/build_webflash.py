@@ -8,6 +8,7 @@ webflash/manifest-<n>.json with offsets read from the built partitions.bin.
 
 Usage:
     python3 scripts/build_webflash.py [--yes] [--clean]
+    python3 scripts/build_webflash.py --check   # read-only: verify webflash/ as committed
 
 PlatformIO is located via the PIO environment variable, then `pio` on PATH,
 then the default PlatformIO Core install (~/.platformio/penv/bin/pio).
@@ -306,13 +307,66 @@ def verify_files():
         raise BuildError(f"missing from webflash/: {', '.join(missing)}")
 
 
+def check_webflash():
+    """Read-only: verify the committed webflash/ against its own partitions.bin.
+
+    Every manifest must list exactly the parts build_manifest() would generate,
+    at the offsets the partition table gives, and every image must exist and fit
+    its partition. Nothing is built or written.
+    """
+    print_header("Checking webflash/ (read-only)")
+    partitions = require(WEBFLASH_DIR / 'partitions.bin')
+    layout = flash_layout(partitions)
+    for kind in ('otadata', 'app', 'fs'):
+        p = layout[kind]
+        print_success(f"{kind:8} '{p['label']}' @ 0x{p['offset']:X}, {p['size']} B")
+    errors = []
+    for version in ENVIRONMENTS:
+        path = require(WEBFLASH_DIR / f'manifest-{version}.json')
+        try:
+            manifest = json.loads(path.read_text())
+            parts = manifest['builds'][0]['parts']
+            got = [(p['path'], p['offset']) for p in parts]
+        except (ValueError, KeyError, IndexError, TypeError) as exc:
+            errors.append(f"{path.name}: malformed ({exc})")
+            continue
+        want = [(p['path'], p['offset'])
+                for p in build_manifest(version, layout)['builds'][0]['parts']]
+        if got != want:
+            errors.append(f"{path.name}: parts {got} != expected from partitions.bin {want}")
+        limits = {f'firmware-{version}.bin': layout['app'],
+                  f'littlefs-{version}.bin': layout['fs']}
+        for name, _ in got:
+            binary = WEBFLASH_DIR / name
+            if not binary.is_file():
+                errors.append(f"{path.name}: missing {name}")
+            elif name in limits and binary.stat().st_size > limits[name]['size']:
+                errors.append(f"{name} ({binary.stat().st_size} B) exceeds partition "
+                              f"'{limits[name]['label']}' ({limits[name]['size']} B)")
+        if not any(e.startswith(path.name) for e in errors):
+            print_success(f"{path.name}: " + ', '.join(f"{n}@0x{o:X}" for n, o in got))
+    if errors:
+        raise BuildError("webflash/ check failed:\n  " + "\n  ".join(errors))
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('-y', '--yes', action='store_true',
                         help="non-interactive: don't prompt (no clean unless --clean)")
     parser.add_argument('--clean', action='store_true',
                         help="remove .pio/build before building")
+    parser.add_argument('--check', action='store_true',
+                        help="read-only: verify webflash/ manifests against its "
+                             "partitions.bin and image sizes; build nothing")
     args = parser.parse_args(argv)
+
+    if args.check:
+        try:
+            check_webflash()
+        except BuildError as exc:
+            print_error(str(exc))
+            return 1
+        return 0
 
     print_header("Project Voyager - WebFlash Build Tool")
     try:

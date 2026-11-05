@@ -14,7 +14,9 @@ var VoyagerLib = (function () {
   var CHUNK_MIN = 1; // Contract 1: RAW_DATA is 1-200 chars
   var CHUNK_MAX = 200;
   var MAC_PLACEHOLDER = "XX:XX:XX:XX:XX:XX";
-  var TX_RESULT_TIMEOUT_MS = 30000;
+  var TX_RESULT_TIMEOUT_MS = 30000; // fallback send window when tx_started has no usable expected_ms
+  var TX_QUEUE_TIMEOUT_MS = 600000; // safety timer while an item waits in the device queue (10 min)
+  var TX_START_SLACK_MS = 5000; // added to tx_started.expected_ms
   var CHUNK_MAX_RETRIES = 2; // same chunk is retried up to 2 more times
   var USERNAME_MAX = 32;
 
@@ -312,6 +314,39 @@ var VoyagerLib = (function () {
     return clamp(Math.round(2 * (n + 100)), 0, 100);
   }
 
+  // Navbar label for a WIFI_DATA event (Contract 4):
+  //   {"mode":"STA","rssi":-55} -> "90 %"      {"mode":"AP","clients":2} -> "AP, 2 clients"
+  //   {"mode":"OFF"}            -> "off"       {"rssi":-55} (older firmware) -> "90 %"
+  // Returns null for anything unusable, so the caller keeps the previous label.
+  function wifiLabel(d) {
+    if (!isObject(d)) return null;
+    var mode = typeof d.mode === "string" ? d.mode.toUpperCase() : "";
+    if (mode === "OFF") return "off";
+    if (mode === "AP") {
+      var c = toNumber(d.clients);
+      if (!isFinite(c) || c < 0) return "AP";
+      c = Math.floor(c);
+      return "AP, " + c + (c === 1 ? " client" : " clients");
+    }
+    if (mode === "STA" || mode === "") {
+      if (d.rssi === undefined || d.rssi === null || !isFinite(toNumber(d.rssi))) return null;
+      return wifiQuality(d.rssi) + " %";
+    }
+    return null;
+  }
+
+  // Signal-bar indicator for a WIFI_DATA event: {mode: "sta"|"ap"|"off", level: 0-4},
+  // or null for anything unusable (same rules as wifiLabel).
+  function wifiBars(d) {
+    if (wifiLabel(d) === null) return null;
+    var mode = typeof d.mode === "string" ? d.mode.toUpperCase() : "";
+    if (mode === "OFF") return { mode: "off", level: 0 };
+    if (mode === "AP") return { mode: "ap", level: 4 };
+    var q = wifiQuality(d.rssi);
+    var level = q >= 75 ? 4 : q >= 50 ? 3 : q >= 25 ? 2 : q > 0 ? 1 : 0;
+    return { mode: "sta", level: level };
+  }
+
   function wifiQualityClass(q) {
     if (q >= 80) return "list-group-item-success";
     if (q >= 60) return "list-group-item-primary";
@@ -545,46 +580,137 @@ var VoyagerLib = (function () {
     };
   }
 
-  // opts: { setTimeout, clearTimeout, timeoutMs }
+  // How long to wait for tx_result after tx_started: expected_ms + slack, or the
+  // 30 s fallback when expected_ms is missing, non-numeric or negative.
+  // (expected_ms === 0 is handled by the caller: it keeps the queue safety timer.)
+  function txSendingWindowMs(expectedMs, slackMs) {
+    var e = toNumber(expectedMs);
+    if (!isFinite(e) || e < 0) e = TX_RESULT_TIMEOUT_MS;
+    return Math.min(e, TX_QUEUE_TIMEOUT_MS) + slackMs;
+  }
+
+  // Bounded id -> message map for events that arrive before the 202 is processed.
+  function createEarlyMap(max) {
+    var map = {};
+    var order = [];
+    return {
+      put: function (key, msg) {
+        if (!Object.prototype.hasOwnProperty.call(map, key)) order.push(key);
+        map[key] = msg;
+        while (order.length > max) delete map[order.shift()];
+      },
+      take: function (key) {
+        if (!Object.prototype.hasOwnProperty.call(map, key)) return null;
+        var m = map[key];
+        delete map[key];
+        var i = order.indexOf(key);
+        if (i >= 0) order.splice(i, 1);
+        return m;
+      },
+    };
+  }
+
+  /*
+   * Tracks queued radio transmissions by id (Contract 2: 202 {id[,queued]};
+   * Contract 3: tx_started {id, expected_ms, attempts}, then tx_result {id, akn, username}).
+   *
+   * opts: setTimeout, clearTimeout,
+   *   timeoutMs   safety timer while "queued" (default TX_QUEUE_TIMEOUT_MS, 10 min)
+   *   slackMs     added to expected_ms once "sending" (default TX_START_SLACK_MS)
+   *
+   * register(id, cb, onState):
+   *   cb(result) exactly once: {id, akn, username, timeout, phase}
+   *     (phase = "queued" | "sending": the state the item was in when it timed out)
+   *   onState(state, info) (optional): "queued" right away, then "sending" with
+   *     {expectedMs, attempts} when tx_started arrives.
+   * started(msg) / resolve(msg): feed tx_started / tx_result; either may arrive
+   *   before register() and is kept until then. Return true when matched.
+   */
   function createTxTracker(opts) {
     var setT = opts.setTimeout;
     var clearT = opts.clearTimeout;
-    var timeoutMs = opts.timeoutMs || TX_RESULT_TIMEOUT_MS;
+    var queuedMs = opts.timeoutMs || TX_QUEUE_TIMEOUT_MS;
+    var slackMs = opts.slackMs === undefined ? TX_START_SLACK_MS : opts.slackMs;
     var pending = {};
-    var early = {}; // tx_result that arrived before the 202 was processed
-    var earlyOrder = [];
+    var earlyResult = createEarlyMap(50); // tx_result that arrived before the 202 was processed
+    var earlyStarted = createEarlyMap(50); // tx_started that arrived before the 202 was processed
+
+    function validId(msg) {
+      return isObject(msg) && msg.id !== undefined && msg.id !== null;
+    }
+
+    function arm(key, p, ms) {
+      if (p.timer !== null) clearT(p.timer);
+      p.timer = setT(function () {
+        if (pending[key] === p) {
+          delete pending[key];
+          p.cb({ id: p.id, akn: 0, username: "", timeout: true, phase: p.state });
+        }
+      }, ms);
+    }
+
+    function markStarted(key, p, msg) {
+      p.state = "sending";
+      // expected_ms === 0 means "time unknown" (Contract 3): keep the queue safety
+      // timer that is already running instead of the 30 s fallback.
+      if (toNumber(msg.expected_ms) === 0) {
+        if (p.timer === null) arm(key, p, queuedMs);
+      } else {
+        arm(key, p, txSendingWindowMs(msg.expected_ms, slackMs));
+      }
+      if (p.onState) {
+        var a = toNumber(msg.attempts);
+        var e = toNumber(msg.expected_ms);
+        p.onState("sending", {
+          expectedMs: isFinite(e) && e >= 0 ? e : null,
+          attempts: isFinite(a) && a > 0 ? Math.floor(a) : null,
+        });
+      }
+    }
 
     return {
-      register: function (id, cb) {
+      register: function (id, cb, onState) {
         var key = String(id);
-        if (Object.prototype.hasOwnProperty.call(early, key)) {
-          var r = early[key];
-          delete early[key];
+        var r = earlyResult.take(key);
+        if (r) {
+          earlyStarted.take(key);
           cb(normalizeTxResult(r));
           return;
         }
-        var timer = setT(function () {
-          if (pending[key]) {
-            delete pending[key];
-            cb({ id: id, akn: 0, username: "", timeout: true });
-          }
-        }, timeoutMs);
-        pending[key] = { cb: cb, timer: timer };
+        var p = { id: id, cb: cb, onState: onState || null, state: "queued", timer: null };
+        pending[key] = p;
+        if (p.onState) p.onState("queued", {});
+        var s = earlyStarted.take(key);
+        if (s) markStarted(key, p, s);
+        else arm(key, p, queuedMs);
       },
-      resolve: function (msg) {
-        if (!isObject(msg) || msg.id === undefined || msg.id === null) return false;
+      started: function (msg) {
+        if (!validId(msg)) return false;
         var key = String(msg.id);
         var p = pending[key];
         if (!p) {
-          early[key] = msg;
-          earlyOrder.push(key);
-          while (earlyOrder.length > 50) delete early[earlyOrder.shift()];
+          earlyStarted.put(key, msg);
+          return false;
+        }
+        markStarted(key, p, msg);
+        return true;
+      },
+      resolve: function (msg) {
+        if (!validId(msg)) return false;
+        var key = String(msg.id);
+        var p = pending[key];
+        if (!p) {
+          earlyResult.put(key, msg);
           return false;
         }
         clearT(p.timer);
         delete pending[key];
         p.cb(normalizeTxResult(msg));
         return true;
+      },
+      state: function (id) {
+        var p = pending[String(id)];
+        return p ? p.state : null;
       },
       pendingCount: function () {
         return Object.keys(pending).length;
@@ -734,6 +860,8 @@ var VoyagerLib = (function () {
     CHUNK_MAX: CHUNK_MAX,
     MAC_PLACEHOLDER: MAC_PLACEHOLDER,
     TX_RESULT_TIMEOUT_MS: TX_RESULT_TIMEOUT_MS,
+    TX_QUEUE_TIMEOUT_MS: TX_QUEUE_TIMEOUT_MS,
+    TX_START_SLACK_MS: TX_START_SLACK_MS,
     CHUNK_MAX_RETRIES: CHUNK_MAX_RETRIES,
     LORA_BANDWIDTHS: LORA_BANDWIDTHS,
     LORA_LIMITS: LORA_LIMITS,
@@ -758,6 +886,8 @@ var VoyagerLib = (function () {
     parseLoraRx: parseLoraRx,
     parseWifiScan: parseWifiScan,
     wifiQuality: wifiQuality,
+    wifiLabel: wifiLabel,
+    wifiBars: wifiBars,
     wifiQualityClass: wifiQualityClass,
     heapStatus: heapStatus,
     parseSseData: parseSseData,

@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# Run every test/web/test_*.js under the macOS JavaScriptCore shell.
+# Run every test/web/test_*.js under the macOS JavaScriptCore shell, or under
+# Node (through test/web/node_jsc_shim.js) where jsc is not available.
 #
-#   bash test/web/run.sh            # all files
-#   JSC=/path/to/jsc bash test/web/run.sh
+#   bash test/web/run.sh                    # all files
+#   JSC=/path/to/jsc bash test/web/run.sh   # a specific jsc
+#   WEB_RUNNER=node bash test/web/run.sh    # force Node even on macOS
+#
+# Runner order: $JSC, the macOS system jsc, `jsc` on PATH, then `node`.
 #
 # Each file runs as: $JSC test/web/harness.js test/web/<file>, from the repo root,
-# so test files can load("data_main/lib.js"). A file passes only if jsc exits 0
-# AND it printed a "N passed, 0 failed" summary (jsc may ignore quit()'s code,
+# so test files can load("data_main/lib.js"). A file passes only if the runner exits 0
+# AND it printed a "N passed, 0 failed" summary (some jsc builds ignore quit()'s code,
 # and a file that never reaches done() must not count as a pass).
 # Output of each file is kept in test/web/<file>.out (git-ignored).
 
@@ -14,11 +18,27 @@ set -u
 
 cd "$(dirname "$0")/../.." || exit 2
 
-JSC="${JSC:-/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc}"
-if [ ! -x "$JSC" ]; then
-    echo "jsc not found at $JSC (set JSC=/path/to/jsc)" >&2
-    exit 2
+# RUN is the command prefix; each test runs as: "${RUN[@]}" harness.js <file>
+RUN=()
+if [ "${WEB_RUNNER:-auto}" != node ]; then
+    if [ -n "${JSC:-}" ]; then
+        [ -x "$JSC" ] || { echo "JSC=$JSC is not executable" >&2; exit 2; }
+        RUN=("$JSC")
+    elif [ -x /System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc ]; then
+        RUN=(/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc)
+    elif command -v jsc >/dev/null 2>&1; then
+        RUN=("$(command -v jsc)")
+    fi
 fi
+if [ ${#RUN[@]} -eq 0 ]; then
+    if command -v node >/dev/null 2>&1; then
+        RUN=(node test/web/node_jsc_shim.js)
+    else
+        echo "neither jsc nor node found (set JSC=/path/to/jsc or install Node)" >&2
+        exit 2
+    fi
+fi
+echo "web tests via: ${RUN[*]}"
 
 shopt -s nullglob
 files=(test/web/test_*.js)
@@ -31,12 +51,12 @@ failed_files=0
 for f in "${files[@]}"; do
     out="${f%.js}.out"
     echo "== $f"
-    "$JSC" test/web/harness.js "$f" > "$out" 2>&1
+    "${RUN[@]}" test/web/harness.js "$f" > "$out" 2>&1
     rc=$?
     cat "$out"
     summary="$(grep -E '^[0-9]+ passed, [0-9]+ failed$' "$out" | tail -n 1)"
     if [ $rc -ne 0 ]; then
-        echo "-- FAILED: $f (jsc exit $rc)"
+        echo "-- FAILED: $f (exit $rc)"
         failed_files=$((failed_files + 1))
     elif [ -z "$summary" ]; then
         echo "-- FAILED: $f (no summary line; did it call done()?)"

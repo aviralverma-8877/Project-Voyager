@@ -107,6 +107,60 @@ static void test_path_blocking() {
   for (const char* p : allowed) TEST_ASSERT_FALSE_MESSAGE(wv::path_is_blocked(p), p);
 }
 
+static void test_page_request() {
+  const char* pages[] = {"/", "/index.html", "/wifi.html", "/LORA.HTML", "/update",
+                         "/Update", "/?x=1", "/dashboard.html?tab=2", "/update?a"};
+  for (const char* p : pages) TEST_ASSERT_TRUE_MESSAGE(wv::is_page_request(p), p);
+  const char* other[] = {"",          "index.html",  "/api/config", "/api/auth/status",
+                         "/script.js", "/setup",     "/ws",         "/rawEvents",
+                         "/updates",  "/update_flash", "/x?.html",  nullptr};
+  for (const char* p : other) TEST_ASSERT_FALSE_MESSAGE(wv::is_page_request(p), p ? p : "null");
+}
+
+static void test_missing_asset() {
+  const char* assets[] = {"/bootstrap.min.css", "/jquery-3.7.1.min.js", "/a/b.png",
+                          "/x.js?v=2", "/favicon.ico", "/BOOT.CSS"};
+  for (const char* p : assets) TEST_ASSERT_TRUE_MESSAGE(wv::is_missing_asset(p), p);
+  const char* shell[] = {"/", "/nonexistent", "/index.html", "/INDEX.HTML", "/a/b",
+                         "/x?f=a.css", "/.hidden", "/name.", "/v1.2/page", "", nullptr};
+  for (const char* p : shell) TEST_ASSERT_FALSE_MESSAGE(wv::is_missing_asset(p), p ? p : "null");
+}
+
+static void test_fs_offline_allowlist() {
+  const char* ok[] = {"/update", "/update_flash", "/update_littlefs", "/hostname",
+                      "/api/auth/status", "/update_littlefs?x=1"};
+  for (const char* p : ok) TEST_ASSERT_TRUE_MESSAGE(wv::allowed_while_fs_offline(p), p);
+  const char* no[] = {"/", "/index.html", "/api/config", "/username", "/ws", "/rawEvents",
+                      "/updates", "/update/x", "/lora_transmit", "", nullptr};
+  for (const char* p : no) TEST_ASSERT_FALSE_MESSAGE(wv::allowed_while_fs_offline(p), p ? p : "null");
+}
+
+static void test_tx_accepted_body() {
+  char b[48];
+  TEST_ASSERT_EQUAL(19, wv::tx_accepted_body(7, 1, b, sizeof(b)));
+  TEST_ASSERT_EQUAL_STRING("{\"id\":7,\"queued\":1}", b);
+  wv::tx_accepted_body(4294967295u, 10, b, sizeof(b));
+  TEST_ASSERT_EQUAL_STRING("{\"id\":4294967295,\"queued\":10}", b);
+  JsonDocument doc;
+  TEST_ASSERT_FALSE(deserializeJson(doc, b));
+  TEST_ASSERT_EQUAL_UINT32(4294967295u, doc["id"].as<uint32_t>());
+  TEST_ASSERT_EQUAL(10, doc["queued"].as<int>());
+  char small[8];
+  TEST_ASSERT_EQUAL(0, wv::tx_accepted_body(7, 1, small, sizeof(small)));
+  TEST_ASSERT_EQUAL_STRING("", small);
+}
+
+static void test_out_queue_admit() {
+  // WS replies take any free slot; SSE only while more than `reserved` are free.
+  TEST_ASSERT_TRUE(wv::out_queue_admit(true, 1, 8));
+  TEST_ASSERT_TRUE(wv::out_queue_admit(true, 32, 8));
+  TEST_ASSERT_FALSE(wv::out_queue_admit(true, 0, 8));
+  TEST_ASSERT_TRUE(wv::out_queue_admit(false, 9, 8));
+  TEST_ASSERT_FALSE(wv::out_queue_admit(false, 8, 8));
+  TEST_ASSERT_FALSE(wv::out_queue_admit(false, 0, 8));
+  TEST_ASSERT_TRUE(wv::out_queue_admit(false, 1, 0));
+}
+
 static void test_wifi_redaction() {
   JsonDocument doc;
   TEST_ASSERT_FALSE(deserializeJson(doc,
@@ -144,16 +198,51 @@ static void test_origin() {
 /* ---- WS frame acceptance ---- */
 
 static void test_ws_frames() {
-  // final, index, num, total_len, chunk_len, opcode
-  TEST_ASSERT_TRUE(wv::ws_frame_acceptable(true, 0, 0, 100, 100, 1));
-  TEST_ASSERT_TRUE(wv::ws_frame_acceptable(true, 0, 0, 2048, 2048, 1));
-  TEST_ASSERT_FALSE(wv::ws_frame_acceptable(true, 0, 0, 2049, 2049, 1));     // > 2 KB
-  TEST_ASSERT_FALSE(wv::ws_frame_acceptable(false, 0, 0, 100, 100, 1));      // fragmented
-  TEST_ASSERT_FALSE(wv::ws_frame_acceptable(true, 0, 1, 100, 100, 0));       // continuation frame
-  TEST_ASSERT_FALSE(wv::ws_frame_acceptable(true, 50, 0, 100, 50, 1));       // later chunk
-  TEST_ASSERT_FALSE(wv::ws_frame_acceptable(true, 0, 0, 100, 50, 1));        // first partial chunk
-  TEST_ASSERT_FALSE(wv::ws_frame_acceptable(true, 0, 0, 100, 100, 2));       // binary
-  TEST_ASSERT_FALSE(wv::ws_frame_acceptable(true, 0, 0, 0, 0, 1));           // empty
+  // final, opcode, total_len. AwsFrameInfo::num is not an input any more: it is
+  // uninitialised garbage in the library for ordinary frames (HIL: every client
+  // after the first had all its frames rejected).
+  TEST_ASSERT_TRUE(wv::ws_frame_start_ok(true, 1, 100));
+  TEST_ASSERT_TRUE(wv::ws_frame_start_ok(true, 1, 1));
+  TEST_ASSERT_TRUE(wv::ws_frame_start_ok(true, 1, 2048));
+  TEST_ASSERT_FALSE(wv::ws_frame_start_ok(true, 1, 2049));     // > 2 KB
+  TEST_ASSERT_FALSE(wv::ws_frame_start_ok(false, 1, 100));     // first fragment of a fragmented message
+  TEST_ASSERT_FALSE(wv::ws_frame_start_ok(true, 0, 100));      // continuation frame
+  TEST_ASSERT_FALSE(wv::ws_frame_start_ok(true, 2, 100));      // binary
+  TEST_ASSERT_FALSE(wv::ws_frame_start_ok(true, 1, 0));        // empty
+}
+
+// Replays the chunk sequence web_sockets.cpp sees for one frame and returns the
+// number of bytes reassembled, or -1 if the message is dropped.
+static long ws_reassemble(bool final, uint8_t opcode, uint64_t total, const uint64_t* idx,
+                          const size_t* lens, size_t n) {
+  if (n == 0 || idx[0] != 0 || !wv::ws_frame_start_ok(final, opcode, total)) return -1;
+  uint64_t received = 0;
+  for (size_t i = 0; i < n; i++) {
+    if (!wv::ws_chunk_in_order(received, total, idx[i], total, lens[i])) return -1;
+    received += lens[i];
+  }
+  return received == total ? (long)received : -1;
+}
+
+static void test_ws_chunk_reassembly() {
+  // 2048 B frame split over two TCP segments (1460 MSS): previously dropped.
+  const uint64_t i1[] = {0, 1460};
+  const size_t l1[] = {1460, 588};
+  TEST_ASSERT_EQUAL(2048, ws_reassemble(true, 1, 2048, i1, l1, 2));
+  const uint64_t i2[] = {0, 500, 1000};
+  const size_t l2[] = {500, 500, 200};
+  TEST_ASSERT_EQUAL(1200, ws_reassemble(true, 1, 1200, i2, l2, 3));
+  // gap / restart offset / overflow / mismatched frame length / empty chunk
+  TEST_ASSERT_FALSE(wv::ws_chunk_in_order(500, 1200, 600, 1200, 100));
+  TEST_ASSERT_FALSE(wv::ws_chunk_in_order(500, 1200, 0, 1200, 100));
+  TEST_ASSERT_FALSE(wv::ws_chunk_in_order(1100, 1200, 1100, 1200, 101));
+  TEST_ASSERT_FALSE(wv::ws_chunk_in_order(500, 1200, 500, 1300, 100));
+  TEST_ASSERT_FALSE(wv::ws_chunk_in_order(500, 1200, 500, 1200, 0));
+  TEST_ASSERT_TRUE(wv::ws_chunk_in_order(1100, 1200, 1100, 1200, 100));
+  // oversized frames are refused at the header, even when split
+  const uint64_t i3[] = {0, 1460};
+  const size_t l3[] = {1460, 1460};
+  TEST_ASSERT_EQUAL(-1, ws_reassemble(true, 1, 2920, i3, l3, 2));
 }
 
 /* ---- auth helpers ---- */
@@ -230,9 +319,15 @@ int main(int, char**) {
   RUN_TEST(test_send_raw);
   RUN_TEST(test_config_whitelist);
   RUN_TEST(test_path_blocking);
+  RUN_TEST(test_page_request);
+  RUN_TEST(test_out_queue_admit);
+  RUN_TEST(test_tx_accepted_body);
+  RUN_TEST(test_missing_asset);
+  RUN_TEST(test_fs_offline_allowlist);
   RUN_TEST(test_wifi_redaction);
   RUN_TEST(test_origin);
   RUN_TEST(test_ws_frames);
+  RUN_TEST(test_ws_chunk_reassembly);
   RUN_TEST(test_password_length);
   RUN_TEST(test_cookie_parsing);
   RUN_TEST(test_ct_equal_and_ids);

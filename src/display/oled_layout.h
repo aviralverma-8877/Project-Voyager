@@ -36,6 +36,24 @@ inline void safe_copy(char* dst, size_t n, const char* src) {
     dst[i] = '\0';
 }
 
+// In place, for text from the network or a LoRa peer: the built-in font has one glyph
+// per byte, so each UTF-8 multi-byte sequence (or stray high byte) becomes a single
+// '?', and control characters other than '\n' become ' '. Keeps width math honest.
+inline void ascii_fold(char* s) {
+    if (!s) return;
+    const unsigned char* r = (const unsigned char*)s;
+    char* w = s;
+    bool in_seq = false;
+    while (*r) {
+        unsigned char c = *r++;
+        if (c >= 0xC0) { *w++ = '?'; in_seq = true; continue; }       // UTF-8 lead byte
+        if (c >= 0x80) { if (!in_seq) *w++ = '?'; continue; }         // continuation / stray
+        in_seq = false;
+        *w++ = (c < 0x20 && c != '\n') || c == 0x7F ? ' ' : (char)c;
+    }
+    *w = '\0';
+}
+
 // How many characters fit in px pixels at the given text size (size 0 treated as 1).
 inline int chars_fit(int px, uint8_t size = 1) {
     if (size == 0) size = 1;
@@ -229,16 +247,159 @@ inline uint8_t next_page(uint8_t cur, uint8_t count = PAGE_COUNT) {
 }
 
 // ---------------------------------------------------------------------------
+// Screen layout for a two-colour panel
+//
+// Common 128x64 SSD1306 modules are yellow in rows 0..15 and blue in rows 16..63.
+// The header (title, icons, separator) and overlay title bars stay in rows
+// 0..OLED_HEADER_H-1; page bodies, overlay bodies and the page dots draw only at
+// y >= OLED_HEADER_H. For a panel with a different split, change OLED_HEADER_H only
+// (the static_asserts below check that everything still fits).
+// ---------------------------------------------------------------------------
+static const int OLED_HEADER_H = 16;
+
+// A rectangle: rows y..y+h-1, columns x..x+w-1.
+struct Box { int x, y, w, h; };
+inline int box_bottom(const Box& b) { return b.y + b.h - 1; }
+inline int box_right(const Box& b) { return b.x + b.w - 1; }
+inline bool box_in_header(const Box& b) { return b.y >= 0 && box_bottom(b) < OLED_HEADER_H; }
+inline bool box_in_body(const Box& b) { return b.y >= OLED_HEADER_H && box_bottom(b) < SCREEN_H; }
+inline bool box_on_screen_x(const Box& b) { return b.x >= 0 && box_right(b) < SCREEN_W; }
+inline bool boxes_overlap(const Box& a, const Box& b) {
+    return a.x <= box_right(b) && b.x <= box_right(a) && a.y <= box_bottom(b) && b.y <= box_bottom(a);
+}
+
+// Header band. Titles are drawn upper-case at text size 2: the glyph cell is 12x16,
+// and upper-case letters, digits and most punctuation use only font rows 0..6
+// (14 px at size 2). Only ',' g p q y use font row 7, so upper-casing keeps the
+// ink off the separator row.
+static const int HEADER_SEP_Y = OLED_HEADER_H - 1;                        // 15
+static const int BAND_INK_H2 = 7 * 2;                                     // size-2 caps
+static const int BAND_INK_H1 = 7;                                         // size-1 caps
+static const int BAND_TEXT_Y2 = (HEADER_SEP_Y - BAND_INK_H2) / 2;         // 0  -> ink 0..13
+static const int BAND_TEXT_Y1 = (HEADER_SEP_Y - BAND_INK_H1) / 2;         // 4  -> ink 4..10
+
+// Header icons, right-aligned; art occupies rows ICON_TOP_Y..ICON_BASE_Y.
+static const int ICON_BASE_Y = HEADER_SEP_Y - 2;                          // 13
+static const int ICON_TOP_Y = ICON_BASE_Y - 11;                           // 2 (12 rows)
+static const int ICON_WIFI_X = 86, ICON_WIFI_W = 13;   // arcs r=6,4,2 around (92, 13)
+static const int ICON_LORA_X = 102, ICON_LORA_W = 9;   // mast + arrow
+static const int ICON_BARS_X = 116, ICON_BARS_W = 12;  // 4 bars (STA) or "AP" (AP mode)
+static const int HEADER_TITLE_PX = ICON_WIFI_X - 2;                       // 84
+static const int HEADER_TITLE_MAX2 = HEADER_TITLE_PX / (CHAR_W * 2);      // 7 chars at size 2
+static const int HEADER_TITLE_MAX1 = HEADER_TITLE_PX / CHAR_W;            // 14 chars at size 1
+
+// Page body: size-1 lines, then the page dots on the bottom rows.
+static const int DOTS_H = 3;
+static const int DOTS_Y = SCREEN_H - DOTS_H;                              // 61..63
+static const int DOTS_SPACING = 6;
+static const int CONTENT_Y = OLED_HEADER_H + 1;                           // 17 (row 16 blank)
+static const int LINE_STEP = 9;
+static const int CONTENT_LINES = (DOTS_Y - CHAR_H - CONTENT_Y) / LINE_STEP + 1;  // 5
+
+// Alert overlay: inverted title band, framed body with wrapped text.
+static const int OVERLAY_MARGIN = 4;
+static const int ALERT_TEXT_Y = OLED_HEADER_H + 3;                        // 19
+static const int ALERT_LINES = (SCREEN_H - 1 - CHAR_H - ALERT_TEXT_Y) / LINE_STEP + 1;  // 5
+
+// Progress overlay ("Hold for SOS", "RX <file>"): title in band, bar + percent below.
+static const int PROG_BAR_Y = OLED_HEADER_H + 8;                          // 24..35
+static const int PROG_BAR_H = 12;
+static const int PROG_PCT_Y = PROG_BAR_Y + PROG_BAR_H + 6;                // 42..57 (size 2)
+
+// New-message overlay: "NEW MSG" in band, sender, two lines of text.
+static const int MSGOV_FROM_Y2 = OLED_HEADER_H + 4;                       // 20..35 (size 2)
+static const int MSGOV_FROM_Y1 = OLED_HEADER_H + 8;                       // 24..31 (size 1)
+static const int MSGOV_TEXT_Y = OLED_HEADER_H + 26;                       // 42, 51
+static const int MSGOV_TEXT_LINES = 2;
+
+// Boot splash: name in band, expanding rings centred in the body.
+static const int SPLASH_FRAMES = 6;
+static const int SPLASH_CX = SCREEN_W / 2;
+static const int SPLASH_CY = OLED_HEADER_H + (SCREEN_H - OLED_HEADER_H) / 2;   // 40
+static const int SPLASH_TAG_Y = SPLASH_CY - CHAR_H / 2;                          // 36
+
+static_assert(OLED_HEADER_H >= 14 && OLED_HEADER_H <= SCREEN_H - 40, "header band size");
+static_assert(BAND_TEXT_Y2 >= 0 && BAND_TEXT_Y2 + 2 * CHAR_H - 1 <= HEADER_SEP_Y, "size-2 title fits band");
+static_assert(ICON_TOP_Y >= 0, "icons fit band");
+static_assert(CONTENT_LINES >= 4, "at least 4 body lines");
+static_assert(PROG_PCT_Y + 2 * CHAR_H <= DOTS_Y + DOTS_H, "progress fits body");
+
+// Text size for a band title: 2 when it fits avail_px, else 1.
+inline uint8_t band_text_size(const char* s, int avail_px) { return text_width(s, 2) <= avail_px ? 2 : 1; }
+inline int band_text_y(uint8_t size) { return size >= 2 ? BAND_TEXT_Y2 : BAND_TEXT_Y1; }
+
+// Upper-case ASCII in place (band titles, see above).
+inline void ascii_upper(char* s) {
+    if (!s) return;
+    for (; *s; s++) if (*s >= 'a' && *s <= 'z') *s = (char)(*s - 'a' + 'A');
+}
+
+// Element boxes (glyph cells, not just ink). The drawing code positions with these.
+inline Box header_sep_box() { Box b = {0, HEADER_SEP_Y, SCREEN_W, 1}; return b; }
+inline Box header_title_box(uint8_t size) {
+    Box b = {0, band_text_y(size), size >= 2 ? HEADER_TITLE_MAX2 * CHAR_W * 2 : HEADER_TITLE_MAX1 * CHAR_W,
+             CHAR_H * (size >= 2 ? 2 : 1)};
+    return b;
+}
+inline Box icon_wifi_box() { Box b = {ICON_WIFI_X, ICON_TOP_Y, ICON_WIFI_W, ICON_BASE_Y - ICON_TOP_Y + 1}; return b; }
+inline Box icon_lora_box() { Box b = {ICON_LORA_X, ICON_TOP_Y, ICON_LORA_W, ICON_BASE_Y - ICON_TOP_Y + 1}; return b; }
+inline Box icon_bars_box() { Box b = {ICON_BARS_X, ICON_TOP_Y, ICON_BARS_W, ICON_BASE_Y - ICON_TOP_Y + 1}; return b; }
+inline Box content_line_box(int i) { Box b = {0, CONTENT_Y + i * LINE_STEP, SCREEN_W, CHAR_H}; return b; }
+inline int dots_x0(uint8_t count = PAGE_COUNT) {
+    int total = (count - 1) * DOTS_SPACING + 3;
+    return (SCREEN_W - total) / 2 + 1;   // centre of the first dot
+}
+inline Box dots_box(uint8_t count = PAGE_COUNT) {
+    Box b = {dots_x0(count) - 1, DOTS_Y, (count - 1) * DOTS_SPACING + 3, DOTS_H};
+    return b;
+}
+inline Box alert_band_box() { Box b = {0, 0, SCREEN_W, OLED_HEADER_H}; return b; }
+inline Box alert_frame_box() { Box b = {0, OLED_HEADER_H, SCREEN_W, SCREEN_H - OLED_HEADER_H}; return b; }
+inline Box alert_line_box(int i) {
+    Box b = {OVERLAY_MARGIN, ALERT_TEXT_Y + i * LINE_STEP, SCREEN_W - 2 * OVERLAY_MARGIN, CHAR_H};
+    return b;
+}
+inline Box progress_bar_box() { Box b = {2 * OVERLAY_MARGIN, PROG_BAR_Y, SCREEN_W - 4 * OVERLAY_MARGIN, PROG_BAR_H}; return b; }
+inline Box progress_pct_box() { Box b = {0, PROG_PCT_Y, SCREEN_W, 2 * CHAR_H}; return b; }
+inline Box msgov_from_box(uint8_t size) {
+    Box b = {0, size >= 2 ? MSGOV_FROM_Y2 : MSGOV_FROM_Y1, SCREEN_W, CHAR_H * (size >= 2 ? 2 : 1)};
+    return b;
+}
+inline Box msgov_text_box(int i) {
+    Box b = {OVERLAY_MARGIN, MSGOV_TEXT_Y + i * LINE_STEP, SCREEN_W - 2 * OVERLAY_MARGIN, CHAR_H};
+    return b;
+}
+inline int splash_ring_r(int frame) { return 3 + frame * 3; }
+inline Box splash_ring_box(int frame) {
+    int r = splash_ring_r(frame);
+    Box b = {SPLASH_CX - r, SPLASH_CY - r, 2 * r + 1, 2 * r + 1};
+    return b;
+}
+inline Box splash_tag_box() { Box b = {0, SPLASH_TAG_Y, SCREEN_W, CHAR_H}; return b; }
+
+// ---------------------------------------------------------------------------
 // Sleep / wake / button state machine
 // ---------------------------------------------------------------------------
 static const uint32_t SLEEP_TIMEOUT_MS = 60000;
 
+// Core shows the "Hold for SOS" progress bar on the BTN1 press-down edge, before the
+// release sends oled_button(1,false). If that progress update is what woke the screen,
+// the BTN1 short release that follows (< SOS hold time) is still the waking press.
+static const uint32_t HOLD_WAKE_WINDOW_MS = 2500;
+
 struct SleepState {
     bool on;
     uint32_t last_activity;
+    bool hold_wake;         // a progress update woke the screen at hold_wake_at
+    uint32_t hold_wake_at;
 };
 
-inline void sleep_init(SleepState& s, uint32_t now) { s.on = true; s.last_activity = now; }
+inline void sleep_init(SleepState& s, uint32_t now) {
+    s.on = true;
+    s.last_activity = now;
+    s.hold_wake = false;
+    s.hold_wake_at = 0;
+}
 
 // What the display task should do with a button press.
 enum ButtonAction : uint8_t {
@@ -250,7 +411,11 @@ enum ButtonAction : uint8_t {
 };
 
 inline ButtonAction sleep_button(SleepState& s, uint8_t btn, bool long_press, uint32_t now) {
+    bool hold_woke = s.hold_wake && btn == 1 && !long_press &&
+                     (uint32_t)(now - s.hold_wake_at) <= HOLD_WAKE_WINDOW_MS;
+    s.hold_wake = false;
     s.last_activity = now;
+    if (hold_woke) { s.on = true; return BTN_ACT_WAKE; }
     if (btn == 2 && long_press) {
         s.on = !s.on;
         return s.on ? BTN_ACT_WAKE : BTN_ACT_SCREEN_OFF;
@@ -267,6 +432,14 @@ inline bool sleep_wake(SleepState& s, uint32_t now) {
     bool was_off = !s.on;
     s.on = true;
     s.last_activity = now;
+    return was_off;
+}
+
+// Progress update: wakes like sleep_wake, and remembers that it did so (see
+// HOLD_WAKE_WINDOW_MS) so the BTN1 release behind it only counts as the wake.
+inline bool sleep_wake_progress(SleepState& s, uint32_t now) {
+    bool was_off = sleep_wake(s, now);
+    if (was_off) { s.hold_wake = true; s.hold_wake_at = now; }
     return was_off;
 }
 

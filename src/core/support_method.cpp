@@ -2,6 +2,7 @@
 #include "core_dispatch.h"
 #include <web/web_sockets.h>
 #include <web/auth.h>
+#include <web/web_server.h>
 #include <mutex>
 
 volatile bool lora_serial = false;
@@ -24,39 +25,98 @@ static void halt_boot(const char* text)
 
 // ------------------------------------------------------------------ file I/O
 
+// LittleFS guard (Contract 6, filesystem OTA). A recursive mutex serialises every
+// read_file / write_file_atomic with the OTA remount (LittleFS.end/begin). While
+// web_fs_offline() is set (a LittleFS image is being written, until the reboot),
+// both fail fast, except for the task that holds the lock through
+// fs_maintenance_begin() (the OTA finish task restoring the user's settings).
+static SemaphoreHandle_t s_fs_mutex = NULL;
+static const TickType_t FS_LOCK_WAIT = pdMS_TO_TICKS(3000);
+
+void fs_lock_init()
+{
+    if (s_fs_mutex == NULL)
+        s_fs_mutex = xSemaphoreCreateRecursiveMutex();
+}
+
+static bool fs_lock_is_mine()
+{
+    return s_fs_mutex != NULL &&
+           xSemaphoreGetMutexHolder(s_fs_mutex) == xTaskGetCurrentTaskHandle();
+}
+
+// Takes the FS lock for a config read/write. False = do not touch LittleFS.
+static bool fs_enter()
+{
+    if (!fs_mounted) return false;
+    if (s_fs_mutex == NULL) return !web_fs_offline();   // before setup() created it
+    bool maintainer = fs_lock_is_mine();
+    if (web_fs_offline() && !maintainer) return false;
+    if (xSemaphoreTakeRecursive(s_fs_mutex, FS_LOCK_WAIT) != pdTRUE) return false;
+    if (web_fs_offline() && !maintainer) {     // went offline while we waited
+        xSemaphoreGiveRecursive(s_fs_mutex);
+        return false;
+    }
+    return true;
+}
+
+static void fs_leave()
+{
+    if (s_fs_mutex != NULL) xSemaphoreGiveRecursive(s_fs_mutex);
+}
+
+bool fs_maintenance_begin(uint32_t wait_ms)
+{
+    if (s_fs_mutex == NULL) return true;
+    return xSemaphoreTakeRecursive(s_fs_mutex, pdMS_TO_TICKS(wait_ms)) == pdTRUE;
+}
+
+void fs_maintenance_end()
+{
+    if (s_fs_mutex != NULL && fs_lock_is_mine())
+        xSemaphoreGiveRecursive(s_fs_mutex);
+}
+
 bool read_file(const char* path, String& out)
 {
     out = "";
-    if (!fs_mounted || !LittleFS.exists(path)) return false;
-    File file = LittleFS.open(path, FILE_READ);
-    if (!file) return false;
-    size_t size = file.size();
-    if (size > 4096) { file.close(); return false; }   // config files are tiny
-    out.reserve(size + 1);
-    while (file.available())
-        out += (char)file.read();
-    file.close();
-    return true;
+    if (path == NULL || !fs_enter()) return false;
+    bool ok = false;
+    if (LittleFS.exists(path)) {
+        File file = LittleFS.open(path, FILE_READ);
+        if (file) {
+            size_t size = file.size();
+            if (size <= 4096) {                 // config files are tiny
+                out.reserve(size + 1);
+                while (file.available())
+                    out += (char)file.read();
+                ok = true;
+            }
+            file.close();
+        }
+    }
+    fs_leave();
+    if (!ok) out = "";
+    return ok;
 }
 
 bool write_file_atomic(const char* path, const String& content)
 {
-    if (!fs_mounted || path == NULL) return false;
+    if (path == NULL || !fs_enter()) return false;
+    bool ok = false;
     String tmp = String(path) + ".tmp";
     File file = LittleFS.open(tmp, FILE_WRITE);
-    if (!file) return false;
-    size_t written = file.print(content);
-    file.close();
-    if (written != content.length()) {
-        LittleFS.remove(tmp);
-        return false;
+    if (file) {
+        size_t written = file.print(content);
+        file.close();
+        // LittleFS rename replaces an existing target atomically.
+        if (written == content.length() && LittleFS.rename(tmp, path))
+            ok = true;
+        else
+            LittleFS.remove(tmp);
     }
-    // LittleFS rename replaces an existing target atomically.
-    if (!LittleFS.rename(tmp, path)) {
-        LittleFS.remove(tmp);
-        return false;
-    }
-    return true;
+    fs_leave();
+    return ok;
 }
 
 // ------------------------------------------------------------- dispatcher
@@ -145,6 +205,14 @@ void handle_operations(JsonDocument& doc)
     case CoreAction::GetSerialMode:
         send_serial_mode_to_ws();
         return;
+    case CoreAction::GetWifiScan:
+    {
+        // Last complete scan only; never starts a scan. Nothing sent if none yet.
+        String scan = wifi_last_scan_json();
+        if (scan.length() > 0)
+            send_to_ws(scan);
+        return;
+    }
     }
 }
 
@@ -339,8 +407,11 @@ void reset_device(void *param)
     if (!restore_default("/config/lora_config.json", "/config/lora_default.json"))
     {
         // No default: remove the active config so the radio uses its compiled defaults.
-        if (fs_mounted && LittleFS.exists("/config/lora_config.json"))
-            ok &= LittleFS.remove("/config/lora_config.json");
+        if (fs_maintenance_begin(3000)) {
+            if (fs_mounted && !web_fs_offline() && LittleFS.exists("/config/lora_config.json"))
+                ok &= LittleFS.remove("/config/lora_config.json");
+            fs_maintenance_end();
+        }
     }
     ok &= write_file_atomic("/config/user_data.json", "{\"username\":\"\"}");
     ok &= write_file_atomic("/config/lora_serial.json", "{\"lora_serial\":false}");
@@ -375,6 +446,18 @@ void config_gpios()
 
 // ---------------------------------------------------------------- logging
 
+// Lines lost because the queue was full or out of memory. Reported (and reset)
+// by the logger task so silent gaps in the log are visible.
+static volatile uint32_t s_debug_dropped = 0;
+static portMUX_TYPE s_debug_mux = portMUX_INITIALIZER_UNLOCKED;
+
+static void debug_count_drop()
+{
+    portENTER_CRITICAL(&s_debug_mux);
+    s_debug_dropped = s_debug_dropped + 1;
+    portEXIT_CRITICAL(&s_debug_mux);
+}
+
 // Queue a debug line. No-op in release builds, from ISRs, or before the
 // logger exists. Callers must never pass secrets (Contract 4).
 void serial_print(String msg)
@@ -383,10 +466,13 @@ void serial_print(String msg)
     if (xPortInIsrContext()) return;
     if (debug_handler == NULL || debug_msg == NULL) return;
     DebugQueueParam *payload = new (std::nothrow) DebugQueueParam();
-    if (!payload) return;
+    if (!payload) { debug_count_drop(); return; }
     payload->message = msg;
     if (xQueueSend(debug_msg, (void*)&payload, 0) != pdTRUE)
+    {
         delete payload;   // queue full: drop rather than block the caller
+        debug_count_drop();
+    }
 }
 
 void debugger_print(void *param)
@@ -396,11 +482,18 @@ void debugger_print(void *param)
         DebugQueueParam* params = NULL;
         if (xQueueReceive(debug_msg, &params, portMAX_DELAY) != pdTRUE || !params)
             continue;
-        if (DEBUGGING && !lora_serial)   // the UART belongs to the bridge in serial mode
+        portENTER_CRITICAL(&s_debug_mux);
+        uint32_t dropped = s_debug_dropped;
+        s_debug_dropped = 0;
+        portEXIT_CRITICAL(&s_debug_mux);
+        if (dropped > 0)
         {
-            Serial.print("\n");
-            Serial.println(params->message);
+            String note = "(" + String(dropped) + " debug lines dropped)";
+            if (DEBUGGING && !lora_serial)
+                Serial.println(note);
         }
+        if (DEBUGGING && !lora_serial)   // the UART belongs to the bridge in serial mode
+            Serial.println(params->message);
         if (DEBUGGING && events_client_count() > 0)
         {
             JsonDocument doc;

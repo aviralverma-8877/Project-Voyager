@@ -54,6 +54,18 @@ static void test_no_arg_commands() {
     ASSERT_ACTION(CoreAction::GetSerialMode, "{\"request-type\":\"get_serial_mode\"}");
 }
 
+static void test_get_wifi_scan() {
+    CoreCommand c = parse("{\"request-type\":\"get_wifi_scan\"}");
+    TEST_ASSERT_EQUAL(CoreAction::GetWifiScan, c.action);
+    TEST_ASSERT_EQUAL_STRING("get_wifi_scan", core_action_name(c.action));
+    // extra keys are ignored; it is a different command from wifi_ssid_scan
+    ASSERT_ACTION(CoreAction::GetWifiScan, "{\"request-type\":\"get_wifi_scan\",\"val\":1}");
+    ASSERT_ACTION(CoreAction::WifiScan, "{\"request-type\":\"wifi_ssid_scan\"}");
+    ASSERT_ACTION(CoreAction::Unknown, "{\"request-type\":\"get_wifi_scan \"}");
+    ASSERT_ACTION(CoreAction::Unknown, "{\"request-type\":\"GET_WIFI_SCAN\"}");
+    ASSERT_ACTION(CoreAction::Missing, "{\"request-type\":[\"get_wifi_scan\"]}");
+}
+
 static void test_connect_wifi() {
     CoreCommand c = parse("{\"request-type\":\"connect_wifi\",\"wifi_ssid\":\"home\",\"wifi_pass\":\"secret123\"}");
     TEST_ASSERT_EQUAL(CoreAction::ConnectWifi, c.action);
@@ -333,6 +345,7 @@ int main(int, char**) {
     RUN_TEST(test_missing_request_type);
     RUN_TEST(test_unknown_request_type);
     RUN_TEST(test_no_arg_commands);
+    RUN_TEST(test_get_wifi_scan);
     RUN_TEST(test_connect_wifi);
     RUN_TEST(test_set_ap_pass);
     RUN_TEST(test_set_username_lengths);

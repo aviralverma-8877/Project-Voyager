@@ -30,4 +30,7 @@
 
     void firmware_web_updater();
     void define_api(void *param);   // task: registers routes, starts the server, deletes itself
+    // True while a LittleFS image is being written and until the reboot after it.
+    // Nothing may touch LittleFS then (HTTP answers 503, WS commands are dropped).
+    bool web_fs_offline();
 #endif

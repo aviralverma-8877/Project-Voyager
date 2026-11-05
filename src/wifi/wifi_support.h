@@ -23,11 +23,12 @@
     void config_wifi(void *param);           // task: load config, bring WiFi up, then vTaskDelete
     void connect_wifi();
     void setup_sta(const char* wifi_ssid, const char* wifi_pass);
-    void setup_ap(const char* wifi_ssid, const char* wifi_pass);  // always WPA2
-    void wifi_monitor(void* param);          // task: STA reconnect with backoff + fallback AP
+    void setup_ap(const char* wifi_ssid, const char* wifi_pass, int channel = 1);  // always WPA2
+    void wifi_monitor(void* param);          // task: STA connects (strongest BSSID), backoff, fallback AP, roam
     void onWifiConnect(WiFiEvent_t event, WiFiEventInfo_t info);    // non-blocking
     void onWifiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info); // non-blocking
-    void scan_ssid(void* args);              // task: sends wifi_scan over WS
+    void scan_ssid(void* args);              // task: sends wifi_scan over WS (deduped, strongest first)
+    String wifi_last_scan_json();            // last complete wifi_scan JSON, "" if none yet (any task)
 
     // Config files (Contract 5). No side effects, no logging of contents.
     String get_wifi_setting(String wifi_config_path);   // raw file text or ""

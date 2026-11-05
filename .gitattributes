@@ -1,0 +1,5 @@
+# Shell scripts must keep LF even with core.autocrlf=true, or bash in WSL,
+# Linux and macOS fails on the CR. Batch files need CRLF.
+*.sh   text eol=lf
+Makefile text eol=lf
+*.bat  text eol=crlf

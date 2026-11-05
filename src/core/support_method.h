@@ -26,6 +26,14 @@
     bool write_file_atomic(const char* path, const String& content);
     // Reads a whole file. Returns false if missing / unreadable.
     bool read_file(const char* path, String& out);
+    // Both of the above return false while web_fs_offline() (filesystem OTA) unless
+    // the calling task holds the FS lock via fs_maintenance_begin().
+    // fs_lock_init(): setup(), before LittleFS.begin().
+    // fs_maintenance_begin/end: take/release the FS lock around LittleFS.end()/begin()
+    // and the settings restore (web_server OTA finish task). Recursive; same task only.
+    void fs_lock_init();
+    bool fs_maintenance_begin(uint32_t wait_ms);
+    void fs_maintenance_end();
 
     // LoRa <-> serial bridge tasks
     void send_to_serial(void *param);

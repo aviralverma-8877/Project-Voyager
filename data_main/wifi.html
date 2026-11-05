@@ -1,100 +1,96 @@
-<h1>
-    WiFi Configuration.
-</h1>
-<hr>
+<h2 class="panel-title">Network <small>WiFi configuration</small></h2>
 <fieldset class="busy_lock">
-    <div class="mb-3">
-        <dl class="row">
-            <dt class="col-sm-2">Saved SSID:</dt>
-            <dd id="wifi_ssid_name" class="col-sm-10">Loading...</dd>
-        </dl>
-    </div>
-    <br>
-    <button
-        type="button"
-        class="btn btn-primary"
-        id="wifi_scan_btn"
-        onclick="scan_ssid()"
-    >Scan SSID</button>
-    <hr>
-    <ul class="list-group" id="wifi_ssid_list">
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-            Press "Scan SSID" to start WiFi Scan.
-        </li>
-    </ul>
-    <hr>
-    <div class="form-group row">
-        <label for="wifi_ssid" class="col-sm-2 col-form-label">WiFi SSID</label>
-        <div class="col-sm-10">
+    <dl class="form-row">
+        <dt class="col-label">Saved network</dt>
+        <dd id="wifi_ssid_name" class="col-input">Loading...</dd>
+    </dl>
+    <section class="section">
+        <div class="actions mb-2">
+            <button
+                type="button"
+                class="btn secondary"
+                id="wifi_scan_btn"
+                onclick="scan_ssid()"
+            >Scan SSID</button>
+        </div>
+        <ul class="list" id="wifi_ssid_list">
+            <li class="spread muted">
+                Press "Scan SSID" to list nearby networks.
+            </li>
+        </ul>
+    </section>
+    <h3 class="section-label">Join a network</h3>
+    <div class="form-row">
+        <label for="wifi_ssid" class="col-label">SSID</label>
+        <div class="col-input">
             <input
                 type="text"
-                readonly
-                class="form-control"
+                class="input"
                 id="wifi_ssid"
-                placeholder="Choose a network from the scan list"
+                maxlength="32"
+                autocomplete="off"
+                placeholder="Type an SSID or choose one from the scan list"
             >
         </div>
     </div>
-    <div class="form-group row">
-        <label for="wifi_password" class="col-sm-2 col-form-label">Password</label>
-        <div class="col-sm-10">
+    <div class="form-row">
+        <label for="wifi_password" class="col-label">Password</label>
+        <div class="col-input">
             <input
                 type="password"
-                class="form-control"
+                class="input"
                 id="wifi_password"
                 maxlength="63"
                 autocomplete="off"
-                placeholder="Password (leave empty for an open network)"
+                placeholder="Leave empty for an open network"
             >
         </div>
     </div>
-    <br>
-    <div class="mb-3">
-        <button type="button" class="btn btn-primary mb-2" onclick="wifi_connect()">Connect</button>
-        <button type="button" class="btn btn-primary mb-2" onclick="wifi_ap_mode()">AP Mode</button>
+    <div class="actions section">
+        <button type="button" class="btn primary" onclick="wifi_connect()">Connect</button>
+        <button type="button" class="btn secondary" onclick="wifi_ap_mode()">AP Mode</button>
     </div>
-    <hr>
-    <h4>Access point password</h4>
-    <div class="form-group row">
-        <label for="ap_password" class="col-sm-2 col-form-label">AP password</label>
-        <div class="col-sm-10">
+    <h3 class="section-label">Access point password</h3>
+    <div class="form-row">
+        <label for="ap_password" class="col-label">AP password</label>
+        <div class="col-input">
             <input
                 type="password"
-                class="form-control"
+                class="input"
                 id="ap_password"
                 maxlength="63"
                 autocomplete="new-password"
                 placeholder="8-63 characters"
             >
-            <div class="form-text">
+            <div class="hint">
                 Used by the device's own WiFi access point (WPA2). Leave it empty to go back to
                 the default password shown on the device's OLED <b>Network</b> page.
             </div>
         </div>
     </div>
-    <div class="mb-3 mt-2">
-        <button type="button" class="btn btn-primary" onclick="set_ap_password()">Set AP password</button>
-        <span class="ms-2 text-muted" id="ap_pass_status"></span>
+    <div class="actions section">
+        <button type="button" class="btn primary" onclick="set_ap_password()">Set AP password</button>
+        <span class="muted" id="ap_pass_status"></span>
     </div>
 </fieldset>
 <hr>
-<h4>Change admin password</h4>
-<p class="form-text">
+<h3 class="section-label">Admin password</h3>
+<p class="hint">
     The admin password protects this web interface (user name <b>admin</b>). After changing it,
     your browser will ask you to sign in again.
 </p>
-<div class="form-group row">
-    <label for="admin_pass1" class="col-sm-2 col-form-label">New password</label>
-    <div class="col-sm-10">
-        <input type="password" class="form-control" id="admin_pass1" maxlength="63" autocomplete="new-password" placeholder="8-63 characters">
+<div class="form-row">
+    <label for="admin_pass1" class="col-label">New password</label>
+    <div class="col-input">
+        <input type="password" class="input" id="admin_pass1" maxlength="63" autocomplete="new-password" placeholder="8-63 characters">
     </div>
 </div>
-<div class="form-group row mt-2">
-    <label for="admin_pass2" class="col-sm-2 col-form-label">Repeat password</label>
-    <div class="col-sm-10">
-        <input type="password" class="form-control" id="admin_pass2" maxlength="63" autocomplete="new-password" placeholder="Repeat the new password">
+<div class="form-row">
+    <label for="admin_pass2" class="col-label">Repeat</label>
+    <div class="col-input">
+        <input type="password" class="input" id="admin_pass2" maxlength="63" autocomplete="new-password" placeholder="Repeat the new password">
     </div>
 </div>
-<div class="mb-3 mt-2">
-    <button type="button" class="btn btn-primary" onclick="change_admin_password()">Change admin password</button>
+<div class="actions">
+    <button type="button" class="btn danger" onclick="change_admin_password()">Change admin password</button>
 </div>

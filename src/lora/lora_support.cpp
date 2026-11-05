@@ -1,6 +1,7 @@
 #include "lora_support.h"
 #include <new>
 #include <esp_random.h>
+#include <atomic>
 
 using namespace lora_proto;
 
@@ -66,9 +67,28 @@ void config_lora()
     oled_set_lora(LORA_RECEIVING);
 }
 
+// Airtime of a REC_AKNG frame under the active config. Read by the TX task without the mutex.
+static std::atomic<uint32_t> s_ack_airtime_ms{0};
+// Snapshot of the active radio config for timing estimates (tx_started). Written
+// in apply_config_locked, read by the TX task; cfg_mux makes the struct copy atomic.
+static portMUX_TYPE cfg_mux = portMUX_INITIALIZER_UNLOCKED;
+static LoraConfig s_cfg = default_config();
+
+static LoraConfig active_config()
+{
+    portENTER_CRITICAL(&cfg_mux);
+    LoraConfig c = s_cfg;
+    portEXIT_CRITICAL(&cfg_mux);
+    return c;
+}
+
 // Caller must hold lora_write_mutex.
 static void apply_config_locked(const LoraConfig& c)
 {
+    portENTER_CRITICAL(&cfg_mux);
+    s_cfg = c;
+    portEXIT_CRITICAL(&cfg_mux);
+    s_ack_airtime_ms = airtime_ms(c.SpreadingFactor, c.SignalBandwidth, c.CodingRate4, ACK_FRAME_LEN);
     LoRa.idle();
     LoRa.setFrequency(c.freq);
     LoRa.setTxPower(c.TxPower);
@@ -76,6 +96,11 @@ static void apply_config_locked(const LoraConfig& c)
     LoRa.setSignalBandwidth(c.SignalBandwidth);
     LoRa.setCodingRate4(c.CodingRate4);
     LoRa.setSyncWord(c.SyncWord);
+    // Hardware payload CRC on TX. In explicit-header mode the receiver reads the CRC
+    // flag from each packet's header, so peers with or without this still interoperate.
+    // A corrupted packet is then dropped by the radio (parsePacket returns 0) before our
+    // crc8 runs; the sender times out and retries.
+    LoRa.enableCrc();
     LoRa_rxMode();
 }
 
@@ -93,12 +118,9 @@ static bool apply_config(const LoraConfig& c)
 
 static bool read_config_file(const char* path, LoraConfig& out)
 {
-    if (!LittleFS.exists(path)) return false;
-    File file = LittleFS.open(path, FILE_READ);
-    if (!file) return false;
-    if (file.size() > 1024) { file.close(); return false; }
-    String text = file.readString();
-    file.close();
+    String text;
+    // read_file honours the FS lock (refuses during a filesystem OTA remount).
+    if (!read_file(path, text) || text.length() > 1024) return false;
     const char* err = nullptr;
     if (!config_from_text(text.c_str(), out, &err)) {
         serial_print(String("LoRa config ") + path + " invalid (" + err + ")");
@@ -147,27 +169,32 @@ bool save_lora_config(String value)
 }
 
 // ---------------------------------------------------------------- radio modes
-// IQ inversion: RX inverted, TX normal. This asymmetry is intentional for
-// gateway-to-node scenarios but means two identical peers may not hear each
-// other. DO NOT CHANGE without L4 hardware testing (voyager-test scenarios 2-5)
-// with two boards to confirm peer-to-peer communication still works. If symmetric
-// operation is needed, both enableInvertIQ() calls below should match.
+// IQ: NORMAL (non-inverted) for both TX and RX, on every packet (data and ACK).
+// Before this, RX used inverted IQ and TX normal IQ (the library's node/gateway
+// example). Two boards running the same firmware then could never decode each other:
+// confirmed in two-board HIL, where neither board logged any RX. v1 got away with it
+// because it called endPacket(true) and then LoRa_rxMode() straight away, which
+// rewrote the IQ registers while the packet was going out. Peers must use the same
+// setting: boards in the field on older v2 builds need this update to talk to new ones.
 
 // Switch radio to continuous receive mode.
 void LoRa_rxMode(){
-    LoRa.enableInvertIQ();                // inverted IQ for RX
-    LoRa.receive();                       // continuous RX, DIO0 => RxDone
+    LoRa.disableInvertIQ();               // normal IQ (same as TX)
+    LoRa.receive();                       // continuous RX, explicit header, DIO0 => RxDone
 }
 
 // Switch radio to idle/transmit mode.
 void LoRa_txMode(){
     LoRa.idle();                          // set standby mode
-    LoRa.disableInvertIQ();               // normal IQ for TX
+    LoRa.disableInvertIQ();               // normal IQ (same as RX)
 }
 
 // ---------------------------------------------------------------- TX
 
 // Blocking transmit of one frame, then back to RX. Takes lora_write_mutex.
+// Note: the library's endPacket() spins on yield() until TX_DONE with no timeout, and
+// LoRaClass::isTransmitting() is private in LoRa@0.8.0, so a TX-hang guard would need
+// a library change (reported, not done).
 static bool lora_tx_frame(const uint8_t* frame, size_t n)
 {
     if (xSemaphoreTake(lora_write_mutex, pdMS_TO_TICKS(LORA_TX_TIMEOUT_MS)) != pdTRUE) {
@@ -230,6 +257,23 @@ static void send_tx_result(uint32_t id, bool ok)
     send_to_ws(out);
 }
 
+// Contract 3: tx_started {id, expected_ms, attempts}, sent when the TX task takes the
+// item off send_packets. expected_ms is the worst case until tx_result (every attempt
+// times out) under the active config.
+static void send_tx_started(uint32_t id, size_t payload_len)
+{
+    const LoraConfig c = active_config();
+    JsonDocument doc;
+    doc["response_type"] = "tx_started";
+    doc["id"] = id;
+    doc["expected_ms"] = tx_expected_ms(c.SpreadingFactor, c.SignalBandwidth, c.CodingRate4,
+                                        HEADER_LEN + payload_len, LORA_ACK_TIMEOUT_MS);
+    doc["attempts"] = TX_ATTEMPTS;
+    String out;
+    serializeJson(doc, out);
+    send_to_ws(out);
+}
+
 // Sends one queued packet with ACK/retry. Returns true on ACK 1.
 static bool send_with_retry(const QueueParam* p)
 {
@@ -241,16 +285,28 @@ static bool send_with_retry(const QueueParam* p)
         serial_print("ERROR: send_packets item too long: " + String(p->message.length()));
         return false;
     }
-    const TickType_t ack_timeout = pdMS_TO_TICKS(LORA_ACK_TIMEOUT_MS);
+    // LORA_ACK_TIMEOUT_MS covers the peer's processing time. The ACK's own airtime is
+    // added on top: about 10 ms at the defaults, but about 15 s at SF12/BW7.8k, where a
+    // flat 5 s would make every ACK arrive too late.
+    const TickType_t ack_timeout = pdMS_TO_TICKS(LORA_ACK_TIMEOUT_MS + s_ack_airtime_ms.load());
+    uint32_t backoff_max;
+    {
+        const LoraConfig c = active_config();
+        backoff_max = retry_backoff_max_ms(
+            airtime_ms(c.SpreadingFactor, c.SignalBandwidth, c.CodingRate4, HEADER_LEN + p->message.length()),
+            s_ack_airtime_ms.load());
+    }
     TxRetry t;
     tx_begin(t, take_seq());
     xQueueReset(ack_queue);               // stale ACKs from earlier packets
 
     for (;;) {
         TxAction a = TxAction::Wait;
+        const uint8_t attempt = t.attempts;   // 1-based number of the transmission below
+        const String tag = "/" + String(MAX_RETRIES + 1);   // total transmissions
         if (!LoRa_send(p->message, p->type, t.seq)) {
             a = tx_on_timeout(t);         // radio busy counts as a failed attempt
-            serial_print("TX attempt failed, attempt " + String(t.attempts));
+            serial_print("TX failed (radio busy) seq=" + String(t.seq) + ", attempt " + String(attempt) + tag);
         } else {
             TickType_t start = xTaskGetTickCount();
             while (a == TxAction::Wait) {
@@ -258,7 +314,7 @@ static bool send_with_retry(const QueueParam* p)
                 uint16_t v;
                 if (elapsed >= ack_timeout || xQueueReceive(ack_queue, &v, ack_timeout - elapsed) != pdTRUE) {
                     a = tx_on_timeout(t);
-                    serial_print("ACK timeout seq=" + String(t.seq) + ", attempt " + String(t.attempts));
+                    serial_print("ACK timeout seq=" + String(t.seq) + ", attempt " + String(attempt) + tag);
                     break;
                 }
                 uint8_t ack_seq = v >> 8, val = v & 0xFF;
@@ -266,12 +322,13 @@ static bool send_with_retry(const QueueParam* p)
                 if (a == TxAction::Wait)
                     serial_print("Ignored ACK seq=" + String(ack_seq) + " (want " + String(t.seq) + ")");
                 else if (a != TxAction::Success)
-                    serial_print("NACK " + String(val) + " seq=" + String(t.seq));
+                    serial_print("NACK " + String(val) + " seq=" + String(t.seq) + ", attempt " + String(attempt) + tag);
             }
         }
         if (a == TxAction::Success) return true;
         if (a == TxAction::Fail) return false;
-        vTaskDelay(pdMS_TO_TICKS(10));    // Retransmit
+        // Retransmit after a random backoff (breaks lockstep with a peer that's also sending).
+        vTaskDelay(pdMS_TO_TICKS(retry_backoff_ms(esp_random(), backoff_max)));
     }
 }
 
@@ -282,6 +339,7 @@ void LoRa_sendRaw(void* param)
         QueueParam* p = NULL;
         if (xQueueReceive(send_packets, &p, portMAX_DELAY) != pdTRUE || p == NULL) continue;
 
+        if (p->id != 0) send_tx_started(p->id, p->message.length());
         oled_set_lora(LORA_TRANSMITTING);
         bool ok = send_with_retry(p);
         oled_set_lora(LORA_RECEIVING);

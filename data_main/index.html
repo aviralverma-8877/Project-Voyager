@@ -4,233 +4,161 @@
     <title>Project Voyager</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="bootstrap.min.css">
-    <style>
-        .pre-line { white-space: pre-line; }
-        .pre-wrap { white-space: pre-wrap; word-break: break-word; }
-        #debug_textarea { font-size: 10px; }
-    </style>
-    <script type="text/javascript" src="jquery-3.7.1.min.js"></script>
-    <script type="text/javascript" src="bootstrap.min.js"></script>
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#070a08">
+    <link rel="stylesheet" href="style.css">
     <script type="text/javascript" src="lib.js"></script>
     <script type="text/javascript" src="script.js"></script>
 </head>
     <body>
-        <div class="container border shadow-sm p-3 my-5 bg-white rounded" id="setup_screen" style="max-width: 32rem" hidden>
-            <h3>Set the admin password</h3>
+        <div class="card narrow" id="setup_screen" hidden>
+            <h2 class="panel-title">Set the admin password</h2>
             <p>This device has no admin password yet. Choose one (8-63 characters). You'll use it with the user name <b>admin</b> whenever the browser asks you to sign in.</p>
             <form id="setup_form" autocomplete="off">
-                <div class="mb-3">
-                    <label for="setup_pass1" class="form-label">Password</label>
-                    <input type="password" class="form-control" id="setup_pass1" minlength="8" maxlength="63" autocomplete="new-password" required>
+                <div class="field">
+                    <label for="setup_pass1" class="label">Password</label>
+                    <input type="password" class="input" id="setup_pass1" minlength="8" maxlength="63" autocomplete="new-password" required>
                 </div>
-                <div class="mb-3">
-                    <label for="setup_pass2" class="form-label">Repeat password</label>
-                    <input type="password" class="form-control" id="setup_pass2" minlength="8" maxlength="63" autocomplete="new-password" required>
+                <div class="field">
+                    <label for="setup_pass2" class="label">Repeat password</label>
+                    <input type="password" class="input" id="setup_pass2" minlength="8" maxlength="63" autocomplete="new-password" required>
                 </div>
-                <p class="text-danger" id="setup_error"></p>
-                <button type="submit" class="btn btn-primary" id="setup_submit">Set password</button>
+                <p class="text-bad mono" id="setup_error"></p>
+                <button type="submit" class="btn primary" id="setup_submit">Set password</button>
             </form>
         </div>
-        <nav id="main_nav" class="navbar navbar-expand-lg navbar-light bg-light">
-            <div class="container-fluid">
-                <a class="navbar-brand" id="project_title" href="">Project Voyager</a>
-                <button
-                    class="navbar-toggler"
-                    type="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#navbarSupportedContent"
-                    aria-controls="navbarSupportedContent"
-                    aria-expanded="false"
-                    aria-label="Toggle navigation"
-                >
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="navbarSupportedContent">
-                    <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                        <li class="nav-item">
-                            <a
-                                id="navbar-dashboard"
-                                class="nav-link"
-                                aria-current="page"
-                                href="#"
-                                onclick="dashboard()"
-                            >Dashboard</a>
-                        </li>
-                        <li class="nav-item">
-                            <a
-                                id="navbar-file-transfer"
-                                class="nav-link"
-                                href="#"
-                                onclick="file_transfer()"
-                            >File Transfer</a>
-                        </li>
-                        <li class="nav-item">
-                            <a
-                                id="navbar-wifi"
-                                class="nav-link"
-                                href="#"
-                                onclick="wifi()"
-                            >WiFi (<span id="wifi_quality">...</span>)</a>
-                        </li>
-                        <li class="nav-item">
-                            <a
-                                id="navbar-lora"
-                                class="nav-link"
-                                href="#"
-                                onclick="lora()"
-                            >LoRa</a>
-                        </li>
-                        <!-- To include BLE, OTA needs to be disabled. -->
-                        <li class="nav-item">
-                            <a
-                                id="navbar-update"
-                                class="nav-link"
-                                href="#"
-                                onclick="update()"
-                            >Update</a>
-                        </li>
-                        <li class="nav-item">
-                            <a
-                                id="navbar-restart"
-                                class="nav-link"
-                                href="#"
-                                onclick="restart()"
-                            >Restart</a>
-                        </li>
-                        <li class="nav-item">
-                            <a
-                                id="navbar-reset"
-                                class="nav-link"
-                                href="#"
-                                onclick="reset()"
-                            >Reset</a>
-                        </li>
-                    </ul>
-                </div>
+        <nav id="main_nav" class="navbar">
+            <a class="brand" id="project_title" href="">
+                <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M3.05 3.05a7 7 0 0 0 0 9.9.5.5 0 0 1-.707.707 8 8 0 0 1 0-11.314.5.5 0 0 1 .707.707m2.122 2.122a4 4 0 0 0 0 5.656.5.5 0 1 1-.708.708 5 5 0 0 1 0-7.072.5.5 0 0 1 .708.708m5.656-.708a.5.5 0 0 1 .708 0 5 5 0 0 1 0 7.072.5.5 0 1 1-.708-.708 4 4 0 0 0 0-5.656.5.5 0 0 1 0-.708m2.122-2.12a.5.5 0 0 1 .707 0 8 8 0 0 1 0 11.313.5.5 0 0 1-.707-.707 7 7 0 0 0 0-9.9.5.5 0 0 1 0-.707zM6 8a2 2 0 1 1 2.5 1.937V15.5a.5.5 0 0 1-1 0V9.937A2 2 0 0 1 6 8"/></svg>
+                VOYAGER <small>LORA LINK</small>
+            </a>
+            <div class="leds" role="status" aria-label="Link status">
+                <span title="WebSocket link to the device"><i class="led" id="led_ws"></i><b>LINK</b></span>
+                <span title="Live telemetry stream"><i class="led" id="led_sse"></i><b>TLM</b></span>
+                <span title="Radio transmit"><i class="led" id="led_tx"></i><b>TX</b></span>
+                <span title="Radio receive"><i class="led" id="led_rx"></i><b>RX</b></span>
+            </div>
+            <button
+                class="toggler"
+                type="button"
+                id="nav_toggler"
+                aria-controls="nav_menu"
+                aria-expanded="false"
+                aria-label="Toggle navigation"
+            >
+                <span class="toggler-icon"></span>
+            </button>
+            <div class="menu" id="nav_menu">
+                <ul class="links">
+                    <li><a id="navbar-dashboard" href="#" data-page="dashboard">Dashboard</a></li>
+                    <li><a id="navbar-file-transfer" href="#" data-page="file_transfer">File Transfer</a></li>
+                    <li><a id="navbar-wifi" href="#" data-page="wifi">WiFi <span class="sig" id="wifi_bars" data-level="0" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span id="wifi_quality">...</span></a></li>
+                    <li><a id="navbar-lora" href="#" data-page="lora">LoRa</a></li>
+                    <!-- To include BLE, OTA needs to be disabled. -->
+                    <li><a id="navbar-update" href="#" data-page="update">Update</a></li>
+                    <li class="sep" aria-hidden="true"></li>
+                    <li><a id="navbar-restart" class="danger" href="#" data-page="restart">Restart</a></li>
+                    <li><a id="navbar-reset" class="danger" href="#" data-page="reset">Reset</a></li>
+                </ul>
             </div>
         </nav>
-        <br>
-        <div class="container border shadow-sm p-3 mb-5 bg-white rounded" id="main_content">
-            <h1>Loading...</h1>
-        </div>
-        <div class="container border shadow-sm p-3 mb-5 bg-white rounded" id="status_panel">
-            <div class="mb-3">
-                <h5>RAM Usage.</h5>
-                <label id="ram_ratio"></label>
-                <div class="progress">
-                    <div
-                        id="heap_progress_bar"
-                        class="progress-bar progress-bar-striped bg-danger"
-                        role="progressbar"
-                        style="width: 0%"
-                        aria-valuenow="10"
-                        aria-valuemin="0"
-                        aria-valuemax="100"
-                    ></div>
-                </div>
+        <main class="console" id="console">
+            <div class="card" id="main_content">
+                <h2 class="panel-title">Loading...</h2>
             </div>
-            <div class="mb-3">
-                <h5>File transfer progress.</h5>
-                <div id="rec_info"></div>
-                <div id="chunk_ratio"></div>
-                <div id="rec_verify" class="fw-bold"></div>
-                <div class="progress">
-                    <div
-                        id="file_upload_progress_bar"
-                        class="progress-bar progress-bar-striped"
-                        role="progressbar"
-                        style="width: 0%"
-                        aria-valuenow="10"
-                        aria-valuemin="0"
-                        aria-valuemax="100"
-                    ></div>
-                </div>
-            </div>
-            <div class="mb-3">
-                <button type="button" class="btn btn-primary" id="download_btn" disabled>Download</button>
-                <button type="button" class="btn btn-outline-danger" id="cancel_receive_btn" hidden>Cancel receiving</button>
-            </div>
-            <hr>
-            <div class="mb-3 form-group">
-                <label for="debug_textarea">
-                    <b>Debugger:</b>
-                </label>
-                <textarea
-                    class="form-control fw-bold"
-                    id="debug_textarea"
-                    rows="10"
-                    readonly
-                ></textarea>
-            </div>
-            <hr>
-            <div class="mb-3 mw-10">
-                <h5>LoRa messages:</h5>
-                <ul class="list-group" id="lora_rx_msg"></ul>
-            </div>
-        </div>
-        <div
-            class="modal fade"
-            id="promptModal"
-            tabindex="-1"
-            aria-labelledby="promptModalLabel"
-            aria-hidden="true"
-        >
+            <aside class="card" id="status_panel" aria-label="Telemetry">
+                <h2 class="panel-title">Telemetry</h2>
+                <section class="section">
+                    <div class="meter-head">
+                        <span class="section-label">Memory</span>
+                        <span id="ram_ratio"></span>
+                    </div>
+                    <div class="progress">
+                        <div
+                            id="heap_progress_bar"
+                            class="bar bad"
+                            role="progressbar"
+                            style="width: 0%"
+                            aria-label="Free heap"
+                            aria-valuemin="0"
+                            aria-valuemax="100"
+                        ></div>
+                    </div>
+                </section>
+                <section class="section">
+                    <h3 class="section-label">File transfer</h3>
+                    <div id="rec_info"></div>
+                    <div id="chunk_ratio"></div>
+                    <div id="rec_verify" class="bold"></div>
+                    <div class="progress">
+                        <div
+                            id="file_upload_progress_bar"
+                            class="bar"
+                            role="progressbar"
+                            style="width: 0%"
+                            aria-label="File transfer progress"
+                            aria-valuenow="0"
+                            aria-valuemin="0"
+                            aria-valuemax="100"
+                        ></div>
+                    </div>
+                    <div class="actions mt-2">
+                        <button type="button" class="btn primary" id="download_btn" disabled>Download</button>
+                        <button type="button" class="btn outline-danger" id="cancel_receive_btn" hidden>Cancel receiving</button>
+                    </div>
+                </section>
+                <section class="section">
+                    <label for="debug_textarea" class="section-label">Debug console</label>
+                    <textarea
+                        class="input"
+                        id="debug_textarea"
+                        rows="10"
+                        readonly
+                        spellcheck="false"
+                    ></textarea>
+                </section>
+                <section class="section">
+                    <h3 class="section-label">Message log</h3>
+                    <ul class="list" id="lora_rx_msg" aria-live="polite"></ul>
+                    <p class="log-empty">No messages yet.</p>
+                </section>
+            </aside>
+        </main>
+        <dialog class="modal" id="promptModal" aria-labelledby="promptModalLabel">
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="promptModalLabel">Project Voyager</h5>
-                        <button
-                            type="button"
-                            class="btn-close"
-                            data-bs-dismiss="modal"
-                            aria-label="Close"
-                        ></button>
+                        <h5 id="promptModalLabel">Project Voyager</h5>
+                        <button type="button" class="btn-x" data-dismiss aria-label="Close"></button>
                     </div>
                     <div class="modal-body pre-line" id="prompt_body"></div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="promptModelProceed">Proceed</button>
+                        <button type="button" class="btn secondary" data-dismiss>Cancel</button>
+                        <button type="button" class="btn primary" id="promptModelProceed">Proceed</button>
                     </div>
                 </div>
             </div>
-        </div>
-        <div
-            class="modal fade"
-            id="alertModal"
-            tabindex="-1"
-            aria-labelledby="alertModalLabel"
-            aria-hidden="true"
-        >
+        </dialog>
+        <dialog class="modal" id="alertModal" aria-labelledby="alertModalLabel">
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="alertModalLabel">Project Voyager</h5>
-                        <button
-                            type="button"
-                            class="btn-close"
-                            data-bs-dismiss="modal"
-                            aria-label="Close"
-                        ></button>
+                        <h5 id="alertModalLabel">Project Voyager</h5>
+                        <button type="button" class="btn-x" data-dismiss aria-label="Close"></button>
                     </div>
                     <div class="modal-body pre-line" id="alert_body"></div>
                 </div>
             </div>
-        </div>
-        <div
-            class="modal fade"
-            id="loadingModal"
-            tabindex="-1"
-            aria-hidden="true"
-        >
+        </dialog>
+        <dialog class="modal" id="loadingModal" data-static aria-label="Connecting">
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">Project Voyager</h5>
+                        <h5>Project Voyager</h5>
                     </div>
-                    <div class="modal-body" id="loading_model_body">Connecting...</div>
+                    <div class="modal-body mono" id="loading_model_body">Connecting...</div>
                 </div>
             </div>
-        </div>
+        </dialog>
     </body>
 </html>

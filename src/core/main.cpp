@@ -54,6 +54,7 @@ void setup() {
   create_task(debugger_print, "debugger_print", 4096, 1, &debug_handler);
 
   oled_status("Mounting storage");
+  fs_lock_init();
   fs_mounted = LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED);
   if (!fs_mounted)
   {
@@ -89,6 +90,7 @@ void setup() {
   create_task(define_api, "define_api", 6000, 2, NULL);
 
   serial_print("config done");
+  oled_status("Ready");   // STA path overwrites this with "WiFi connected" later
 }
 
 void loop() {

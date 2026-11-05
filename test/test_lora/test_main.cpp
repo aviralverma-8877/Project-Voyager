@@ -257,6 +257,103 @@ static void test_dedup_multi_raw_data_key() {
     TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, mac, 50));
 }
 
+// Regression: one sender, shared seq counter. enable_file_tx_mode (LORA_MSG seq s),
+// then 255 RAW chunks (s+1..s+255), then disable_file_tx_mode (LORA_MSG seq s+256 == s).
+// The closing message must NOT be dropped as a duplicate.
+static void test_dedup_multi_seq_wrap_across_types() {
+    RxDedupMulti d;
+    uint32_t mac = hash_mac("54:43:B2:16:F1:5C");
+    uint8_t s = 200;
+    TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, mac, s));
+    rx_commit_multi(d, mac, s);
+    for (int i = 1; i <= 255; ++i) {
+        uint8_t q = (uint8_t)(s + i);
+        TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, DEDUP_KEY_RAW, q));
+        rx_commit_multi(d, DEDUP_KEY_RAW, q);
+    }
+    TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, mac, (uint8_t)(s + 256)));
+}
+
+// A retry is still caught when a few packets from other peers came in between.
+static void test_dedup_multi_retry_after_interleave() {
+    RxDedupMulti d;
+    uint32_t a = hash_mac("A"), b = hash_mac("B");
+    rx_commit_multi(d, a, 7);
+    for (int i = 0; i < 5; ++i) rx_commit_multi(d, b, (uint8_t)(100 + i));
+    TEST_ASSERT_TRUE(rx_is_duplicate_multi(d, a, 7));
+    // ...but not after DEDUP_WINDOW other accepted packets.
+    for (uint32_t i = 0; i < DEDUP_WINDOW; ++i) rx_commit_multi(d, b, (uint8_t)(110 + i));
+    TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, a, 7));
+}
+
+// A check that's never committed (queue full -> NACK) must not evict anything.
+static void test_dedup_multi_check_has_no_side_effect() {
+    RxDedupMulti d;
+    for (size_t i = 0; i < DEDUP_SLOTS; ++i) rx_commit_multi(d, (uint32_t)(i + 1), (uint8_t)i);
+    for (int k = 0; k < 10; ++k) TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, 999u + k, 1));
+    for (size_t i = 0; i < DEDUP_SLOTS; ++i)
+        TEST_ASSERT_TRUE(rx_is_duplicate_multi(d, (uint32_t)(i + 1), (uint8_t)i));
+}
+
+// Time on air vs the Semtech calculator (explicit header, CRC on, preamble 8).
+static void test_airtime() {
+    // SF8 / BW500k / 4/7, 116-byte payload + 4 header = 120 bytes -> ~121 ms
+    uint32_t t = airtime_ms(8, 500000, 7, 120);
+    TEST_ASSERT_UINT32_WITHIN(5, 121, t);
+    // SF7 / BW125k / 4/5, 10 bytes -> 41.2 ms
+    TEST_ASSERT_UINT32_WITHIN(2, 42, airtime_ms(7, 125000, 5, 10));
+    // SF12 / BW125k / 4/5, 10 bytes (LDRO on) -> 991.2 ms
+    TEST_ASSERT_UINT32_WITHIN(5, 992, airtime_ms(12, 125000, 5, 10));
+    // Slowest allowed config: an ACK frame (5 bytes) alone takes about 14.8 s.
+    uint32_t ack = airtime_ms(12, 7800, 8, 5);
+    TEST_ASSERT_TRUE(ack > 14000 && ack < 16000);
+    // Monotonic in payload length; invalid input -> 0.
+    TEST_ASSERT_TRUE(airtime_ms(8, 125000, 7, 255) > airtime_ms(8, 125000, 7, 5));
+    TEST_ASSERT_EQUAL_UINT32(0, airtime_ms(5, 125000, 5, 10));
+    TEST_ASSERT_EQUAL_UINT32(0, airtime_ms(7, 0, 5, 10));
+    TEST_ASSERT_EQUAL_UINT32(0, airtime_ms(7, 125000, 9, 10));
+}
+
+// Contract 3 tx_started.expected_ms
+static void test_tx_expected_ms() {
+    TEST_ASSERT_EQUAL_UINT8(4, TX_ATTEMPTS);
+    // Formula check against its parts.
+    const uint32_t data = airtime_ms(8, 500000, 7, 119), ack = airtime_ms(8, 500000, 7, ACK_FRAME_LEN);
+    TEST_ASSERT_EQUAL_UINT32(4u * (data + 5000 + ack) + 3u * (TX_RETRY_GAP_MS + retry_backoff_max_ms(data, ack)),
+                             tx_expected_ms(8, 500000, 7, 119, 5000));
+    // Defaults (SF8/BW500k/4-7). HIL without backoff: tx_result 20.6-23.7 s after the POST.
+    // With the max backoff: about 20.5 + 3 x 1.5 s, roughly 25 s.
+    uint32_t e115 = tx_expected_ms(8, 500000, 7, HEADER_LEN + 115, 5000);
+    TEST_ASSERT_TRUE(e115 > 23700 && e115 < 27000);
+    uint32_t e251 = tx_expected_ms(8, 500000, 7, MAX_FRAME, 5000);
+    TEST_ASSERT_TRUE(e251 > e115 && e251 < 28000);
+    // Slow config exceeds the old 30 s UI timeout with a single packet.
+    TEST_ASSERT_TRUE(tx_expected_ms(12, 125000, 5, MAX_FRAME, 5000) > 30000);
+    // Slowest allowed config: several minutes, no uint32 overflow.
+    uint32_t slow = tx_expected_ms(12, 7800, 8, MAX_FRAME, 5000);
+    TEST_ASSERT_TRUE(slow > 4u * 200000u && slow < 30u * 300000u);
+    // Invalid inputs -> 0 (unknown).
+    TEST_ASSERT_EQUAL_UINT32(0, tx_expected_ms(13, 125000, 5, 10, 5000));
+    TEST_ASSERT_EQUAL_UINT32(0, tx_expected_ms(8, 125000, 7, MAX_FRAME + 1, 5000));
+}
+
+// Retry backoff: bounded, covers the window, wider for slower configs.
+static void test_retry_backoff() {
+    const uint32_t mx = retry_backoff_max_ms(121, 10);
+    TEST_ASSERT_EQUAL_UINT32(BACKOFF_BASE_MS + 4u * 131u, mx);
+    TEST_ASSERT_EQUAL_UINT32(TX_RETRY_GAP_MS, retry_backoff_ms(0, mx));
+    TEST_ASSERT_EQUAL_UINT32(TX_RETRY_GAP_MS + mx - 1, retry_backoff_ms(mx - 1, mx));
+    TEST_ASSERT_EQUAL_UINT32(TX_RETRY_GAP_MS, retry_backoff_ms(mx, mx));
+    TEST_ASSERT_EQUAL_UINT32(TX_RETRY_GAP_MS, retry_backoff_ms(12345, 0));
+    for (uint32_t r = 0; r < 100000; r += 7919) {
+        uint32_t b = retry_backoff_ms(r * 2654435761u, mx);
+        TEST_ASSERT_TRUE(b >= TX_RETRY_GAP_MS && b < TX_RETRY_GAP_MS + mx);
+    }
+    // The window must be wider than one data+ACK exchange so retries can separate.
+    TEST_ASSERT_TRUE(mx > 2u * (121u + 10u));
+    TEST_ASSERT_TRUE(retry_backoff_max_ms(1000, 50) > retry_backoff_max_ms(121, 10));
+}
+
 static void test_extract_mac_key() {
     // Valid LORA_MSG payload
     uint32_t k1 = extract_mac_key("{\"name\":\"bob\",\"mac\":\"AABBCCDD\",\"data\":\"{}\"}");
@@ -398,6 +495,12 @@ int main(int, char**) {
     RUN_TEST(test_dedup_multi_new_seq_accepted);
     RUN_TEST(test_dedup_multi_lru_eviction);
     RUN_TEST(test_dedup_multi_raw_data_key);
+    RUN_TEST(test_dedup_multi_seq_wrap_across_types);
+    RUN_TEST(test_dedup_multi_retry_after_interleave);
+    RUN_TEST(test_dedup_multi_check_has_no_side_effect);
+    RUN_TEST(test_airtime);
+    RUN_TEST(test_tx_expected_ms);
+    RUN_TEST(test_retry_backoff);
     RUN_TEST(test_extract_mac_key);
     RUN_TEST(test_hash_mac);
     RUN_TEST(test_config_valid_and_roundtrip);

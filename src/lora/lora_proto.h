@@ -149,18 +149,29 @@ inline void rx_commit(RxDedup& d, uint8_t seq) { d.have = true; d.last_seq = seq
 // ---- per-source dedup (multi-peer) -----------------------------------------------
 // Tracks the last accepted seq for up to N sources, identified by a 32-bit key
 // (MAC hash). Uses LRU replacement when full. Key 0 is reserved for RAW_DATA.
+//
+// A sender uses ONE seq counter for LORA_MSG and RAW_DATA, but they're tracked under
+// different keys here. Without aging, a LORA_MSG that comes exactly 256*k packets
+// after the previous LORA_MSG (e.g. enable_file_tx_mode, 255 RAW chunks,
+// disable_file_tx_mode) would match the stale entry and be dropped as a "duplicate".
+// A real duplicate is a retry of the packet we just ACKed, so it arrives within a few
+// accepted packets. An entry only counts if it was accepted within the last
+// DEDUP_WINDOW accepted packets.
 constexpr size_t DEDUP_SLOTS = 4;
 constexpr uint32_t DEDUP_KEY_RAW = 0;  // RAW_DATA packets share this slot
+constexpr uint32_t DEDUP_WINDOW = 16;  // must be well below 256
 
 struct RxDedupEntry {
     uint32_t key = 0;
+    uint32_t at = 0;      // value of RxDedupMulti::accepted when committed
     uint8_t seq = 0;
     bool used = false;
 };
 
 struct RxDedupMulti {
     RxDedupEntry entries[DEDUP_SLOTS] = {};
-    size_t lru = 0;  // next slot to replace when all are used
+    size_t lru = 0;          // next slot to replace when all are used
+    uint32_t accepted = 0;   // total commits so far
 };
 
 // Simple hash for MAC string (e.g., "AABBCCDD"). Returns non-zero for valid input.
@@ -181,33 +192,91 @@ inline uint32_t extract_mac_key(const char* payload) {
     return hash_mac(mac);
 }
 
-// Find or allocate a slot for the given key.
-inline RxDedupEntry* rx_dedup_find(RxDedupMulti& d, uint32_t key) {
-    // First pass: exact match
+// Existing entry for `key`, or nullptr. No side effects.
+inline const RxDedupEntry* rx_dedup_lookup(const RxDedupMulti& d, uint32_t key) {
     for (size_t i = 0; i < DEDUP_SLOTS; ++i)
         if (d.entries[i].used && d.entries[i].key == key)
             return &d.entries[i];
-    // Second pass: unused slot
+    return nullptr;
+}
+
+// Find or allocate a slot for the given key (evicts when full). Used by commit only.
+inline RxDedupEntry* rx_dedup_find(RxDedupMulti& d, uint32_t key) {
+    for (size_t i = 0; i < DEDUP_SLOTS; ++i)
+        if (d.entries[i].used && d.entries[i].key == key)
+            return &d.entries[i];
     for (size_t i = 0; i < DEDUP_SLOTS; ++i)
         if (!d.entries[i].used)
             return &d.entries[i];
-    // All used: LRU replacement
     RxDedupEntry* e = &d.entries[d.lru];
     d.lru = (d.lru + 1) % DEDUP_SLOTS;
     e->used = false;
     return e;
 }
 
-inline bool rx_is_duplicate_multi(RxDedupMulti& d, uint32_t key, uint8_t seq) {
-    RxDedupEntry* e = rx_dedup_find(d, key);
-    return e->used && e->key == key && e->seq == seq;
+// True if this repeats the recently accepted packet from the same source.
+// Doesn't modify `d`; a check that's never committed evicts nothing.
+inline bool rx_is_duplicate_multi(const RxDedupMulti& d, uint32_t key, uint8_t seq) {
+    const RxDedupEntry* e = rx_dedup_lookup(d, key);
+    return e != nullptr && e->seq == seq && (uint32_t)(d.accepted - e->at) < DEDUP_WINDOW;
 }
 
 inline void rx_commit_multi(RxDedupMulti& d, uint32_t key, uint8_t seq) {
     RxDedupEntry* e = rx_dedup_find(d, key);
     e->key = key;
     e->seq = seq;
+    e->at = d.accepted;
     e->used = true;
+    d.accepted++;
+}
+
+// ---- time on air (Semtech SX127x formula) ------------------------------------------
+// Explicit header, 8-symbol preamble, payload CRC counted (an upper bound whether or
+// not the radio has CRC on), low-data-rate optimisation when a symbol lasts > 16 ms
+// (the LoRa library uses the same rule). `cr4` is 5..8. Returns ms, rounded up.
+inline uint32_t airtime_ms(int sf, long bw_hz, int cr4, size_t payload_len) {
+    if (sf < 6 || sf > 12 || bw_hz <= 0 || cr4 < 5 || cr4 > 8) return 0;
+    const double tsym_ms = (double)(1L << sf) * 1000.0 / (double)bw_hz;
+    const int de = tsym_ms > 16.0 ? 1 : 0;
+    const long num = 8L * (long)payload_len - 4L * sf + 28 + 16;   // CRC on, explicit header
+    const long den = 4L * (sf - 2 * de);
+    long n = num > 0 ? (num + den - 1) / den : 0;
+    const double symbols = (8 + 4.25) + 8 + (double)(n * cr4);
+    const double ms = symbols * tsym_ms;
+    return (uint32_t)ms + 1;
+}
+
+// ---- Contract 3 tx_started: worst-case time until tx_result -----------------------
+constexpr uint8_t  TX_ATTEMPTS        = MAX_RETRIES + 1;   // first send + retries
+constexpr uint32_t TX_RETRY_GAP_MS    = 10;                // delay between attempts
+constexpr size_t   ACK_FRAME_LEN      = HEADER_LEN + 1;
+
+// Random backoff before each retransmission. Without it, two boards that start sending
+// at the same moment stay in lockstep (same TX time, same ACK timeout), so every retry
+// collides and neither ever hears the other (seen in two-board HIL). The window is
+// several data+ACK exchanges wide, so a retry usually lands in a free slot.
+constexpr uint32_t BACKOFF_BASE_MS = 1000;
+inline uint32_t retry_backoff_max_ms(uint32_t data_airtime_ms, uint32_t ack_airtime_ms) {
+    return BACKOFF_BASE_MS + 4u * (data_airtime_ms + ack_airtime_ms);
+}
+// `rnd` is any 32-bit random value. Result is in [TX_RETRY_GAP_MS, TX_RETRY_GAP_MS + max).
+inline uint32_t retry_backoff_ms(uint32_t rnd, uint32_t max_ms) {
+    return TX_RETRY_GAP_MS + (max_ms ? rnd % max_ms : 0);
+}
+
+// Every attempt times out and every backoff is the longest:
+// TX_ATTEMPTS x (airtime(frame) + ack_timeout_ms + airtime(ACK))
+//   + MAX_RETRIES x (TX_RETRY_GAP_MS + retry_backoff_max_ms).
+// This matches the sender: each attempt waits ack_timeout_ms + airtime(ACK) after
+// TX_DONE. Mutex waits aren't included; the UI adds its own slack. Returns 0 for an
+// invalid config or a frame longer than a LoRa packet.
+inline uint32_t tx_expected_ms(int sf, long bw_hz, int cr4, size_t frame_len, uint32_t ack_timeout_ms) {
+    if (frame_len > MAX_FRAME) return 0;
+    const uint32_t data = airtime_ms(sf, bw_hz, cr4, frame_len);
+    const uint32_t ack  = airtime_ms(sf, bw_hz, cr4, ACK_FRAME_LEN);
+    if (data == 0 || ack == 0) return 0;
+    return (uint32_t)TX_ATTEMPTS * (data + ack_timeout_ms + ack) +
+           (uint32_t)MAX_RETRIES * (TX_RETRY_GAP_MS + retry_backoff_max_ms(data, ack));
 }
 
 // ---- Contract 5: LoRa radio config --------------------------------------------

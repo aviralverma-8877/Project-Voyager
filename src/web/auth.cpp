@@ -133,8 +133,20 @@ void auth_session_revoke(const char* token) {
   portEXIT_CRITICAL(&auth_mux);
 }
 
+// Hardware test builds only (env esp_lora_v2_test): every request counts as signed
+// in once a password exists, so test tools can drive the API and OTA without it.
+#if defined(VOYAGER_TEST_NOAUTH) && VOYAGER_TEST_NOAUTH
+#if !DEBUG
+#error "VOYAGER_TEST_NOAUTH must never be combined with a release build"
+#endif
+#warning "VOYAGER_TEST_NOAUTH: web authentication is disabled in this build"
+#endif
+
 bool auth_check(AsyncWebServerRequest* request) {
   if (request == nullptr || !auth_is_set()) return false;
+#if defined(VOYAGER_TEST_NOAUTH) && VOYAGER_TEST_NOAUTH
+  return true;
+#endif
 
   const AsyncWebHeader* cookie = request->getHeader("Cookie");
   if (cookie) {

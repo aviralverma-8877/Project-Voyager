@@ -45,25 +45,8 @@ const uint32_t MIN_FRAME_MS = 100;     // caps I2C frames at 10 Hz
 const uint32_t IDLE_TICK_MS = 1000;
 const uint32_t BLINK_MS = 500;
 
-// Screen layout (size-1 font: 6x8 px, 21 chars per 128 px line)
-const int LINE_CHARS = SCREEN_W / CHAR_W;  // 21
-const int HEADER_TITLE_MAX = 13;           // max chars for page title (leaves room for icons)
-const int HEADER_LINE_Y = 9;
-const int CONTENT_Y = 11;
-const int LINE_STEP = 9;
-const int CONTENT_LINES = 5;  // y = 11, 20, 29, 38, 47
-const int DOTS_Y = 60;
-
-// Header icon positions (right-aligned: WiFi, LoRa, signal bars)
-const int ICON_WIFI_X = 86;
-const int ICON_LORA_X = 103;
-const int ICON_BARS_X = 116;
-const int ICON_Y = 1;
-
-// Overlay layout
-const int OVERLAY_MARGIN = 4;              // padding from screen edge for text
-const int OVERLAY_TITLE_H = 11;            // alert title bar height
-const int PROGRESS_BAR_H = 10;             // progress bar height
+// Screen layout: all positions come from oled_layout.h (OLED_HEADER_H band split).
+const int LINE_CHARS = SCREEN_W / CHAR_W;  // 21 size-1 chars per line
 
 // ---------------------------------------------------------------------------
 // Queue message
@@ -189,6 +172,23 @@ void print_centered(int y, const char* text, uint8_t size = 1) {
     display.setTextSize(1);
 }
 
+// Title in the header band: size 2 (upper-cased, so no descender reaches the
+// separator row) when it fits avail_px, else size 1 as given, truncated with "...".
+// Vertically centred above the separator. x < 0 centres it horizontally.
+void draw_band_title(int x, int avail_px, const char* title) {
+    char up[MSG_FROM_LEN];  // titles come from MSG_FROM_LEN buffers
+    safe_copy(up, sizeof(up), title);
+    uint8_t size = band_text_size(up, avail_px);
+    if (size >= 2) ascii_upper(up);
+    char buf[LINE_CHARS + 1];
+    truncate_ellipsis(up, buf, sizeof(buf), chars_fit(avail_px, size));
+    display.setTextSize(size);
+    int w = text_width(buf, size);
+    display.setCursor(x < 0 ? center_x(w) : x, band_text_y(size));
+    display.print(buf);
+    display.setTextSize(1);
+}
+
 // Word-wrapped block at (x, y); returns lines drawn.
 int draw_wrapped(int x, int y, int max_px, int max_lines, const char* text, int step = LINE_STEP) {
     char lines[CONTENT_LINES + 1][LINE_CHARS + 1];
@@ -209,78 +209,82 @@ int draw_split(int line, int max_lines, const char* label, const char* value) {
     return n;
 }
 
-void draw_wifi_icon(int x, int y, WiFiStatus st, uint32_t now) {
+// Header icons: art stays in rows ICON_TOP_Y..ICON_BASE_Y (2..13), above the separator.
+void draw_cross(int x, int y, int size) {
+    display.drawLine(x, y, x + size - 1, y + size - 1, SSD1306_WHITE);
+    display.drawLine(x, y + size - 1, x + size - 1, y, SSD1306_WHITE);
+}
+
+void draw_wifi_icon(WiFiStatus st, uint32_t now) {
+    const int cx = ICON_WIFI_X + ICON_WIFI_W / 2;  // 92
+    const int cy = ICON_BASE_Y;                    // 13
     if (st == WIFI_DISCONNECTED) {
-        display.drawLine(x, y, x + 6, y + 6, SSD1306_WHITE);
-        display.drawLine(x, y + 6, x + 6, y, SSD1306_WHITE);
+        draw_cross(cx - 4, ICON_BASE_Y - 8, 9);    // rows 5..13
         return;
     }
     if (st == WIFI_CONNECTING && ((now / BLINK_MS) % 2) == 1) return;  // blink
-    display.drawLine(x + 1, y, x + 5, y, SSD1306_WHITE);
-    display.drawPixel(x, y + 1, SSD1306_WHITE);
-    display.drawPixel(x + 6, y + 1, SSD1306_WHITE);
-    display.drawLine(x + 2, y + 3, x + 4, y + 3, SSD1306_WHITE);
-    display.drawPixel(x + 1, y + 4, SSD1306_WHITE);
-    display.drawPixel(x + 5, y + 4, SSD1306_WHITE);
-    display.drawLine(x + 3, y + 5, x + 3, y + 6, SSD1306_WHITE);
-    if (st == WIFI_CONNECTED_AP) {
-        display.setCursor(x + 8, y);
-        display.print('A');
-    }
+    display.drawCircleHelper(cx, cy, 6, 0x1 | 0x2, SSD1306_WHITE);  // arc rows 7..12
+    display.drawCircleHelper(cx, cy, 4, 0x1 | 0x2, SSD1306_WHITE);  // arc rows 9..12
+    display.fillRect(cx - 1, cy - 1, 3, 2, SSD1306_WHITE);           // dot rows 12..13
 }
 
-void draw_lora_icon(int x, int y, LoRaStatus st) {
+void draw_lora_icon(LoRaStatus st) {
+    const int x = ICON_LORA_X, y = ICON_TOP_Y, m = ICON_LORA_X + ICON_LORA_W / 2;  // mast x 106
     if (st == LORA_ERROR) {
-        display.drawLine(x, y, x + 6, y + 6, SSD1306_WHITE);
-        display.drawLine(x, y + 6, x + 6, y, SSD1306_WHITE);
+        draw_cross(x, ICON_BASE_Y - 8, 9);
         return;
     }
-    display.drawLine(x + 3, y + 1, x + 3, y + 6, SSD1306_WHITE);  // mast
-    if (st == LORA_TRANSMITTING) {                                 // arrow out
-        display.drawLine(x + 3, y, x, y + 3, SSD1306_WHITE);
-        display.drawLine(x + 3, y, x + 6, y + 3, SSD1306_WHITE);
-    } else if (st == LORA_RECEIVING) {                             // arrow in
-        display.drawLine(x, y, x + 3, y + 3, SSD1306_WHITE);
-        display.drawLine(x + 6, y, x + 3, y + 3, SSD1306_WHITE);
-    } else {                                                       // idle antenna
-        display.drawLine(x, y + 1, x + 3, y + 3, SSD1306_WHITE);
-        display.drawLine(x + 6, y + 1, x + 3, y + 3, SSD1306_WHITE);
+    display.drawFastVLine(m, y + 3, ICON_BASE_Y - (y + 3) + 1, SSD1306_WHITE);  // mast rows 5..13
+    if (st == LORA_TRANSMITTING) {             // arrow out (^), rows 2..6
+        display.drawLine(m, y, x, y + 4, SSD1306_WHITE);
+        display.drawLine(m, y, x + 8, y + 4, SSD1306_WHITE);
+    } else if (st == LORA_RECEIVING) {         // arrow in (v), rows 2..6
+        display.drawLine(x, y, m, y + 4, SSD1306_WHITE);
+        display.drawLine(x + 8, y, m, y + 4, SSD1306_WHITE);
+    } else {                                   // idle: shallow antenna, rows 4..6
+        display.drawLine(x, y + 2, m, y + 4, SSD1306_WHITE);
+        display.drawLine(x + 8, y + 2, m, y + 4, SSD1306_WHITE);
     }
 }
 
-void draw_signal_bars(int x, int y, uint8_t bars) {
+// STA: 4 bars (heights 3/6/9/12, bottoms on ICON_BASE_Y). AP: the letters "AP".
+void draw_bars_slot(WiFiStatus st, uint8_t bars) {
+    if (st == WIFI_CONNECTED_AP) {
+        display.setCursor(ICON_BARS_X, BAND_TEXT_Y1);
+        display.print("AP");
+        return;
+    }
     for (int i = 0; i < 4; i++) {
-        int h = (i + 1) * 2 - 1;  // 1,3,5,7
-        int bx = x + i * 3;
-        int by = y + 7 - h;
-        if (i < bars) display.fillRect(bx, by, 2, h, SSD1306_WHITE);
-        else display.drawPixel(bx, y + 6, SSD1306_WHITE);
+        int h = (i + 1) * 3;
+        int bx = ICON_BARS_X + i * 3;
+        if (i < bars) display.fillRect(bx, ICON_BASE_Y - h + 1, 2, h, SSD1306_WHITE);
+        else display.drawFastHLine(bx, ICON_BASE_Y, 2, SSD1306_WHITE);
     }
 }
 
-void draw_progress_bar(int x, int y, int w, int h, uint8_t pct) {
-    display.drawRect(x, y, w, h, SSD1306_WHITE);
-    int fill = progress_fill(w - 2, pct);
-    if (fill > 0) display.fillRect(x + 1, y + 1, fill, h - 2, SSD1306_WHITE);
+void draw_progress_bar(const Box& b, uint8_t pct) {
+    display.drawRect(b.x, b.y, b.w, b.h, SSD1306_WHITE);
+    int fill = progress_fill(b.w - 2, pct);
+    if (fill > 0) display.fillRect(b.x + 1, b.y + 1, fill, b.h - 2, SSD1306_WHITE);
 }
 
-// Header: page title on the left; WiFi, LoRa and signal icons on the right.
+void draw_separator() { display.drawFastHLine(0, HEADER_SEP_Y, SCREEN_W, SSD1306_WHITE); }
+
+// Header band (rows 0..OLED_HEADER_H-1): title left, icons right, separator last row.
 void draw_header(const char* title, uint32_t now) {
-    print_at(0, 0, title, HEADER_TITLE_MAX);
-    draw_wifi_icon(ICON_WIFI_X, ICON_Y, ui.wifi, now);
-    draw_lora_icon(ICON_LORA_X, ICON_Y, ui.lora);
+    draw_band_title(0, HEADER_TITLE_PX, title);
+    draw_wifi_icon(ui.wifi, now);
+    draw_lora_icon(ui.lora);
     uint8_t bars = ui.wifi == WIFI_CONNECTED_STA ? rssi_to_bars(ui.wifi_rssi) : 0;
-    draw_signal_bars(ICON_BARS_X, ICON_Y, bars);
-    display.drawFastHLine(0, HEADER_LINE_Y, SCREEN_W, SSD1306_WHITE);
+    draw_bars_slot(ui.wifi, bars);
+    draw_separator();
 }
 
 void draw_page_dots() {
-    const int spacing = 6;
-    int total = (PAGE_COUNT - 1) * spacing + 3;
-    int x0 = center_x(total) + 1;
+    int x0 = dots_x0();
     for (int i = 0; i < PAGE_COUNT; i++) {
-        int cx = x0 + i * spacing;
-        if (i == ui.page) display.fillRect(cx - 1, DOTS_Y, 3, 3, SSD1306_WHITE);
+        int cx = x0 + i * DOTS_SPACING;
+        if (i == ui.page) display.fillRect(cx - 1, DOTS_Y, 3, DOTS_H, SSD1306_WHITE);
         else display.drawPixel(cx, DOTS_Y + 1, SSD1306_WHITE);
     }
 }
@@ -317,7 +321,7 @@ void page_status(uint32_t now) {
 void page_messages(uint32_t now) {
     char title[16];
     if (ui.msg_sel >= 0) snprintf(title, sizeof(title), "Msg %d/%d", ui.msg_sel + 1, ui.ring.count);
-    else snprintf(title, sizeof(title), "Messages");
+    else snprintf(title, sizeof(title), "Inbox");  // "MESSAGES" is 8 chars; 7 fit at size 2
     draw_header(title, now);
     if (ui.ring.count == 0) {
         print_centered(CONTENT_Y + 2 * LINE_STEP, "No messages");
@@ -375,8 +379,10 @@ void page_network(uint32_t now) {
             const char* ip = ui.ap_known && ui.ap_ip[0] ? ui.ap_ip : ui.ip;
             snprintf(buf, sizeof(buf), "AP   %s", ip[0] ? ip : "--");
             print_line(0, buf);
-            draw_split(1, 2, "SSID ", ssid);
-            draw_split(3, 2, "Pass ", ui.ap_known ? ui.ap_pass : "--");
+            // SSID takes 1-2 lines; the password gets the rest (up to 3 lines, so a
+            // long user-set AP password is shown up to 58 chars before "...").
+            int n = draw_split(1, 2, "SSID ", ssid);
+            draw_split(1 + n, CONTENT_LINES - 1 - n, "Pass ", ui.ap_known ? ui.ap_pass : "--");
             break;
         }
         case WIFI_CONNECTED_STA:
@@ -419,35 +425,37 @@ void page_system(uint32_t now) {
 // Overlays
 // ---------------------------------------------------------------------------
 void overlay_alert() {
-    display.drawRect(0, 0, SCREEN_W, SCREEN_H, SSD1306_WHITE);
-    display.fillRect(0, 0, SCREEN_W, OVERLAY_TITLE_H, SSD1306_WHITE);
+    Box band = alert_band_box();
+    display.fillRect(band.x, band.y, band.w, band.h, SSD1306_WHITE);  // inverted title band
     display.setTextColor(SSD1306_BLACK);
-    print_centered(2, ui.alert_title[0] ? ui.alert_title : "Alert");
+    draw_band_title(-1, SCREEN_W - 2 * OVERLAY_MARGIN, ui.alert_title[0] ? ui.alert_title : "Alert");
     display.setTextColor(SSD1306_WHITE);
-    draw_wrapped(OVERLAY_MARGIN, OVERLAY_TITLE_H + 3, SCREEN_W - OVERLAY_MARGIN * 2, 5, ui.alert_text);
+    Box f = alert_frame_box();
+    display.drawRect(f.x, f.y, f.w, f.h, SSD1306_WHITE);
+    Box l0 = alert_line_box(0);
+    draw_wrapped(l0.x, l0.y, l0.w, ALERT_LINES, ui.alert_text);
 }
 
 void overlay_progress() {
-    display.drawRect(0, 0, SCREEN_W, SCREEN_H, SSD1306_WHITE);
-    draw_wrapped(OVERLAY_MARGIN, 8, SCREEN_W - OVERLAY_MARGIN * 2, 2, ui.prog_title);
-    draw_progress_bar(OVERLAY_MARGIN * 2, 30, SCREEN_W - OVERLAY_MARGIN * 4, PROGRESS_BAR_H, ui.prog_pct);
+    draw_band_title(-1, SCREEN_W, ui.prog_title);
+    draw_separator();
+    draw_progress_bar(progress_bar_box(), ui.prog_pct);
     char buf[8];
     snprintf(buf, sizeof(buf), "%u%%", (unsigned)ui.prog_pct);
-    print_centered(46, buf);
+    print_centered(PROG_PCT_Y, buf, 2);
 }
 
 void overlay_message() {
-    display.drawRect(0, 0, SCREEN_W, SCREEN_H, SSD1306_WHITE);
-    print_centered(5, "New message from");
+    draw_band_title(-1, SCREEN_W, "New msg");
+    draw_separator();
     const char* from = ui.msgov_from[0] ? ui.msgov_from : "?";
-    if (text_width(from, 2) <= SCREEN_W - OVERLAY_MARGIN) print_centered(20, from, 2);
-    else print_centered(24, from);
+    uint8_t size = text_width(from, 2) <= SCREEN_W - OVERLAY_MARGIN ? 2 : 1;
+    print_centered(msgov_from_box(size).y, from, size);
     char buf[MSG_TEXT_LEN];
     safe_copy(buf, sizeof(buf), ui.msgov_text);
     for (char* c = buf; *c; c++) if (*c == '\n' || *c == '\r' || *c == '\t') *c = ' ';
-    char line[LINE_CHARS + 1];
-    truncate_ellipsis(buf, line, sizeof(line), LINE_CHARS - 1);
-    print_centered(44, line);
+    Box t0 = msgov_text_box(0);
+    draw_wrapped(t0.x, t0.y, t0.w, MSGOV_TEXT_LINES, buf);
 }
 
 void render(uint32_t now) {
@@ -503,12 +511,13 @@ void apply(const OledMsg& m, uint32_t now) {
     switch (m.cmd) {
         case CMD_WIFI:
             ui.wifi = (WiFiStatus)m.u8;
-            if (m.b0) safe_copy(ui.ssid, sizeof(ui.ssid), m.s0);
+            if (m.b0) { safe_copy(ui.ssid, sizeof(ui.ssid), m.s0); ascii_fold(ui.ssid); }
             if (m.b1) safe_copy(ui.ip, sizeof(ui.ip), m.s3);
             break;
         case CMD_AP:
             ui.ap_known = true;
             safe_copy(ui.ap_ssid, sizeof(ui.ap_ssid), m.s0);
+            ascii_fold(ui.ap_ssid);
             safe_copy(ui.ap_pass, sizeof(ui.ap_pass), m.s2);
             safe_copy(ui.ap_ip, sizeof(ui.ap_ip), m.s3);
             break;
@@ -539,11 +548,18 @@ void apply(const OledMsg& m, uint32_t now) {
             break;
         case CMD_MESSAGE:
             ring_push(ui.ring, m.s0, m.s1);
+            {
+                int k = ring_slot(ui.ring, 0);
+                ascii_fold(ui.ring.from[k]);
+                ascii_fold(ui.ring.text[k]);
+            }
             if (ui.msg_sel >= 0) ui.msg_sel = 0;  // keep detail view on the newest
             ui.msgov_on = true;
             ui.msgov_until = now + MSG_OVERLAY_MS;
             safe_copy(ui.msgov_from, sizeof(ui.msgov_from), m.s0);
             safe_copy(ui.msgov_text, sizeof(ui.msgov_text), m.s1);
+            ascii_fold(ui.msgov_from);
+            ascii_fold(ui.msgov_text);
             sleep_wake(ui.sleep, now);
             break;
         case CMD_ALERT:
@@ -552,6 +568,8 @@ void apply(const OledMsg& m, uint32_t now) {
             ui.alert_until = now + m.ms;
             safe_copy(ui.alert_title, sizeof(ui.alert_title), m.s0);
             safe_copy(ui.alert_text, sizeof(ui.alert_text), m.s1);
+            ascii_fold(ui.alert_title);
+            ascii_fold(ui.alert_text);
             sleep_wake(ui.sleep, now);
             break;
         case CMD_PROGRESS:
@@ -565,7 +583,8 @@ void apply(const OledMsg& m, uint32_t now) {
                 ui.prog_pct = pct;
                 ui.prog_last = now;
                 safe_copy(ui.prog_title, sizeof(ui.prog_title), m.s0);
-                sleep_wake(ui.sleep, now);
+                ascii_fold(ui.prog_title);
+                sleep_wake_progress(ui.sleep, now);
                 if (same) return;
             }
             break;
@@ -575,6 +594,7 @@ void apply(const OledMsg& m, uint32_t now) {
         case CMD_STATUS:
             if (strcmp(ui.status, m.s1) == 0) return;
             safe_copy(ui.status, sizeof(ui.status), m.s1);
+            ascii_fold(ui.status);
             break;
         default:
             return;
@@ -646,21 +666,23 @@ void pump_until(QueueHandle_t q, uint32_t deadline) {
 }
 
 // <= 1.2 s; keeps applying queued updates between frames so nothing is lost.
+// Name in the header band, rings expanding in the body.
 void boot_animation(QueueHandle_t q) {
-    const int frames = 6;
-    for (int f = 0; f < frames; f++) {
+    for (int f = 0; f < SPLASH_FRAMES; f++) {
         display.clearDisplay();
         display.setTextColor(SSD1306_WHITE);
-        print_centered(14, PROJECT_NAME, 2);
-        int r = 3 + f * 3;
-        display.drawCircle(SCREEN_W / 2, 46, r, SSD1306_WHITE);
-        if (f >= 2) display.drawCircle(SCREEN_W / 2, 46, r - 6, SSD1306_WHITE);
+        draw_band_title(-1, SCREEN_W, PROJECT_NAME);
+        draw_separator();
+        int r = splash_ring_r(f);
+        display.drawCircle(SPLASH_CX, SPLASH_CY, r, SSD1306_WHITE);
+        if (f >= 2) display.drawCircle(SPLASH_CX, SPLASH_CY, r - 6, SSD1306_WHITE);
         display.display();
         pump_until(q, millis() + 150);
     }
     display.clearDisplay();
-    print_centered(14, PROJECT_NAME, 2);
-    print_centered(40, "LoRa messenger");
+    draw_band_title(-1, SCREEN_W, PROJECT_NAME);
+    draw_separator();
+    print_centered(SPLASH_TAG_Y, "LoRa messenger");
     display.display();
     pump_until(q, millis() + 300);
 }

@@ -2,6 +2,7 @@
 // Run: ~/.platformio/penv/bin/pio test -e native -f test_oled
 #include <unity.h>
 #include <string.h>
+#include <stdio.h>
 #include <string>
 #include "display/oled_layout.h"
 
@@ -297,6 +298,188 @@ static void test_msg_selection_cycle() {
     TEST_ASSERT_EQUAL_INT8(-1, msg_select_next(7, 3));  // stale index after ring shrink
 }
 
+// ---------------------------------------------------------------- HIL review additions
+static void test_ascii_fold() {
+    char a[32] = "caf\xC3\xA9 \xF0\x9F\x98\x80!";  // "cafe" + U+1F600
+    ascii_fold(a);
+    TEST_ASSERT_EQUAL_STRING("caf? ?!", a);
+    char b[16] = "x\xE9y";               // Latin-1 byte >= 0xC0
+    ascii_fold(b);
+    TEST_ASSERT_EQUAL_STRING("x?y", b);
+    char c[16] = "\xA9z";                // stray continuation byte
+    ascii_fold(c);
+    TEST_ASSERT_EQUAL_STRING("?z", c);
+    char d[16] = "a\tb\nc\x1b\x7f";      // controls -> space, '\n' kept
+    ascii_fold(d);
+    TEST_ASSERT_EQUAL_STRING("a b\nc  ", d);
+    char e[2] = "";
+    ascii_fold(e);
+    TEST_ASSERT_EQUAL_STRING("", e);
+    ascii_fold(nullptr);  // no crash
+}
+
+// Screen asleep; BTN1 press-down shows the SOS hold bar (wakes), release < 2 s sends
+// oled_button(1,false): that release is the waking press and must do nothing else.
+static void test_btn1_release_after_progress_wake_is_consumed() {
+    SleepState s;
+    sleep_init(s, 0);
+    sleep_tick(s, 60000);
+    TEST_ASSERT_FALSE(s.on);
+    TEST_ASSERT_TRUE(sleep_wake_progress(s, 70000));
+    TEST_ASSERT_TRUE(s.on);
+    TEST_ASSERT_EQUAL_UINT8(BTN_ACT_WAKE, sleep_button(s, 1, false, 70300));
+    TEST_ASSERT_EQUAL_UINT8(BTN_ACT_BTN1, sleep_button(s, 1, false, 71000));  // next press acts
+    // Progress while already on does not arm the swallow.
+    TEST_ASSERT_FALSE(sleep_wake_progress(s, 72000));
+    TEST_ASSERT_EQUAL_UINT8(BTN_ACT_BTN1, sleep_button(s, 1, false, 72100));
+    // Armed, but the press comes after the window (e.g. SOS fired, much later press).
+    sleep_tick(s, 72100 + 60000);
+    sleep_wake_progress(s, 140000);
+    TEST_ASSERT_EQUAL_UINT8(BTN_ACT_BTN1, sleep_button(s, 1, false, 140000 + HOLD_WAKE_WINDOW_MS + 1));
+    // Armed, but BTN2 comes first: page change, and the flag is cleared.
+    sleep_tick(s, 300000);
+    sleep_wake_progress(s, 300000);
+    TEST_ASSERT_EQUAL_UINT8(BTN_ACT_NEXT_PAGE, sleep_button(s, 2, false, 300100));
+    TEST_ASSERT_EQUAL_UINT8(BTN_ACT_BTN1, sleep_button(s, 1, false, 300200));
+}
+
+// Network page (AP): mirrors page_network's line budget (4 content lines after the IP).
+static int ap_page(const char* ssid, const char* pass, char out[5][22]) {
+    char joined[97];
+    char l[3][22];
+    int line = 0;
+    snprintf(joined, sizeof(joined), "SSID %s", ssid);
+    int n = split_lines(joined, 21, 2, &l[0][0], sizeof(l[0]));
+    for (int i = 0; i < n; i++) strcpy(out[line++], l[i]);
+    snprintf(joined, sizeof(joined), "Pass %s", pass);
+    int m = split_lines(joined, 21, 4 - n > 3 ? 3 : 4 - n, &l[0][0], sizeof(l[0]));
+    for (int i = 0; i < m; i++) strcpy(out[line++], l[i]);
+    return line;
+}
+
+static void test_network_page_ap_password() {
+    char out[5][22];
+    // Derived default for MAC 54:43:B2:16:F1:5C: 8 uppercase hex chars, one line.
+    TEST_ASSERT_EQUAL_INT(2, ap_page("Voyager", "B216F15C", out));
+    TEST_ASSERT_EQUAL_STRING("SSID Voyager", out[0]);
+    TEST_ASSERT_EQUAL_STRING("Pass B216F15C", out[1]);
+    // Short SSID + 63-char password: 3 lines, 58 chars shown before "...".
+    std::string pw(63, 'p');
+    TEST_ASSERT_EQUAL_INT(4, ap_page("Voyager", pw.c_str(), out));
+    TEST_ASSERT_EQUAL_STRING("...", out[3] + 18);
+    // A 58-char password fits completely.
+    std::string pw58(58, 'q');
+    TEST_ASSERT_EQUAL_INT(4, ap_page("Voyager", pw58.c_str(), out));
+    TEST_ASSERT_EQUAL_STRING("Pass qqqqqqqqqqqqqqqq", out[1]);
+    TEST_ASSERT_EQUAL_UINT(21, strlen(out[3]));
+    TEST_ASSERT_NULL(strchr(out[3], '.'));
+    // 32-char SSID takes 2 lines; password gets the other 2 and never exceeds line 4.
+    std::string ssid32(32, 's');
+    TEST_ASSERT_EQUAL_INT(4, ap_page(ssid32.c_str(), pw.c_str(), out));
+    TEST_ASSERT_EQUAL_STRING("ssssssssssssssss", out[1]);
+    TEST_ASSERT_EQUAL_STRING("...", out[3] + 18);
+    // 8-char password with a 32-char SSID still shows in full.
+    TEST_ASSERT_EQUAL_INT(3, ap_page(ssid32.c_str(), "B216F15C", out));
+    TEST_ASSERT_EQUAL_STRING("Pass B216F15C", out[2]);
+}
+
+// ---------------------------------------------------------------- two-colour band layout
+// Header elements must stay in rows 0..OLED_HEADER_H-1 (yellow), body elements in
+// rows OLED_HEADER_H..63 (blue). These are the boxes oled_display.cpp draws with.
+static void assert_header(const Box& b, const char* what) {
+    char msg[64];
+    snprintf(msg, sizeof(msg), "%s y=%d..%d", what, b.y, box_bottom(b));
+    TEST_ASSERT_TRUE_MESSAGE(box_in_header(b), msg);
+    TEST_ASSERT_TRUE_MESSAGE(box_on_screen_x(b), msg);
+}
+static void assert_body(const Box& b, const char* what) {
+    char msg[64];
+    snprintf(msg, sizeof(msg), "%s y=%d..%d", what, b.y, box_bottom(b));
+    TEST_ASSERT_TRUE_MESSAGE(box_in_body(b), msg);
+    TEST_ASSERT_TRUE_MESSAGE(box_on_screen_x(b), msg);
+}
+
+static void test_band_constants() {
+    TEST_ASSERT_EQUAL_INT(16, OLED_HEADER_H);
+    TEST_ASSERT_EQUAL_INT(15, HEADER_SEP_Y);
+    TEST_ASSERT_EQUAL_INT(0, BAND_TEXT_Y2);
+    TEST_ASSERT_EQUAL_INT(4, BAND_TEXT_Y1);
+    TEST_ASSERT_EQUAL_INT(17, CONTENT_Y);
+    TEST_ASSERT_EQUAL_INT(5, CONTENT_LINES);
+    TEST_ASSERT_EQUAL_INT(61, DOTS_Y);
+    TEST_ASSERT_EQUAL_INT(7, HEADER_TITLE_MAX2);
+    TEST_ASSERT_EQUAL_INT(14, HEADER_TITLE_MAX1);
+}
+
+static void test_header_elements_in_band() {
+    assert_header(header_sep_box(), "separator");
+    assert_header(header_title_box(2), "title size 2");
+    assert_header(header_title_box(1), "title size 1");
+    assert_header(icon_wifi_box(), "wifi icon");
+    assert_header(icon_lora_box(), "lora icon");
+    assert_header(icon_bars_box(), "bars/AP");
+    // Ink (caps at size 2, icons) sits above the separator row, not on it.
+    TEST_ASSERT_TRUE(BAND_TEXT_Y2 + BAND_INK_H2 - 1 < HEADER_SEP_Y);
+    TEST_ASSERT_TRUE(BAND_TEXT_Y1 + CHAR_H - 1 < HEADER_SEP_Y);   // size-1 cell incl. descender
+    TEST_ASSERT_TRUE(box_bottom(icon_wifi_box()) < HEADER_SEP_Y);
+    // Title, icons and the AP/bars slot do not collide horizontally.
+    TEST_ASSERT_FALSE(boxes_overlap(header_title_box(2), icon_wifi_box()));
+    TEST_ASSERT_FALSE(boxes_overlap(header_title_box(1), icon_wifi_box()));
+    TEST_ASSERT_FALSE(boxes_overlap(icon_wifi_box(), icon_lora_box()));
+    TEST_ASSERT_FALSE(boxes_overlap(icon_lora_box(), icon_bars_box()));
+    TEST_ASSERT_TRUE(text_width("AP") <= ICON_BARS_W);
+    TEST_ASSERT_TRUE(ICON_BARS_X + 3 * 3 + 2 <= SCREEN_W);       // 4th bar's right column
+    // The wifi arcs (r = 6 around the icon centre) stay inside its box.
+    TEST_ASSERT_TRUE(ICON_WIFI_X + ICON_WIFI_W / 2 - 6 >= ICON_WIFI_X);
+    TEST_ASSERT_TRUE(ICON_WIFI_X + ICON_WIFI_W / 2 + 6 <= box_right(icon_wifi_box()));
+    TEST_ASSERT_TRUE(ICON_BASE_Y - 6 >= ICON_TOP_Y);
+}
+
+static void test_body_elements_below_band() {
+    for (int i = 0; i < CONTENT_LINES; i++) {
+        assert_body(content_line_box(i), "content line");
+        TEST_ASSERT_TRUE(box_bottom(content_line_box(i)) < DOTS_Y);  // never touches the dots
+    }
+    // Messages detail view: inverted sender bar from CONTENT_Y-1.
+    Box sender = {0, CONTENT_Y - 1, SCREEN_W, LINE_STEP};
+    assert_body(sender, "sender bar");
+    assert_body(dots_box(), "page dots");
+    for (int i = 0; i < ALERT_LINES; i++) {
+        assert_body(alert_line_box(i), "alert line");
+        TEST_ASSERT_TRUE(box_bottom(alert_line_box(i)) < box_bottom(alert_frame_box()));  // inside frame
+    }
+    assert_body(alert_frame_box(), "alert frame");
+    assert_header(alert_band_box(), "alert band");
+    assert_body(progress_bar_box(), "progress bar");
+    assert_body(progress_pct_box(), "progress pct");
+    TEST_ASSERT_FALSE(boxes_overlap(progress_bar_box(), progress_pct_box()));
+    assert_body(msgov_from_box(2), "msg from size 2");
+    assert_body(msgov_from_box(1), "msg from size 1");
+    for (int i = 0; i < MSGOV_TEXT_LINES; i++) {
+        assert_body(msgov_text_box(i), "msg text");
+        TEST_ASSERT_FALSE(boxes_overlap(msgov_from_box(2), msgov_text_box(i)));
+    }
+    for (int f = 0; f < SPLASH_FRAMES; f++) assert_body(splash_ring_box(f), "splash ring");
+    assert_body(splash_tag_box(), "splash tag");
+}
+
+static void test_band_title_size_and_case() {
+    TEST_ASSERT_EQUAL_UINT8(2, band_text_size("Voyager", HEADER_TITLE_PX));
+    TEST_ASSERT_EQUAL_UINT8(2, band_text_size("Network", HEADER_TITLE_PX));
+    TEST_ASSERT_EQUAL_UINT8(2, band_text_size("Msg 5/5", HEADER_TITLE_PX));
+    TEST_ASSERT_EQUAL_UINT8(2, band_text_size("Inbox", HEADER_TITLE_PX));
+    TEST_ASSERT_EQUAL_UINT8(1, band_text_size("Messages", HEADER_TITLE_PX));  // why it is "Inbox"
+    TEST_ASSERT_EQUAL_UINT8(2, band_text_size("TX failed", SCREEN_W - 2 * OVERLAY_MARGIN));
+    TEST_ASSERT_EQUAL_UINT8(1, band_text_size("Storage error", SCREEN_W - 2 * OVERLAY_MARGIN));
+    TEST_ASSERT_EQUAL_UINT8(1, band_text_size("Hold for SOS", SCREEN_W));
+    TEST_ASSERT_EQUAL_INT(BAND_TEXT_Y2, band_text_y(2));
+    TEST_ASSERT_EQUAL_INT(BAND_TEXT_Y1, band_text_y(1));
+    char t[16] = "Msg 1/5 gpqy,";
+    ascii_upper(t);
+    TEST_ASSERT_EQUAL_STRING("MSG 1/5 GPQY,", t);
+    ascii_upper(nullptr);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_safe_copy_null_and_bounds);
@@ -322,5 +505,12 @@ int main(int, char**) {
     RUN_TEST(test_ring_newest_first_and_capacity);
     RUN_TEST(test_ring_copies_and_bounds);
     RUN_TEST(test_msg_selection_cycle);
+    RUN_TEST(test_ascii_fold);
+    RUN_TEST(test_btn1_release_after_progress_wake_is_consumed);
+    RUN_TEST(test_network_page_ap_password);
+    RUN_TEST(test_band_constants);
+    RUN_TEST(test_header_elements_in_band);
+    RUN_TEST(test_body_elements_below_band);
+    RUN_TEST(test_band_title_size_and_case);
     return UNITY_END();
 }

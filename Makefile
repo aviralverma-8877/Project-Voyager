@@ -22,8 +22,8 @@ help:
 	@echo "  make build-v2     - Build firmware for version 2"
 	@echo "  make buildfs      - Build LittleFS filesystem"
 	@echo "  make release      - Build release firmware (DEBUG=false) for all versions"
-	@echo "  make test         - Run native unit tests (pio test -e native)"
-	@echo "  make test-web     - Run web UI tests (test/web/run.sh)"
+	@echo "  make test         - Run native unit tests (pio, or WSL g++ on Windows)"
+	@echo "  make test-web     - Run web UI tests (jsc, or node where jsc is missing)"
 	@echo "  make upload       - Upload firmware (default environment: $(DEFAULT_ENV))"
 	@echo "  make upload-v1    - Upload firmware to version 1"
 	@echo "  make upload-v2    - Upload firmware to version 2"
@@ -109,9 +109,10 @@ release:
 	$(PIO) run -e esp_lora_v2_release
 
 # Tests
+# pio test -e native where a host compiler exists; WSL g++ on Windows without one.
 test:
 	@echo "Running native unit tests..."
-	$(PIO) test -e native
+	PIO="$(PIO)" bash scripts/run_native_tests.sh
 
 test-web:
 	@echo "Running web UI tests..."
@@ -157,21 +158,6 @@ lint:
 	@echo "Running PlatformIO static analysis..."
 	$(PIO) check -e esp_lora_v1 --skip-packages --severity=medium
 
-# Sync data_main/ to data/ (minify JS, compact JSON)
+# Sync data_main/ to data/ (minify JS, compact JSON); falls back to cp without rsync.
 sync-data:
-	@echo "Syncing data_main/ -> data/..."
-	rsync -a --delete --exclude config/ --exclude script.js --exclude lib.js data_main/ data/
-	@echo "Minifying JavaScript..."
-	@for f in script.js lib.js; do \
-		if [ -f data_main/$$f ]; then \
-			npx --yes terser@5.31.0 data_main/$$f -c -m -o data/$$f; \
-			echo "  $$f minified"; \
-		fi; \
-	done
-	@echo "Compacting JSON configs..."
-	@mkdir -p data/config
-	@for f in data_main/config/*.json; do \
-		$(PYTHON) -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1])),separators=(',',':')),end='')" "$$f" > "data/config/$$(basename $$f)"; \
-		echo "  $$(basename $$f) compacted"; \
-	done
-	@echo "Sync complete!"
+	PYTHON="$(PYTHON)" bash scripts/sync_data.sh

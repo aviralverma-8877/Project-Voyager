@@ -137,16 +137,34 @@ void btn_intrupt(void *param)
 
 // ------------------------------------------------------------- telemetry
 
+// WIFI_DATA (Contract 4): STA connected -> {"mode":"STA","rssi":dBm};
+// otherwise, if the AP is up -> {"mode":"AP","clients":n} (WiFi.RSSI() is
+// STA-only and reads 0 in AP mode); else {"mode":"OFF"}.
 void get_wifi_rssi(void* params)
 {
     while (true)
     {
-        int rssi = WiFi.RSSI();
-        oled_set_wifi_rssi(rssi);
+        bool sta = WiFi.status() == WL_CONNECTED;
+        int rssi = sta ? WiFi.RSSI() : 0;
+        if (sta)
+            oled_set_wifi_rssi(rssi);
         if (events_client_count() > 0)
         {
             JsonDocument doc;
-            doc["rssi"] = rssi;
+            if (sta)
+            {
+                doc["mode"] = "STA";
+                doc["rssi"] = rssi;
+            }
+            else if (WiFi.getMode() & WIFI_MODE_AP)
+            {
+                doc["mode"] = "AP";
+                doc["clients"] = WiFi.softAPgetStationNum();
+            }
+            else
+            {
+                doc["mode"] = "OFF";
+            }
             String data;
             serializeJson(doc, data);
             send_to_events(data, "WIFI_DATA");
