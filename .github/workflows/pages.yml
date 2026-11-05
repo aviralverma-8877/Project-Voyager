@@ -48,6 +48,12 @@ jobs:
       - name: Test and build voyager-link.exe
         working-directory: tools/voyager-link
         run: |
+          # Wintun (LoRa network adapter driver), embedded into the exe; pinned hash.
+          curl -sSfL -o wintun.zip https://www.wintun.net/builds/wintun-0.14.1.zip
+          echo "07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51  wintun.zip" | sha256sum -c -
+          unzip -q wintun.zip -d wintun-x
+          mkdir -p wintun
+          cp wintun-x/wintun/bin/amd64/wintun.dll wintun-x/wintun/LICENSE.txt wintun/
           go vet ./...
           go test ./...
           VERSION="$(tr -d '[:space:]' < VERSION)"

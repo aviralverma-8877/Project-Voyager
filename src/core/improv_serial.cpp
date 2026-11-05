@@ -10,6 +10,8 @@
 #include "improv.h"
 #include "support_method.h"
 #include <wifi/wifi_support.h>
+#include <lora/lora_support.h>
+#include "net_serial.h"
 
 #define IMPROV_CONNECT_TIMEOUT_MS 20000
 #define IMPROV_SCAN_MAX           20
@@ -146,6 +148,26 @@ static void handle_rpc(const improv::Packet& p)
             send_error(improv::ERROR_UNKNOWN);
             send_state(improv::STATE_READY);
         }
+        return;
+    }
+    case improv::CMD_VOYAGER_NET_START:
+    {
+        if (lora_serial || s_busy) { send_error(improv::ERROR_UNKNOWN); return; }
+        uint16_t node = lora_node_id();
+        char ip[16], id[8];
+        snprintf(ip, sizeof ip, "%u.%u.%u.%u", lora_proto::NET_PREFIX_A, lora_proto::NET_PREFIX_B,
+                 node >> 8, node & 0xFF);
+        snprintf(id, sizeof id, "%04X", node);
+        // Airtime of a full and of a minimal NET frame, so the PC paces what it hands
+        // us to what the radio can send (a flooded TX queue just drops everything).
+        char full[12], small[12];
+        snprintf(full, sizeof full, "%lu", (unsigned long)lora_frame_airtime_ms(lora_proto::MAX_PAYLOAD));
+        snprintf(small, sizeof small, "%lu", (unsigned long)lora_frame_airtime_ms(lora_proto::NET_HDR + 20));
+        const char* s[] = {ip, id, improv::VOYAGER_NET_PROTO, full, small};
+        // Answer first (still Improv framing), then the port switches to SLIP.
+        send_result(improv::CMD_VOYAGER_NET_START, s, 5);
+        Serial.flush();
+        if (!net_enter()) send_error(improv::ERROR_UNKNOWN);
         return;
     }
     case improv::CMD_GET_WIFI_NETWORKS:

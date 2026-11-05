@@ -32,6 +32,7 @@ enum class CoreAction : uint8_t {
     SetLoraConfig,  // arg1 = JSON string, already range-checked
     SetSerialMode,  // flag
     GetSerialMode,
+    GetNetStatus,   // LoRa network: this node's address, counters, peers heard
     GetWifiScan,    // resend the last scan result (no new scan)
     // Bluetooth Serial (file transfer support)
     GetBtConfig,    // returns current BT config (name, enabled)
@@ -74,6 +75,7 @@ inline const char* core_action_name(CoreAction a) {
         case CoreAction::SetLoraConfig: return "set_lora_config";
         case CoreAction::SetSerialMode: return "set_serial_mode";
         case CoreAction::GetSerialMode: return "get_serial_mode";
+        case CoreAction::GetNetStatus: return "get_net_status";
         case CoreAction::GetWifiScan: return "get_wifi_scan";
         case CoreAction::GetBtConfig: return "get_bt_config";
         case CoreAction::SetBtMode: return "set_bt_mode";
@@ -150,6 +152,7 @@ inline CoreCommand core_parse_request(JsonVariantConst doc) {
     if (strcmp(t, "restart_device") == 0) { c.action = CoreAction::RestartDevice; return c; }
     if (strcmp(t, "get_username") == 0)   { c.action = CoreAction::GetUsername; return c; }
     if (strcmp(t, "get_serial_mode") == 0){ c.action = CoreAction::GetSerialMode; return c; }
+    if (strcmp(t, "get_net_status") == 0) { c.action = CoreAction::GetNetStatus; return c; }
     if (strcmp(t, "get_wifi_scan") == 0)  { c.action = CoreAction::GetWifiScan; return c; }
 
     if (strcmp(t, "connect_wifi") == 0) {

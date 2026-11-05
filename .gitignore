@@ -9,3 +9,4 @@ test/web/*.out
 __pycache__/
 tools/voyager-link/dist/
 tools/voyager-link/voyager-link.exe
+tools/voyager-link/wintun/

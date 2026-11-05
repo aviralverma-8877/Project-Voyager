@@ -2,6 +2,7 @@
 #include "core_dispatch.h"
 #include "bt_serial.h"
 #include "improv_serial.h"
+#include "net_serial.h"
 #include <web/web_sockets.h>
 #include <web/auth.h>
 #include <web/web_server.h>
@@ -337,6 +338,11 @@ void handle_operations(JsonDocument& doc)
             show_alert("LoRa config rejected");
         return;
     case CoreAction::SetSerialMode:
+        if (cmd.flag && net_active()) {
+            show_alert("The serial port is in LoRa network mode (Voyager Link).");
+            send_serial_mode_to_ws();
+            return;
+        }
         lora_serial = cmd.flag;
         if (xTaskCreatePinnedToCore(save_lora_serial_config, "save_lora_serial", 4096, NULL, 1, NULL, 1) != pdPASS)
             serial_print("save_lora_serial task create failed");
@@ -345,6 +351,13 @@ void handle_operations(JsonDocument& doc)
     case CoreAction::GetSerialMode:
         send_serial_mode_to_ws();
         return;
+    case CoreAction::GetNetStatus:
+    {
+        // net_status_json() is a complete object; tag it for the UI.
+        String s = net_status_json();
+        send_to_ws("{\"response_type\":\"net_status\"," + s.substring(1));
+        return;
+    }
     case CoreAction::GetWifiScan:
     {
         // Last complete scan only; never starts a scan. Nothing sent if none yet.
@@ -393,6 +406,11 @@ void handle_operations(JsonDocument& doc)
         send_file_tx_join(String(cmd.arg1.c_str()), String(cmd.arg2.c_str()));
         return;
     case CoreAction::FileTxStart:
+        if (net_active()) {
+            show_alert("The serial port is in LoRa network mode (Voyager Link). Leave the network first.");
+            send_serial_mode_to_ws();
+            return;
+        }
         lora_serial = true;
         serial_print("File TX started (serial bridge enabled)");
         send_serial_mode_to_ws();
@@ -501,9 +519,15 @@ void serial_to_lora(void* param)
         }
         else
         {
-            // Bridge off: USB input goes to Improv (WiFi setup from the web flasher);
-            // anything that isn't an Improv packet is dropped by its parser.
-            while (Serial.available()) improv_feed((uint8_t)Serial.read());
+            // Bridge off: USB input is the LoRa network (SLIP) when Voyager Link turned
+            // it on, else Improv (WiFi setup / network start); anything else is dropped
+            // by the respective parser.
+            if (net_active()) {
+                while (Serial.available()) net_feed((uint8_t)Serial.read());
+                net_poll();
+            } else {
+                while (Serial.available()) improv_feed((uint8_t)Serial.read());
+            }
         }
         vTaskDelay(pdMS_TO_TICKS(10));
     }
@@ -513,6 +537,7 @@ void serial_to_lora(void* param)
 // Halts on failure: the serial bridge is core functionality (Contract 6).
 void start_serial_bridge()
 {
+    net_init();   // LoRa network mode (USB SLIP), entered via Improv vendor command
     if (xTaskCreatePinnedToCore(send_to_serial, "send_to_serial", 4096, NULL, 1, NULL, 1) != pdPASS)
         halt_boot("serial rx task");
     if (xTaskCreatePinnedToCore(send_to_lora, "send_to_lora", 6000, NULL, 1, NULL, 1) != pdPASS)
@@ -699,10 +724,10 @@ void debugger_print(void *param)
         if (dropped > 0)
         {
             String note = "(" + String(dropped) + " debug lines dropped)";
-            if (DEBUGGING && !lora_serial)
+            if (DEBUGGING && !lora_serial && !net_active())
                 Serial.println(note);
         }
-        if (DEBUGGING && !lora_serial)   // the UART belongs to the bridge in serial mode
+        if (DEBUGGING && !lora_serial && !net_active())   // the UART belongs to the bridge / network
             Serial.println(params->message);
         if (DEBUGGING && events_client_count() > 0)
         {

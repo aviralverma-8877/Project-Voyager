@@ -353,6 +353,23 @@ var VoyagerLib = (function () {
     return { millis: o.millis, data: toText(o.data) };
   }
 
+  // net_status (get_net_status): {"active","node","ip","tx","rx","drop","peers":[{"ip","rssi","age_s"}]}
+  // Strings are passed through as text, numbers clamped; null if unusable.
+  function parseNetStatus(d) {
+    if (!isObject(d) || typeof d.ip !== "string") return null;
+    function n(v) { var x = toNumber(v); return isFinite(x) && x >= 0 ? Math.floor(x) : 0; }
+    var peers = Array.isArray(d.peers) ? d.peers : [];
+    return {
+      active: d.active === true,
+      ip: toText(d.ip),
+      tx: n(d.tx), rx: n(d.rx), drop: n(d.drop),
+      peers: peers.filter(isObject).slice(0, 16).map(function (p) {
+        var r = toNumber(p.rssi);
+        return { ip: toText(p.ip), rssi: isFinite(r) ? Math.round(r) : 0, age: n(p.age_s) };
+      }),
+    };
+  }
+
   /* ---------- validation ---------- */
 
   function validatePassword(p) {
@@ -588,6 +605,7 @@ var VoyagerLib = (function () {
     loraAirtimeMs: loraAirtimeMs,
     kermitTimeoutMs: kermitTimeoutMs,
     parseLoraRx: parseLoraRx,
+    parseNetStatus: parseNetStatus,
     parseWifiScan: parseWifiScan,
     wifiQuality: wifiQuality,
     wifiLabel: wifiLabel,

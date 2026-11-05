@@ -96,7 +96,7 @@ static void test_len_mismatch_and_short() {
     TEST_ASSERT_EQUAL_INT((int)ParseErr::LenMismatch, (int)parse_packet(f, n - 1).err);
     TEST_ASSERT_EQUAL_INT((int)ParseErr::LenMismatch, (int)parse_packet(f, n + 1).err);
     TEST_ASSERT_EQUAL_INT((int)ParseErr::TooShort, (int)parse_packet(f, 3).err);
-    f[1] = 4;
+    f[1] = T_NET + 1;   // first unknown type
     TEST_ASSERT_EQUAL_INT((int)ParseErr::BadType, (int)parse_packet(f, n).err);
 }
 

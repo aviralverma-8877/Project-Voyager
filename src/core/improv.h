@@ -39,6 +39,13 @@ constexpr uint8_t CMD_WIFI_SETTINGS = 0x01;
 constexpr uint8_t CMD_GET_CURRENT_STATE = 0x02;
 constexpr uint8_t CMD_GET_DEVICE_INFO = 0x03;
 constexpr uint8_t CMD_GET_WIFI_NETWORKS = 0x04;
+// Vendor command (not in the Improv spec): Voyager Link asks the board to switch its
+// USB serial to LoRa network mode (SLIP). Result strings: IPv4 address, node id
+// (4 hex digits), protocol version, then (since firmware with pacing) the airtime in
+// ms of a full NET frame and of a minimal one (older Voyager Link ignores them).
+constexpr uint8_t CMD_VOYAGER_NET_START = 0xF0;
+// "2": adds the NET_CTL_SEND_TO control frame (internet sharing via a gateway node).
+constexpr const char* VOYAGER_NET_PROTO = "2";
 
 constexpr size_t MAX_DATA = 255;
 constexpr size_t MAX_PACKET = 6 + 3 + MAX_DATA + 1 + 1;  // + '\n'

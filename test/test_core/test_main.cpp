@@ -52,6 +52,7 @@ static void test_no_arg_commands() {
     ASSERT_ACTION(CoreAction::RestartDevice, "{\"request-type\":\"restart_device\"}");
     ASSERT_ACTION(CoreAction::GetUsername, "{\"request-type\":\"get_username\"}");
     ASSERT_ACTION(CoreAction::GetSerialMode, "{\"request-type\":\"get_serial_mode\"}");
+    ASSERT_ACTION(CoreAction::GetNetStatus, "{\"request-type\":\"get_net_status\"}");
 }
 
 static void test_get_wifi_scan() {

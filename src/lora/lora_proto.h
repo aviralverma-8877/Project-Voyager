@@ -18,6 +18,7 @@ constexpr uint8_t  T_LORA_MSG    = 0;
 constexpr uint8_t  T_RAW_DATA    = 1;
 constexpr uint8_t  T_REC_AKNG    = 2;
 constexpr uint8_t  T_LORA_SERIAL = 3;
+constexpr uint8_t  T_NET         = 4;     // LoRa network: [dst u16][src u16] + IPv4 packet
 constexpr size_t   HEADER_LEN    = 4;     // [len][type][seq][crc8]
 constexpr size_t   MAX_PAYLOAD   = 251;   // 255 FIFO bytes - header
 constexpr size_t   MAX_FRAME     = HEADER_LEN + MAX_PAYLOAD;
@@ -47,7 +48,7 @@ inline uint8_t packet_crc(uint8_t seq, const uint8_t* payload, size_t len) {
 // data type, or `out` is too small. Use frame_ack() for REC_AKNG.
 inline size_t frame_packet(uint8_t type, uint8_t seq, const uint8_t* payload, size_t len,
                            uint8_t* out, size_t out_cap) {
-    if (len > MAX_PAYLOAD || type == T_REC_AKNG || type > T_LORA_SERIAL) return 0;
+    if (len > MAX_PAYLOAD || type == T_REC_AKNG || type > T_NET) return 0;
     if (out == nullptr || out_cap < HEADER_LEN + len) return 0;
     if (len > 0 && payload == nullptr) return 0;
     out[0] = (uint8_t)len;
@@ -88,7 +89,7 @@ inline Parsed parse_packet(const uint8_t* buf, size_t n) {
     p.seq = buf[2];
     p.payload = buf + HEADER_LEN;
     if (n != HEADER_LEN + (size_t)p.len) { p.err = ParseErr::LenMismatch; return p; }
-    if (p.type > T_LORA_SERIAL) { p.err = ParseErr::BadType; return p; }
+    if (p.type > T_NET) { p.err = ParseErr::BadType; return p; }
     if (p.type == T_REC_AKNG) {
         if (p.len != 1) { p.err = ParseErr::BadAck; return p; }
         p.ok = true;
@@ -377,6 +378,147 @@ inline LoraMsgInfo parse_lora_msg(const char* payload) {
     }
     return info;
 }
+
+
+// ---- LoRa network (T_NET): IPv4 over the radio --------------------------------
+// Every board is a node on one shared radio channel. A node id is 16 bits taken
+// from the MAC, and node X.Y owns IPv4 10.73.X.Y/16, so no configuration or ARP
+// is needed: the IP destination names the node. Payload of a T_NET frame:
+//   [dst hi][dst lo][src hi][src lo] + one whole IPv4 packet (<= NET_MAX_IP bytes).
+// Unicast frames are ACKed/retried like LORA_MSG; dst NET_BROADCAST is not ACKed.
+constexpr uint8_t  NET_PREFIX_A  = 10;
+constexpr uint8_t  NET_PREFIX_B  = 73;
+constexpr size_t   NET_HDR       = 4;
+constexpr size_t   NET_MAX_IP    = MAX_PAYLOAD - NET_HDR;   // 247
+constexpr uint16_t NET_BROADCAST = 0xFFFF;
+
+// Node id from the last two MAC bytes. Each byte is kept in 1..254 so the address
+// 10.73.X.Y never ends in .0 or .255 in either octet.
+inline uint8_t net_fix_octet(uint8_t b) { return b == 0 ? 1 : (b == 255 ? 254 : b); }
+inline uint16_t net_node_id(const uint8_t mac[6]) {
+    return (uint16_t)((net_fix_octet(mac[4]) << 8) | net_fix_octet(mac[5]));
+}
+
+// IPv4 destination -> node: 0 = not ours (drop), NET_BROADCAST for broadcast.
+inline uint16_t net_ip_to_node(const uint8_t ip[4]) {
+    if (ip[0] == 255 && ip[1] == 255 && ip[2] == 255 && ip[3] == 255) return NET_BROADCAST;
+    if (ip[0] != NET_PREFIX_A || ip[1] != NET_PREFIX_B) return 0;
+    if (ip[2] == 255 && ip[3] == 255) return NET_BROADCAST;               // 10.73.255.255
+    if (ip[2] == 0 || ip[2] == 255 || ip[3] == 0 || ip[3] == 255) return 0;
+    return (uint16_t)((ip[2] << 8) | ip[3]);
+}
+
+// Minimal IPv4 check: version 4, header length sane, total length == len.
+inline bool net_ipv4_ok(const uint8_t* ip, size_t len) {
+    if (ip == nullptr || len < 20 || (ip[0] >> 4) != 4) return false;
+    size_t ihl = (size_t)(ip[0] & 0x0F) * 4;
+    size_t total = ((size_t)ip[2] << 8) | ip[3];
+    return ihl >= 20 && ihl <= total && total == len;
+}
+
+// Builds a T_NET payload. Returns its length, 0 if the packet doesn't fit.
+inline size_t net_build(uint16_t dst, uint16_t src, const uint8_t* ip, size_t len,
+                        uint8_t* out, size_t cap) {
+    if (len == 0 || len > NET_MAX_IP || cap < NET_HDR + len || ip == nullptr) return 0;
+    out[0] = (uint8_t)(dst >> 8); out[1] = (uint8_t)dst;
+    out[2] = (uint8_t)(src >> 8); out[3] = (uint8_t)src;
+    memcpy(out + NET_HDR, ip, len);
+    return NET_HDR + len;
+}
+
+struct NetFrame { uint16_t dst; uint16_t src; const uint8_t* ip; size_t len; };
+
+inline bool net_parse(const uint8_t* payload, size_t n, NetFrame& f) {
+    if (payload == nullptr || n <= NET_HDR) return false;
+    f.dst = (uint16_t)((payload[0] << 8) | payload[1]);
+    f.src = (uint16_t)((payload[2] << 8) | payload[3]);
+    f.ip = payload + NET_HDR;
+    f.len = n - NET_HDR;
+    return f.src != 0 && f.src != NET_BROADCAST && f.dst != 0 && net_ipv4_ok(f.ip, f.len);
+}
+
+// Dedup key for NET unicast from one node: a fixed tag in the high half keeps it
+// apart from the LORA_MSG keys (32-bit MAC hashes) in practice.
+inline uint32_t net_dedup_key(uint16_t src) { return 0x4E450000u | src; }
+
+// ---- USB control frames in network mode (first byte 0x00, never IPv4) ----------
+constexpr uint8_t NET_CTL_KEEPALIVE = 0x01;   // 00 01
+constexpr uint8_t NET_CTL_LEAVE     = 0x02;   // 00 02
+constexpr uint8_t NET_CTL_SEND_TO   = 0x03;   // 00 03 [node hi][node lo] + IPv4 packet
+constexpr uint8_t NET_CTL_ALIVE_ACK = 0x81;   // board -> PC: answer to 00 01 (still in network mode)
+constexpr uint8_t NET_CTL_BUSY      = 0x82;   // board -> PC: 00 82 [queued]: radio queue filling, slow down
+constexpr uint8_t NET_BUSY_DEPTH    = 6;      // TX queue depth that triggers 00 82
+
+// "Send this IPv4 packet to node X" whatever its IP destination: how a PC reaches
+// the internet through a gateway node (the packet's destination is outside 10.73/16).
+// Returns false if malformed, the node is invalid or the packet isn't IPv4.
+inline bool net_parse_send_to(const uint8_t* f, size_t n, uint16_t& node, const uint8_t*& ip, size_t& len) {
+    if (f == nullptr || n < 4 || f[0] != 0x00 || f[1] != NET_CTL_SEND_TO) return false;
+    node = (uint16_t)((f[2] << 8) | f[3]);
+    ip = f + 4;
+    len = n - 4;
+    if (node == 0 || node == NET_BROADCAST) return false;
+    return net_ipv4_ok(ip, len);
+}
+
+// ---- SLIP (RFC 1055): IP packets over the USB serial link in network mode ----
+constexpr uint8_t SLIP_END = 0xC0, SLIP_ESC = 0xDB, SLIP_ESC_END = 0xDC, SLIP_ESC_ESC = 0xDD;
+
+// Encodes one frame (END + escaped bytes + END). Returns its size, 0 if cap is too
+// small (worst case 2 * len + 2).
+inline size_t slip_encode(const uint8_t* in, size_t len, uint8_t* out, size_t cap) {
+    if (cap < 2) return 0;
+    size_t o = 0;
+    out[o++] = SLIP_END;
+    for (size_t i = 0; i < len; i++) {
+        uint8_t b = in[i];
+        bool esc = (b == SLIP_END || b == SLIP_ESC);
+        if (o + (esc ? 2 : 1) > cap - 1) return 0;
+        if (esc) {
+            out[o++] = SLIP_ESC;
+            out[o++] = (b == SLIP_END) ? SLIP_ESC_END : SLIP_ESC_ESC;
+        } else {
+            out[o++] = b;
+        }
+    }
+    out[o++] = SLIP_END;
+    return o;
+}
+
+// Byte-at-a-time decoder. feed() returns the frame length when a non-empty frame
+// ends (bytes in frame()), else 0. Oversized or badly escaped frames are dropped.
+template <size_t CAP>
+class SlipDecoder {
+public:
+    size_t feed(uint8_t b) {
+        if (b == SLIP_END) {
+            size_t n = (bad_ || esc_) ? 0 : len_;
+            len_ = 0; esc_ = false; bad_ = false;
+            return n;
+        }
+        if (bad_) return 0;
+        if (esc_) {
+            esc_ = false;
+            if (b == SLIP_ESC_END) b = SLIP_END;
+            else if (b == SLIP_ESC_ESC) b = SLIP_ESC;
+            else { bad_ = true; return 0; }
+        } else if (b == SLIP_ESC) {
+            esc_ = true;
+            return 0;
+        }
+        if (len_ >= CAP) { bad_ = true; return 0; }
+        buf_[len_++] = b;
+        return 0;
+    }
+    const uint8_t* frame() const { return buf_; }
+    void reset() { len_ = 0; esc_ = false; bad_ = false; }
+
+private:
+    uint8_t buf_[CAP];
+    size_t len_ = 0;
+    bool esc_ = false;
+    bool bad_ = false;
+};
 
 }  // namespace lora_proto
 

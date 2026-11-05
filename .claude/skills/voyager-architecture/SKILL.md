@@ -121,6 +121,32 @@ Device → client `response_type`:
 Every outbound WS and SSE message goes through **one** sender task (web_sockets).
 `send_to_ws` / `send_to_events` only enqueue a copy, so they're safe to call from any task.
 
+## LoRa network (TCP/IP over LoRa)
+
+- Packet type `4 T_NET`: payload `[dst u16][src u16]` + one IPv4 packet (max 247 bytes).
+  Node id = last two MAC bytes (each kept in 1..254); node X.Y owns `10.73.X.Y/16`
+  (`lora_proto.h`: net_node_id, net_ip_to_node, net_build/net_parse, SLIP codec).
+  Unicast is ACKed and retried, with an ACK wait of `NET_ACK_SLACK_MS` (400 ms) plus 2 ACK airtimes,
+  deduped by `net_dedup_key(src)`. A board that isn't in network mode doesn't ACK.
+  `NET_BROADCAST` (0xFFFF) isn't ACKed.
+- Listen-before-talk on every TX except ACKs: `REG_MODEM_STAT` busy bits or an
+  unread RxDone mean wait 20–120 ms with the radio mutex released; after 12 tries, send anyway.
+- USB network mode (core `net_serial.cpp`): entered with Improv vendor RPC 0xF0
+  (result: IP, node hex, protocol "1"). Then USB carries SLIP: IPv4 packets, or control frames
+  `00 01` keepalive and `00 02` leave. The mode exits on leave or after 30 s without a frame. Debug output
+  to USB is off, and file-transfer/serial-mode bridge requests are refused while it's on.
+- Protocol "2" adds control frames: `00 03 [node u16] + IPv4` (send to that node
+  whatever the IP destination: internet traffic to a gateway node) and `00 81`
+  (board's answer to each keepalive; without it for 20 s, Voyager Link re-sends
+  the network-start command because the board rebooted).
+- Internet sharing is entirely PC-side: the gateway PC runs a gVisor user-space NAT
+  (public unicast destinations only) and beacons UDP `10.73.255.255:47330`
+  `VOYAGER-GW/1` every 30 s. Clients route 0.0.0.0/0 + DNS through the adapter and wrap
+  internet-bound packets in `00 03`.
+- WS: `get_net_status` returns `net_status` `{active,node,ip,tx,rx,drop,peers:[{ip,rssi,age_s}]}`.
+- PC side: Voyager Link (Wintun adapter "Voyager-LoRa", MTU 576, TCP MSS clamp 190,
+  unicast-only filter). Joining needs admin rights.
+
 ## Improv Serial (WiFi setup from the web flasher)
 
 While the LoRa-serial bridge is off, `serial_to_lora` feeds USB bytes to

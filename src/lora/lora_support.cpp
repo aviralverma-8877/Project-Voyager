@@ -2,6 +2,8 @@
 #include <new>
 #include <esp_random.h>
 #include <atomic>
+#include <esp_mac.h>
+#include <core/net_serial.h>
 
 using namespace lora_proto;
 
@@ -12,6 +14,7 @@ static const char* LORA_DEFAULT_PATH = "/config/lora_default.json";
 
 static TaskHandle_t  rx_task_handle = NULL;
 static QueueHandle_t ack_queue = NULL;           // uint16_t: (seq << 8) | value, RX task -> TX task
+static uint16_t s_node_id = 0;                   // LoRa network node id (from the MAC)
 static volatile bool tx_in_progress = false;     // set while we own the radio for TX; ISR ignores DIO0 then
 
 static portMUX_TYPE seq_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -46,6 +49,11 @@ void config_lora()
         lora_fatal("LoRa: out of memory");
     }
     next_seq = (uint8_t)esp_random();
+    {
+        uint8_t mac[6] = {0};
+        esp_read_mac(mac, ESP_MAC_WIFI_STA);
+        s_node_id = net_node_id(mac);
+    }
 
     SPI.begin(SCK, MISO, MOSI, SS);
     LoRa.setPins(SS, RST, IRQ);
@@ -195,9 +203,46 @@ void LoRa_txMode(){
 // Note: the library's endPacket() spins on yield() until TX_DONE with no timeout, and
 // LoRaClass::isTransmitting() is private in LoRa@0.8.0, so a TX-hang guard would need
 // a library change (reported, not done).
-static bool lora_tx_frame(const uint8_t* frame, size_t n)
+// SX127x registers for listen-before-talk. The LoRa library keeps its register
+// access private, so read them directly (caller holds lora_write_mutex).
+#define REG_IRQ_FLAGS_  0x12
+#define REG_MODEM_STAT_ 0x18
+#define IRQ_RX_DONE_    0x40
+#define MODEM_BUSY_     0x0B     // signal detected | synchronized | header valid
+#define LBT_TRIES       12
+
+static uint8_t radio_read_reg(uint8_t addr)
 {
-    if (xSemaphoreTake(lora_write_mutex, pdMS_TO_TICKS(LORA_TX_TIMEOUT_MS)) != pdTRUE) {
+    SPI.beginTransaction(SPISettings(8E6, MSBFIRST, SPI_MODE0));
+    digitalWrite(SS, LOW);
+    SPI.transfer(addr & 0x7F);
+    uint8_t v = SPI.transfer(0x00);
+    digitalWrite(SS, HIGH);
+    SPI.endTransaction();
+    return v;
+}
+
+// Takes lora_write_mutex once the channel is free: no other node is transmitting
+// and no received packet waits in the FIFO (transmitting would overwrite it).
+// Between checks the mutex is released so the RX task can drain the FIFO. In
+// LoRa network mode several nodes share the channel, hence the random backoff.
+// Returns false only if the mutex could not be taken at all.
+static bool take_radio_clear_channel(bool lbt)
+{
+    for (int i = 0; ; i++) {
+        if (xSemaphoreTake(lora_write_mutex, pdMS_TO_TICKS(LORA_TX_TIMEOUT_MS)) != pdTRUE) return false;
+        if (!lbt || i >= LBT_TRIES) return true;   // waited long enough: transmit anyway
+        bool busy = (radio_read_reg(REG_MODEM_STAT_) & MODEM_BUSY_) ||
+                    (radio_read_reg(REG_IRQ_FLAGS_) & IRQ_RX_DONE_);
+        if (!busy) return true;
+        xSemaphoreGive(lora_write_mutex);
+        vTaskDelay(pdMS_TO_TICKS(20 + esp_random() % 100));
+    }
+}
+
+static bool lora_tx_frame(const uint8_t* frame, size_t n, bool lbt = true)
+{
+    if (!take_radio_clear_channel(lbt)) {
         serial_print("ERROR: LoRa write mutex timeout");
         return false;
     }
@@ -241,7 +286,7 @@ void LoRa_sendAkn(uint8_t seq, uint8_t result)
 {
     uint8_t frame[HEADER_LEN + 1];
     size_t n = frame_ack(seq, result, frame, sizeof frame);
-    if (lora_tx_frame(frame, n))
+    if (lora_tx_frame(frame, n, false))   // ACKs go out at once: the sender is waiting
         serial_print("SENT AKN seq=" + String(seq) + " val=" + String(result));
 }
 
@@ -277,10 +322,15 @@ static void send_tx_started(uint32_t id, size_t payload_len)
 // Sends one queued packet with ACK/retry. Returns true on ACK 1.
 static bool send_with_retry(const QueueParam* p)
 {
-    if (p->type != LORA_MSG) {
+    if (p->type != LORA_MSG && p->type != LORA_NET) {
         serial_print("ERROR: send_packets item has type " + String(p->type));
         return false;
     }
+    const bool net = p->type == LORA_NET;
+    // NET broadcast: one transmission, nobody ACKs it.
+    if (net && p->message.length() >= 2 &&
+        ((((uint8_t)p->message[0]) << 8) | (uint8_t)p->message[1]) == NET_BROADCAST)
+        return LoRa_send(p->message, p->type, take_seq());
     if (p->message.length() > LORA_MAX_PAYLOAD) {
         serial_print("ERROR: send_packets item too long: " + String(p->message.length()));
         return false;
@@ -288,13 +338,16 @@ static bool send_with_retry(const QueueParam* p)
     // LORA_ACK_TIMEOUT_MS covers the peer's processing time. The ACK's own airtime is
     // added on top: about 10 ms at the defaults, but about 15 s at SF12/BW7.8k, where a
     // flat 5 s would make every ACK arrive too late.
-    const TickType_t ack_timeout = pdMS_TO_TICKS(LORA_ACK_TIMEOUT_MS + s_ack_airtime_ms.load());
+    TickType_t ack_timeout = pdMS_TO_TICKS(LORA_ACK_TIMEOUT_MS + s_ack_airtime_ms.load());
     uint32_t backoff_max;
     {
         const LoraConfig c = active_config();
-        backoff_max = retry_backoff_max_ms(
-            airtime_ms(c.SpreadingFactor, c.SignalBandwidth, c.CodingRate4, HEADER_LEN + p->message.length()),
-            s_ack_airtime_ms.load());
+        const uint32_t data_air =
+            airtime_ms(c.SpreadingFactor, c.SignalBandwidth, c.CodingRate4, HEADER_LEN + p->message.length());
+        backoff_max = retry_backoff_max_ms(data_air, s_ack_airtime_ms.load());
+        // NET: the peer ACKs straight from its RX task, so wait about one ACK airtime
+        // plus slack, not the 5 s chat budget (TCP would stall for seconds per loss).
+        if (net) ack_timeout = pdMS_TO_TICKS(NET_ACK_SLACK_MS + 2 * s_ack_airtime_ms.load());
     }
     TxRetry t;
     tx_begin(t, take_seq());
@@ -345,7 +398,7 @@ void LoRa_sendRaw(void* param)
         oled_set_lora(LORA_RECEIVING);
         oled_lora_packet(true, ok, 0, 0.0f);
 
-        if (!ok) {
+        if (!ok && p->type != LORA_NET) {   // NET loss is TCP's to recover: no alert storm
             show_alert("Transmission failed after " + String(LORA_MAX_RETRIES) + " retries");
             oled_alert("TX failed", "no ACK from peer", 3000);
         }
@@ -399,6 +452,29 @@ static void handle_rx_frame(const uint8_t* buf, size_t n, int rssi, float snr)
         d->message.concat((const char*)p.payload, p.len);
         if (d->message.length() != p.len) { delete d; return; }
         if (xQueueSend(serial_packet_rec, &d, 0) != pdTRUE) delete d;
+        return;
+    }
+    case LORA_NET: {
+        NetFrame nf;
+        if (!net_parse(p.payload, p.len, nf) || nf.src == s_node_id) return;
+        const bool to_me = nf.dst == s_node_id;
+        if (!to_me && nf.dst != NET_BROADCAST) return;     // another node's unicast
+        oled_lora_packet(false, true, rssi, snr);
+        net_heard(nf.src, rssi);
+        if (!to_me) {                                     // broadcast: no ACK, no dedup
+            net_deliver(nf.ip, nf.len);
+            return;
+        }
+        // Not in network mode: stay silent, so the sender sees no ACK.
+        if (!net_active()) return;
+        const uint32_t key = net_dedup_key(nf.src);
+        if (rx_is_duplicate_multi(rx_dedup, key, p.seq)) {
+            LoRa_sendAkn(p.seq, ACK_OK);
+            return;
+        }
+        bool queued = net_deliver(nf.ip, nf.len);
+        if (queued) rx_commit_multi(rx_dedup, key, p.seq);
+        LoRa_sendAkn(p.seq, queued ? ACK_OK : ACK_RETRY);
         return;
     }
     case RAW_DATA:
@@ -460,6 +536,38 @@ void lora_rx_task(void* param)
             handle_rx_frame(buf, n, rssi, snr);
         }
     }
+}
+
+// ---------------------------------------------------------------- LoRa network
+
+uint16_t lora_node_id() { return s_node_id; }
+
+int lora_tx_queue_depth()
+{
+    return send_packets ? (int)uxQueueMessagesWaiting(send_packets) : 0;
+}
+
+uint32_t lora_frame_airtime_ms(size_t payload_len)
+{
+    const LoraConfig c = active_config();
+    return airtime_ms(c.SpreadingFactor, c.SignalBandwidth, c.CodingRate4, HEADER_LEN + payload_len);
+}
+
+bool lora_net_send(uint16_t dst, const uint8_t* ip, size_t len)
+{
+    uint8_t buf[LORA_MAX_PAYLOAD];
+    size_t n = net_build(dst, s_node_id, ip, len, buf, sizeof buf);
+    if (n == 0 || send_packets == NULL) return false;
+    QueueParam* q = new (std::nothrow) QueueParam();
+    if (q == NULL) return false;
+    q->type = LORA_NET;
+    q->id = 0;                                   // no tx_started / tx_result
+    q->message.concat((const char*)buf, n);      // binary-safe (IP headers contain 0x00)
+    if (q->message.length() != n || xQueueSend(send_packets, &q, 0) != pdTRUE) {
+        delete q;
+        return false;
+    }
+    return true;
 }
 
 // ---------------------------------------------------------------- forwarding

@@ -519,7 +519,36 @@ function dashboard() {
       refresh_locks();
     }, function () {});
     ws_send({ "request-type": "get_username" }, true);
+    request_net_status();
   });
+}
+
+// Dashboard "LoRa network" panel: refreshed every 5 s while the dashboard is shown.
+let netStatusTimer = null;
+function request_net_status() {
+  if (netStatusTimer) clearTimeout(netStatusTimer);
+  netStatusTimer = null;
+  if (!byId("net_status")) return; // left the dashboard
+  ws_send({ "request-type": "get_net_status" }, true);
+  netStatusTimer = setTimeout(request_net_status, 5000);
+}
+
+function render_net_status(d) {
+  const box = byId("net_status");
+  if (!box) return;
+  const s = L.parseNetStatus(d);
+  if (!s) return;
+  box.textContent = s.active
+    ? "Joined: a PC uses this board as " + s.ip + " (" + s.tx + " packets out, " + s.rx + " in, " + s.drop + " dropped)."
+    : "This board's address is " + s.ip + ". No PC has joined through it.";
+  const ul = byId("net_peers");
+  ul.replaceChildren();
+  s.peers.forEach(function (p) {
+    const li = el("li", "spread");
+    li.append(el("span", "", p.ip), el("span", "hint", p.rssi + " dBm, " + p.age + " s ago"));
+    ul.append(li);
+  });
+  if (s.peers.length === 0) ul.append(el("li", "hint", "No other network nodes heard yet."));
 }
 
 function wifi() {
@@ -683,6 +712,9 @@ function handle_ws_message(data) {
     case "set_uname":
       state.username = L.toText(data.uname);
       setValue("username", state.username);
+      break;
+    case "net_status":
+      render_net_status(data);
       break;
     case "serial_mode": {
       state.serialMode = data.value === true || data.value === "true" || data.value === 1;

@@ -130,7 +130,10 @@ type server struct {
 
 	mu       sync.Mutex
 	sessions map[*session]struct{}
-	owners   map[string]*session // portKey(name) -> page holding it
+	owners   map[string]*session // portKey(name) -> page (or the LoRa network) holding it
+
+	net         netState
+	netUseRoute bool // -use-internet-route: client takes a default route instead of the system proxy
 }
 
 func portKey(name string) string { return strings.ToUpper(strings.TrimSpace(name)) }
@@ -149,7 +152,7 @@ func (s *server) claim(name string, sess *session) error {
 		s.owners = map[string]*session{}
 	}
 	if o, ok := s.owners[portKey(name)]; ok && o != sess {
-		return fmt.Errorf("%s is in use by the page from %s; disconnect it there first", name, hostOf(o.origin))
+		return fmt.Errorf("%s is in use by %s; disconnect it there first", name, ownerName(o))
 	}
 	s.owners[portKey(name)] = sess
 	return nil
@@ -214,7 +217,7 @@ func (s *server) handleInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"app": appName, "version": s.version, "busy": s.busy()})
+	json.NewEncoder(w).Encode(map[string]any{"app": appName, "version": s.version, "busy": s.busy(), "net": s.netStatus()})
 }
 
 func (s *server) handleSerial(w http.ResponseWriter, r *http.Request) {
@@ -463,6 +466,19 @@ func listen() (net.Listener, int, error) {
 		}
 	}
 	return nil, 0, fmt.Errorf("all helper ports %v are in use", helperPorts)
+}
+
+// listenTakeover is listen() for an instance that replaces a running one (the
+// elevated relaunch for the LoRa network): wait for the old one to exit.
+func listenTakeover(wait time.Duration) (net.Listener, int, error) {
+	end := time.Now().Add(wait)
+	for {
+		ln, port, err := listen()
+		if !errors.Is(err, errAlreadyRunning) || time.Now().After(end) {
+			return ln, port, err
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
 }
 
 func probeIsHelper(addr string) bool {

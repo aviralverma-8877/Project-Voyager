@@ -65,6 +65,18 @@ test("file_tx_invite with hostile file name/size/tx_id passes through as text", 
   assertEq(m.txId, XSS[0]);
 });
 
+test("net_status: hostile peer fields pass through as text, numbers sanitised", function () {
+  var s = L.parseNetStatus({ active: true, ip: "10.73.241.92", tx: 5, rx: "7", drop: -3,
+    peers: [{ ip: XSS[0], rssi: "-71", age_s: 4 }, "junk", { ip: "10.73.232.236", rssi: "x" }] });
+  assertEq(s.active, true);
+  assertEq([s.tx, s.rx, s.drop], [5, 7, 0]);
+  assertEq(s.peers.length, 2);
+  assertEq(s.peers[0], { ip: XSS[0], rssi: -71, age: 4 });
+  assertEq(s.peers[1].rssi, 0);
+  assertEq(L.parseNetStatus({ active: true }), null);
+  assertEq(L.parseNetStatus("nope"), null);
+});
+
 test("malformed lora_rx payloads return null instead of throwing", function () {
   [undefined, null, "", "not json", "[]", "{}", '{"name":"a","data":"not json"}',
    '{"name":"a","data":"{\\"pack_type\\":\\"other\\"}"}'].forEach(function (raw) {
