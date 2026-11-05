@@ -736,14 +736,6 @@ function handle_ws_message(data) {
     case "stop_transmission":
       if (state.sending) state.cancelSend = true;
       break;
-    case "file_tx_invite":
-      // Incoming file transfer invitation (receiver side)
-      serialTransfer.handleInvitation(data);
-      break;
-    case "file_tx_participant":
-      // Participant joined (sender side)
-      serialTransfer.handleParticipant(data);
-      break;
     default:
       break;
   }
@@ -758,6 +750,9 @@ function handle_lora_rx(msg) {
   if (msg.action === "enable_file_tx_mode") on_file_rx_start(msg);
   else if (msg.action === "disable_file_tx_mode") on_file_rx_end(msg);
   else if (msg.action === "sos") alertText("User " + msg.sender + " has sent a SOS request.");
+  // Serial (YMODEM) transfer handshake. Invites are kept even while another page is
+  // shown, so they are listed when the user opens Serial Transfer.
+  else if (msg.action.indexOf("file_tx_") === 0) serialTransfer.handleLoraAction(msg);
 }
 
 function add_message(sender, text, own) {
@@ -1447,411 +1442,716 @@ function set_coding_rate(val) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Serial File Transfer (YMODEM over Web Serial API)                   */
+/* Serial File Transfer (YMODEM over USB serial, relayed over LoRa)    */
 /* ------------------------------------------------------------------ */
+//
+// Each browser runs YMODEM against its own device's USB serial port; the devices
+// relay the bytes as LORA_SERIAL packets while the bridge is on (file_tx_start).
+// The serial port is reached through one of two transports with the same shape:
+//   - Web Serial, when the page is a secure context (https / localhost);
+//   - Voyager Link (tools/voyager-link), a tray helper on ws://127.0.0.1, for the
+//     normal case of this page being served over plain http by the device.
+// Transport: {kind, label, needsPortList, listPorts(), open(name), write(u8),
+//             onData(cb) -> unsubscribe, onClose(cb), close()}
+//
+// Handshake (LORA_MSG actions via /lora_transmit, see lib.js buildFileTx*):
+//   sender: file_tx_invite -> receivers: file_tx_join{nonce} -> sender picks ONE:
+//   file_tx_go{nonce}. YMODEM is point-to-point, so only that receiver turns its
+//   bridge on; the others go back to waiting.
 
-var serialTransfer = (function () {
-  var port = null;
-  var reader = null;
-  var writer = null;
-  var connected = false;
-  var transferActive = false;
-  var role = "sender"; // "sender" or "receiver"
-  var participants = [];
-  var invitations = [];
-  var selectedFile = null;
-  var receivedData = null;
-  var receivedFileName = "";
-  var ymodemInstance = null;
-  var dataCallbacks = []; // Callbacks waiting for serial data
+var HELPER_PORTS = [47321, 47322, 47323, 47324, 47325]; // = helperPorts in tools/voyager-link/server.go
+var HELPER_DOWNLOAD_URL =
+  "https://github.com/aviralverma-8877/Project-Voyager/releases/latest/download/voyager-link.exe";
+var SERIAL_BAUD = 115200;
+// Time for file_tx_start (WS) to reach the device before YMODEM bytes do: while the
+// bridge is off the device discards serial input, and debug lines stop only once it is on.
+var BRIDGE_SETTLE_MS = 400;
 
-  // Check Web Serial API support
-  function isSupported() {
-    return "serial" in navigator;
+function webSerialAvailable() {
+  return !!(window.isSecureContext && navigator.serial);
+}
+
+function makeListeners() {
+  var list = [];
+  return {
+    add: function (cb) {
+      list.push(cb);
+      return function () {
+        var i = list.indexOf(cb);
+        if (i >= 0) list.splice(i, 1);
+      };
+    },
+    emit: function (data) {
+      list.slice().forEach(function (cb) {
+        try {
+          cb(data);
+        } catch (e) {
+          console.error("Serial data callback error:", e);
+        }
+      });
+    },
+    clear: function () {
+      list = [];
+    },
+  };
+}
+
+function createWebSerialTransport() {
+  var port = null, reader = null, writer = null, closing = false, closeCb = null;
+  var listeners = makeListeners();
+
+  async function readLoop() {
+    try {
+      while (reader) {
+        var r = await reader.read();
+        if (r.done) break;
+        if (r.value) listeners.emit(r.value);
+      }
+    } catch (e) {
+      if (!closing) console.error("Serial read error:", e);
+    }
+    if (!closing && closeCb) closeCb("serial port lost");
   }
 
-  // Initialize the page UI
+  return {
+    kind: "webserial",
+    label: "Web Serial",
+    needsPortList: false,
+    listPorts: function () {
+      return Promise.resolve([]);
+    },
+    open: async function () {
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: SERIAL_BAUD });
+      // Chrome raises DTR/RTS on open; on ESP32 boards they drive the auto-reset circuit.
+      try {
+        await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+      } catch (e) {}
+      closing = false;
+      reader = port.readable.getReader();
+      writer = port.writable.getWriter();
+      readLoop();
+      return "serial port";
+    },
+    write: function (bytes) {
+      if (!writer) return;
+      writer.write(bytes).catch(function (e) {
+        console.error("Serial write error:", e);
+      });
+    },
+    onData: listeners.add,
+    onClose: function (cb) {
+      closeCb = cb;
+    },
+    close: async function () {
+      closing = true;
+      listeners.clear();
+      try {
+        if (reader) {
+          await reader.cancel().catch(function () {});
+          reader.releaseLock();
+        }
+        if (writer) writer.releaseLock();
+        if (port) await port.close();
+      } catch (e) {
+        console.error("Serial close error:", e);
+      }
+      reader = writer = port = null;
+    },
+  };
+}
+
+function fetchWithTimeout(url, ms) {
+  var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  return new Promise(function (resolve, reject) {
+    var t = setTimeout(function () {
+      if (ctl) ctl.abort();
+      reject(new Error("timeout"));
+    }, ms);
+    fetch(url, { cache: "no-store", signal: ctl ? ctl.signal : undefined }).then(
+      function (r) {
+        clearTimeout(t);
+        resolve(r);
+      },
+      function (e) {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}
+
+// Resolves {port, version} for a running Voyager Link, or null. A closed port fails
+// at once; the long timeout only covers Chrome's "access apps on this device" prompt.
+function findHelper() {
+  var i = 0;
+  return new Promise(function (resolve) {
+    (function next() {
+      if (i >= HELPER_PORTS.length) {
+        resolve(null);
+        return;
+      }
+      var p = HELPER_PORTS[i++];
+      fetchWithTimeout("http://127.0.0.1:" + p + "/info", 20000)
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (info) {
+          if (info && info.app === "voyager-link") resolve({ port: p, version: L.toText(info.version) });
+          else next();
+        }, next);
+    })();
+  });
+}
+
+function createHelperTransport(helper) {
+  var ws = null, pending = null, closing = false, closeCb = null;
+  var listeners = makeListeners();
+
+  function lost(reason) {
+    if (!closing && closeCb) closeCb(reason);
+  }
+
+  function connectWs() {
+    if (ws && ws.readyState === 1) return Promise.resolve();
+    return new Promise(function (resolve, reject) {
+      var sock = new WebSocket("ws://127.0.0.1:" + helper.port + "/serial");
+      var opened = false;
+      sock.binaryType = "arraybuffer";
+      sock.onopen = function () {
+        opened = true;
+        ws = sock;
+        resolve();
+      };
+      sock.onerror = function () {
+        if (!opened) reject(new Error("could not connect to Voyager Link"));
+      };
+      sock.onclose = function (ev) {
+        if (ws === sock) ws = null;
+        if (pending) {
+          pending.reject(new Error("Voyager Link closed the connection"));
+          pending = null;
+        }
+        if (opened) lost(ev.code === 1008 ? "another page is now using Voyager Link" : "Voyager Link stopped");
+      };
+      sock.onmessage = function (ev) {
+        if (typeof ev.data !== "string") {
+          listeners.emit(new Uint8Array(ev.data));
+          return;
+        }
+        var m = L.safeJsonParse(ev.data);
+        if (!m) return;
+        if (m.op === "closed") {
+          lost(L.toText(m.reason) || "serial port closed");
+          return;
+        }
+        if (pending && (m.op === pending.expect || m.op === "error")) {
+          var p = pending;
+          pending = null;
+          if (m.op === "error") p.reject(new Error(L.toText(m.msg)));
+          else p.resolve(m);
+        } else if (m.op === "error") {
+          console.warn("Voyager Link:", m.msg);
+        }
+      };
+    });
+  }
+
+  function call(obj, expect) {
+    return connectWs().then(function () {
+      return new Promise(function (resolve, reject) {
+        pending = { resolve: resolve, reject: reject, expect: expect };
+        ws.send(JSON.stringify(obj));
+      });
+    });
+  }
+
+  return {
+    kind: "helper",
+    label: "Voyager Link " + helper.version,
+    needsPortList: true,
+    listPorts: function () {
+      return call({ op: "list" }, "ports").then(function (m) {
+        return Array.isArray(m.ports) ? m.ports : [];
+      });
+    },
+    open: function (name) {
+      closing = false;
+      return call({ op: "open", port: name, baud: SERIAL_BAUD }, "opened").then(function () {
+        return name;
+      });
+    },
+    write: function (bytes) {
+      if (ws && ws.readyState === 1) ws.send(bytes);
+    },
+    onData: listeners.add,
+    onClose: function (cb) {
+      closeCb = cb;
+    },
+    close: function () {
+      closing = true;
+      listeners.clear();
+      if (ws) {
+        try {
+          ws.send(JSON.stringify({ op: "close" }));
+          ws.close();
+        } catch (e) {}
+        ws = null;
+      }
+      return Promise.resolve();
+    },
+  };
+}
+
+function randomId() {
+  var b = new Uint8Array(4);
+  if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(b);
+  else for (var i = 0; i < 4; i++) b[i] = Math.floor(Math.random() * 256);
+  return Array.prototype.map
+    .call(b, function (x) {
+      return ("0" + x.toString(16)).slice(-2);
+    })
+    .join("");
+}
+
+var serialTransfer = (function () {
+  var transport = null;
+  var connected = false;
+  var transferActive = false;
+  var role = "sender";
+  var ymodemTimeout = 30000;
+  var ymodemInstance = null;
+
+  // sender
+  var selectedFile = null;
+  var txId = "";
+  var participants = []; // {name, mac, nonce}
+  var chosenNonce = "";
+
+  // receiver
+  var invitations = []; // {txId, sender, mac, fileName, size}
+  var joined = null; // {txId, nonce, inv}
+  var receivedData = null;
+  var receivedFileName = "";
+
   function init() {
-    if (!isSupported()) {
-      setText("serialStatus", "Web Serial API not supported. Use Chrome or Edge.");
-      setDisabled("connectSerialBtn", true);
-      return;
-    }
+    // Page re-entered: drop whatever the previous visit left open.
+    if (ymodemInstance) ymodemInstance.cancel();
+    ymodemInstance = null;
+    if (transport) transport.close();
+    transport = null;
+    var keepInvitations = invitations; // heard while another page was shown
+    resetState();
+    invitations = keepInvitations;
 
-    // Mode selection
-    document.querySelectorAll('input[name="serial_mode"]').forEach(function (radio) {
-      radio.addEventListener("change", onModeChange);
-    });
-
-    // Role selection
-    document.querySelectorAll('input[name="serial_role"]').forEach(function (radio) {
-      radio.addEventListener("change", onRoleChange);
-    });
-
-    // Buttons
+    byId("helperDownloadLink").href = HELPER_DOWNLOAD_URL;
+    byId("helperRetryBtn").addEventListener("click", detectTransport);
     byId("connectSerialBtn").addEventListener("click", connect);
+    byId("refreshPortsBtn").addEventListener("click", refreshPorts);
     byId("disconnectSerialBtn").addEventListener("click", disconnect);
     byId("inviteBtn").addEventListener("click", sendInvitation);
     byId("startSerialTransferBtn").addEventListener("click", startTransfer);
-    byId("cancelSerialTransferBtn").addEventListener("click", cancelTransfer);
+    byId("cancelSerialTransferBtn").addEventListener("click", function () {
+      endTransfer(false, "Transfer cancelled.", true);
+    });
     byId("serialDownloadBtn").addEventListener("click", downloadReceivedFile);
     byId("serialResetBtn").addEventListener("click", resetTransfer);
-
-    // File input
-    var fileInput = byId("serialSendFile");
-    if (fileInput) {
-      fileInput.addEventListener("change", function () {
-        selectedFile = fileInput.files && fileInput.files[0];
-        updateSenderUI();
+    document.querySelectorAll('input[name="serial_role"]').forEach(function (radio) {
+      radio.addEventListener("change", function () {
+        role = radio.value === "receiver" ? "receiver" : "sender";
+        updateUI();
       });
-    }
+    });
+    var fileInput = byId("serialSendFile");
+    fileInput.addEventListener("change", function () {
+      selectedFile = (fileInput.files && fileInput.files[0]) || null;
+      txId = "";
+      participants = [];
+      chosenNonce = "";
+      byId("participantsSection").hidden = true;
+      setText("serialSenderStatus", "");
+      updateUI();
+    });
 
-    resetState();
+    // Block timeout follows the radio settings (SF12 needs minutes, not 30 s).
+    get_config("lora_config.json").then(
+      function (cfg) {
+        ymodemTimeout = L.ymodemTimeoutMs(cfg);
+      },
+      function () {}
+    );
+
+    renderInvitations();
     updateUI();
+    detectTransport();
   }
 
   function resetState() {
     connected = false;
     transferActive = false;
     role = "sender";
-    participants = [];
-    invitations = [];
     selectedFile = null;
+    txId = "";
+    participants = [];
+    chosenNonce = "";
+    invitations = [];
+    joined = null;
     receivedData = null;
     receivedFileName = "";
   }
 
-  function onModeChange() {
-    var mode = getSelectedMode();
-    var notice = byId("btModeNotice");
-    if (mode === "bt") {
-      notice.textContent =
-        "Bluetooth will be enabled when you click Connect. " +
-        "Pair 'Voyager_XXXX' in your OS Bluetooth settings, " +
-        "then select the Bluetooth serial port.";
-      notice.hidden = false;
-    } else {
-      notice.hidden = true;
-    }
-  }
+  /* ---------- connection ---------- */
 
-  function onRoleChange() {
-    role = getSelectedRole();
-    updateUI();
-  }
-
-  function getSelectedMode() {
-    var radios = document.querySelectorAll('input[name="serial_mode"]');
-    for (var i = 0; i < radios.length; i++) {
-      if (radios[i].checked) return radios[i].value;
-    }
-    return "usb";
-  }
-
-  function getSelectedRole() {
-    var radios = document.querySelectorAll('input[name="serial_role"]');
-    for (var i = 0; i < radios.length; i++) {
-      if (radios[i].checked) return radios[i].value;
-    }
-    return "sender";
-  }
-
-  // Connect to serial port
-  async function connect() {
-    if (!isSupported()) {
-      alertText("Web Serial API not supported. Use Chrome or Edge.");
+  function detectTransport() {
+    byId("helperMissing").hidden = true;
+    setDisabled("connectSerialBtn", true);
+    if (webSerialAvailable()) {
+      useTransport(createWebSerialTransport(), "Using the browser's Web Serial.");
       return;
     }
-
-    var mode = getSelectedMode();
-    if (mode === "bt") {
-      // Start Bluetooth on demand (no reboot needed)
-      ws_send({ "request-type": "set_bt_mode", value: true });
-      setText("serialStatus", "Starting Bluetooth... Pair device in OS settings, then select port.");
-    }
-
-    try {
-      port = await navigator.serial.requestPort();
-      await port.open({ baudRate: 115200 });
-
-      // Set up binary reader/writer (no text encoding for YMODEM)
-      reader = port.readable.getReader();
-      writer = port.writable.getWriter();
-
-      connected = true;
-      setText("serialStatus", "Connected to serial port");
-      byId("disconnectSerialBtn").hidden = false;
-      byId("btModeNotice").hidden = true;
-
-      updateUI();
-
-      // Start reading loop (handle in background)
-      readLoop();
-    } catch (e) {
-      console.error("Serial connect error:", e);
-      if (e.name === "NotFoundError") {
-        setText("serialStatus", "No port selected");
-      } else {
-        setText("serialStatus", "Connection failed: " + (e.message || "unknown error"));
-      }
-    }
-  }
-
-  // Read loop for incoming serial data (binary)
-  async function readLoop() {
-    try {
-      while (port && port.readable && reader) {
-        var result = await reader.read();
-        if (result.done) {
-          break;
-        }
-        if (result.value) {
-          handleSerialData(result.value);
-        }
-      }
-    } catch (e) {
-      if (e.name !== "TypeError") { // Ignore errors from port closing
-        console.error("Serial read error:", e);
-      }
-    }
-  }
-
-  function handleSerialData(data) {
-    // data is Uint8Array - dispatch to any registered callbacks (YMODEM)
-    for (var i = 0; i < dataCallbacks.length; i++) {
-      try {
-        dataCallbacks[i](data);
-      } catch (e) {
-        console.error("Serial data callback error:", e);
-      }
-    }
-  }
-
-  function registerDataCallback(cb) {
-    dataCallbacks.push(cb);
-  }
-
-  function unregisterDataCallback(cb) {
-    var idx = dataCallbacks.indexOf(cb);
-    if (idx >= 0) dataCallbacks.splice(idx, 1);
-  }
-
-  // Write binary data to serial port
-  async function writeSerial(data) {
-    if (!writer) return false;
-    try {
-      var arr = data instanceof Uint8Array ? data : new Uint8Array(data);
-      await writer.write(arr);
-      return true;
-    } catch (e) {
-      console.error("Serial write error:", e);
-      return false;
-    }
-  }
-
-  // Disconnect from serial port
-  async function disconnect() {
-    // Cancel any active YMODEM transfer
-    if (ymodemInstance && ymodemInstance.cancel) {
-      ymodemInstance.cancel();
-      ymodemInstance = null;
-    }
-    dataCallbacks = [];
-
-    try {
-      if (reader) {
-        await reader.cancel().catch(function () {});
-        reader.releaseLock();
-        reader = null;
-      }
-      if (writer) {
-        writer.releaseLock();
-        writer = null;
-      }
-      if (port) {
-        await port.close();
-        port = null;
-      }
-    } catch (e) {
-      console.error("Serial disconnect error:", e);
-    }
-
-    connected = false;
-    setText("serialStatus", "Disconnected");
-    byId("disconnectSerialBtn").hidden = true;
-    updateUI();
-  }
-
-  // Send file transfer invitation via WebSocket
-  function sendInvitation() {
-    if (!selectedFile) {
-      alertText("Select a file first.");
-      return;
-    }
-    ws_send({
-      "request-type": "file_tx_invite",
-      fileName: selectedFile.name,
-      fileSize: selectedFile.size,
-    });
-    byId("participantsSection").hidden = false;
-    setText("serialTransferStatus", "Invitation sent, waiting for participants...");
-  }
-
-  // Join a file transfer (receiver side)
-  function joinTransfer(senderMac, mode) {
-    ws_send({
-      "request-type": "file_tx_join",
-      sender_mac: senderMac,
-      mode: mode || "serial",
-    });
-  }
-
-  // Start the transfer (sender side)
-  function startTransfer() {
-    if (!selectedFile || participants.length === 0) {
-      alertText("No participants have joined yet.");
-      return;
-    }
-    if (!connected) {
-      alertText("Serial port is not connected.");
-      return;
-    }
-
-    transferActive = true;
-    ws_send({ "request-type": "file_tx_start" });
-    showProgressStep();
-
-    // Read file and start YMODEM transfer
-    var fileReader = new FileReader();
-    fileReader.onerror = function () {
-      endTransfer(false, "Could not read the file.");
-    };
-    fileReader.onload = function () {
-      var fileData = new Uint8Array(fileReader.result);
-      setText("serialTransferStatus", "Starting YMODEM transfer...");
-      setSerialProgress(0);
-
-      if (typeof YMODEM === "undefined") {
-        endTransfer(false, "YMODEM module not loaded.");
+    setText("serialLinkStatus", "Looking for Voyager Link on this computer...");
+    findHelper().then(function (helper) {
+      if (!byId("serialLinkStatus")) return; // page changed meanwhile
+      if (!helper) {
+        setText("serialLinkStatus", "Voyager Link is not running.");
+        byId("helperMissing").hidden = false;
         return;
       }
-
-      ymodemInstance = YMODEM.createSender({
-        file: { name: selectedFile.name, size: fileData.length, data: fileData },
-        write: function (bytes) {
-          writeSerial(bytes);
-        },
-        onData: function (callback) {
-          registerDataCallback(callback);
-        },
-        onProgress: function (sent, total) {
-          var pct = total > 0 ? (sent / total) * 100 : 0;
-          setSerialProgress(pct);
-          setText("serialTransferStatus", "Sending: " + sent + " / " + total + " bytes");
-        },
-        onComplete: function (success, error) {
-          unregisterDataCallback(ymodemInstance._dataCallback);
-          ymodemInstance = null;
-          if (success) {
-            endTransfer(true, "File sent successfully!");
-          } else {
-            endTransfer(false, "Transfer failed: " + (error || "unknown error"));
-          }
-        },
-        timeout: 30000 // 30s timeout for LoRa latency
-      });
-
-      // Store callback reference for cleanup
-      ymodemInstance._dataCallback = ymodemInstance._internalDataCallback;
-      ymodemInstance.start();
-    };
-    fileReader.readAsArrayBuffer(selectedFile);
+      useTransport(createHelperTransport(helper), "Connected to Voyager Link " + helper.version + ".");
+      refreshPorts();
+    });
   }
 
-  // Cancel the transfer
-  function cancelTransfer() {
-    if (ymodemInstance && ymodemInstance.cancel) {
-      ymodemInstance.cancel();
-      if (ymodemInstance._dataCallback) {
-        unregisterDataCallback(ymodemInstance._dataCallback);
+  function useTransport(t, statusText) {
+    transport = t;
+    transport.onClose(function (reason) {
+      if (!connected) return;
+      connected = false;
+      setText("serialStatus", "Disconnected: " + reason);
+      if (transferActive) endTransfer(false, "Serial link lost: " + reason, true);
+      updateUI();
+    });
+    setText("serialLinkStatus", statusText);
+    byId("serialPortField").hidden = !t.needsPortList;
+    byId("refreshPortsBtn").hidden = !t.needsPortList;
+    setDisabled("connectSerialBtn", t.needsPortList); // enabled once ports are listed
+  }
+
+  function refreshPorts() {
+    if (!transport || !transport.needsPortList) return;
+    transport.listPorts().then(
+      function (ports) {
+        var sel = byId("serialPortSelect");
+        if (!sel) return;
+        sel.replaceChildren();
+        // Likely ESP32 bridges (CP210x, CH340, ...) first.
+        ports.sort(function (a, b) {
+          return (b.likely ? 1 : 0) - (a.likely ? 1 : 0);
+        });
+        ports.forEach(function (p) {
+          var label = L.toText(p.name) + (p.desc ? " - " + L.toText(p.desc) : "");
+          if (p.likely) label += " (Voyager?)";
+          var opt = el("option", "", label);
+          opt.value = L.toText(p.name);
+          sel.append(opt);
+        });
+        if (ports.length === 0) {
+          var none = el("option", "", "No serial ports found - plug in the device");
+          none.value = "";
+          sel.append(none);
+        }
+        setDisabled("connectSerialBtn", ports.length === 0 || connected);
+      },
+      function (e) {
+        setText("serialStatus", "Could not list ports: " + e.message);
       }
-      ymodemInstance = null;
-    }
-    transferActive = false;
-    ws_send({ "request-type": "file_tx_end" });
-    endTransfer(false, "Transfer cancelled.");
+    );
   }
 
-  // End the transfer (show result)
-  function endTransfer(success, message) {
-    transferActive = false;
-    ws_send({ "request-type": "file_tx_end" });
+  async function connect() {
+    if (!transport) return;
+    var name = transport.needsPortList ? byId("serialPortSelect").value : "";
+    if (transport.needsPortList && !name) return;
+    setDisabled("connectSerialBtn", true);
+    setText("serialStatus", "Connecting...");
+    try {
+      var what = await transport.open(name);
+      connected = true;
+      setText("serialStatus", "Connected to " + what + " (" + transport.label + ")");
+    } catch (e) {
+      connected = false;
+      setText(
+        "serialStatus",
+        e && e.name === "NotFoundError" ? "No port selected" : "Connection failed: " + ((e && e.message) || "unknown error")
+      );
+    }
+    updateUI();
+  }
 
+  async function disconnect() {
+    if (transferActive) endTransfer(false, "Transfer cancelled.", true);
+    connected = false;
+    if (transport) await transport.close();
+    setText("serialStatus", "Disconnected");
+    updateUI();
+    refreshPorts();
+  }
+
+  /* ---------- handshake ---------- */
+
+  function sendInvitation() {
+    if (!selectedFile || !connected) return;
+    txId = randomId();
+    participants = [];
+    chosenNonce = "";
+    renderParticipants();
+    var inner = L.buildFileTxInvite(txId, selectedFile.name, selectedFile.size);
+    var chk = L.checkPayload(state.username, inner);
+    if (!chk.ok) {
+      alertText("File name too long to announce over LoRa. Rename the file and try again.");
+      return;
+    }
+    byId("participantsSection").hidden = false;
+    setDisabled("inviteBtn", true);
+    setText("serialSenderStatus", "Broadcasting invitation...");
+    lora_tx("/lora_transmit", inner, function (r) {
+      setDisabled("inviteBtn", false);
+      setText(
+        "serialSenderStatus",
+        r.ok
+          ? "Invitation delivered. Waiting for a receiver to accept..."
+          : "No device acknowledged the invitation (" + r.reason + "). Receivers may still see it; you can broadcast again."
+      );
+      updateUI();
+    });
+  }
+
+  // lora_rx actions file_tx_* (called from handle_lora_rx).
+  function handleLoraAction(msg) {
+    if (msg.action === "file_tx_invite") onInvite(msg);
+    else if (msg.action === "file_tx_join") onJoin(msg);
+    else if (msg.action === "file_tx_go") onGo(msg);
+  }
+
+  function onInvite(msg) {
+    if (!msg.txId) return;
+    for (var i = 0; i < invitations.length; i++) if (invitations[i].txId === msg.txId) return;
+    invitations.push({
+      txId: msg.txId,
+      sender: msg.sender,
+      mac: msg.mac,
+      fileName: msg.fileName || "file",
+      size: Number(msg.size) || 0,
+    });
+    if (byId("invitationList")) {
+      renderInvitations();
+      updateUI();
+    }
+  }
+
+  function onJoin(msg) {
+    if (!txId || msg.txId !== txId || !msg.nonce || transferActive) return;
+    for (var i = 0; i < participants.length; i++) if (participants[i].nonce === msg.nonce) return;
+    participants.push({ name: msg.sender, mac: msg.mac, nonce: msg.nonce });
+    if (!chosenNonce) chosenNonce = msg.nonce;
+    renderParticipants();
+    updateUI();
+  }
+
+  function onGo(msg) {
+    if (!joined || msg.txId !== joined.txId || transferActive) return;
+    if (msg.nonce !== joined.nonce) {
+      setText("serialReceiverStatus", joined.inv.sender + " chose another receiver for " + joined.inv.fileName + ".");
+      joined = null;
+      renderInvitations();
+      return;
+    }
+    startReceiving(joined.inv);
+  }
+
+  function acceptInvitation(inv) {
+    if (!connected) {
+      alertText("Connect the serial port first.");
+      return;
+    }
+    var nonce = randomId();
+    joined = { txId: inv.txId, nonce: nonce, inv: inv };
+    renderInvitations();
+    setText("serialReceiverStatus", "Joining " + inv.sender + "'s transfer...");
+    lora_tx_retry("/lora_transmit", L.buildFileTxJoin(inv.txId, nonce), 2, function (r) {
+      if (!joined || joined.nonce !== nonce || transferActive) return;
+      if (r.ok) {
+        setText("serialReceiverStatus", "Joined. Waiting for " + inv.sender + " to start the transfer...");
+      } else {
+        joined = null;
+        renderInvitations();
+        setText("serialReceiverStatus", "Could not reach " + inv.sender + ": " + r.reason + ".");
+      }
+    });
+  }
+
+  /* ---------- transfer ---------- */
+
+  function startTransfer() {
+    var p = chosenParticipant();
+    if (!selectedFile || !p || !connected || transferActive) return;
+    transferActive = true;
+    receivedData = null;
+    showProgressStep();
+    setSerialProgress(0);
+    setText("serialTransferStatus", "Preparing " + selectedFile.name + "...");
+
+    var fr = new FileReader();
+    fr.onerror = function () {
+      endTransfer(false, "Could not read the file.", false);
+    };
+    fr.onload = function () {
+      if (!transferActive) return;
+      var data = new Uint8Array(fr.result);
+      ws_send({ "request-type": "file_tx_start" });
+      setTimeout(function () {
+        if (!transferActive) return;
+        // Start listening before telling the receiver to go, so its first 'C' is not missed.
+        ymodemInstance = YMODEM.createSender({
+          file: { name: selectedFile.name, size: data.length, data: data },
+          write: transport.write,
+          onData: transport.onData,
+          timeout: ymodemTimeout,
+          onProgress: function (sent, total) {
+            setSerialProgress(total > 0 ? (sent / total) * 100 : 0);
+            setText("serialTransferStatus", "Sending: " + L.formatSize(sent) + " / " + L.formatSize(total));
+          },
+          onComplete: function (ok, err) {
+            ymodemInstance = null;
+            endTransfer(ok, ok ? "File sent to " + p.name + "." : "Transfer failed: " + (err || "unknown error"), false);
+          },
+        });
+        ymodemInstance.start();
+        setText("serialTransferStatus", "Asking " + p.name + " to start...");
+        lora_tx_retry(
+          "/lora_transmit",
+          L.buildFileTxGo(txId, p.nonce),
+          2,
+          function (r) {
+            if (!transferActive) return;
+            if (r.ok) setText("serialTransferStatus", "Waiting for " + p.name + " to request the file...");
+            else endTransfer(false, "Could not reach " + p.name + ": " + r.reason + ".", true);
+          },
+          function () {
+            return !transferActive;
+          }
+        );
+      }, BRIDGE_SETTLE_MS);
+    };
+    fr.readAsArrayBuffer(selectedFile);
+  }
+
+  function startReceiving(inv) {
+    transferActive = true;
+    receivedData = null;
+    receivedFileName = inv.fileName;
+    showProgressStep();
+    setSerialProgress(0);
+    setText("serialTransferStatus", "Starting to receive " + inv.fileName + " from " + inv.sender + "...");
+    ws_send({ "request-type": "file_tx_start" });
+    setTimeout(function () {
+      if (!transferActive) return;
+      ymodemInstance = YMODEM.createReceiver({
+        write: transport.write,
+        onData: transport.onData,
+        timeout: ymodemTimeout,
+        onFileStart: function (name) {
+          receivedFileName = name || inv.fileName;
+          setText("serialTransferStatus", "Receiving " + receivedFileName + "...");
+        },
+        onProgress: function (got, total) {
+          var t = total > 0 ? total : inv.size;
+          setSerialProgress(t > 0 ? (got / t) * 100 : 0);
+          setText("serialTransferStatus", "Receiving: " + L.formatSize(got) + " / " + L.formatSize(t));
+        },
+        onComplete: function (ok, data, err) {
+          ymodemInstance = null;
+          if (ok && data) receivedData = data;
+          endTransfer(
+            ok && !!data,
+            ok ? "Received " + receivedFileName + " (" + L.formatSize(data ? data.length : 0) + ")." : "Receive failed: " + (err || "unknown error"),
+            false
+          );
+        },
+      });
+      ymodemInstance.start();
+    }, BRIDGE_SETTLE_MS);
+  }
+
+  // cancel=true aborts a running YMODEM session (sends CAN to the peer).
+  function endTransfer(success, message, cancel) {
+    if (cancel && ymodemInstance) ymodemInstance.cancel();
+    ymodemInstance = null;
+    var wasActive = transferActive;
+    transferActive = false;
+    joined = null;
+    if (wasActive) ws_send({ "request-type": "file_tx_end" });
+    if (!byId("serial_step_result")) return; // page changed meanwhile
     byId("serial_step_progress").hidden = true;
     byId("serial_step_result").hidden = false;
-
     var resultEl = byId("serialResultMessage");
     resultEl.textContent = message;
     resultEl.classList.toggle("text-ok", success);
     resultEl.classList.toggle("text-bad", !success);
-
-    if (success && role === "receiver" && receivedData) {
-      byId("serialDownloadBtn").hidden = false;
-    }
+    byId("serialDownloadBtn").hidden = !(success && receivedData);
   }
 
-  // Download received file
   function downloadReceivedFile() {
-    if (!receivedData) {
-      alertText("No file to download.");
-      return;
-    }
+    if (!receivedData) return;
     save_blob(new Blob([receivedData]), receivedFileName || "Voyager_Serial_Download");
   }
 
-  // Reset for a new transfer
   function resetTransfer() {
-    resetState();
-    updateUI();
+    txId = "";
+    participants = [];
+    chosenNonce = "";
+    invitations = [];
+    joined = null;
+    receivedData = null;
     byId("serial_step_result").hidden = true;
     byId("serial_step_progress").hidden = true;
     byId("serialDownloadBtn").hidden = true;
     byId("participantsSection").hidden = true;
-    byId("invitationsSection").hidden = true;
+    setText("serialSenderStatus", "");
+    setText("serialReceiverStatus", "");
+    renderInvitations();
+    updateUI();
   }
 
-  // Update UI based on state
+  /* ---------- rendering ---------- */
+
+  function chosenParticipant() {
+    for (var i = 0; i < participants.length; i++) if (participants[i].nonce === chosenNonce) return participants[i];
+    return null;
+  }
+
   function updateUI() {
-    var roleFieldset = byId("serial_step_role");
-    var senderFieldset = byId("serial_step_sender");
-    var receiverFieldset = byId("serial_step_receiver");
-
-    roleFieldset.disabled = !connected;
-
-    senderFieldset.hidden = !connected || role !== "sender";
-    receiverFieldset.hidden = !connected || role !== "receiver";
-
-    updateSenderUI();
-    updateReceiverUI();
-  }
-
-  function updateSenderUI() {
-    var hasFile = !!selectedFile;
-    var hasParticipants = participants.length > 0;
-    setDisabled("inviteBtn", !hasFile || !connected);
-    setDisabled("startSerialTransferBtn", !hasFile || !hasParticipants || !connected);
-  }
-
-  function updateReceiverUI() {
-    var hasInvitations = invitations.length > 0;
-    byId("receiverWaiting").hidden = hasInvitations;
-    byId("invitationsSection").hidden = !hasInvitations;
+    if (!byId("serial_step_role")) return;
+    var busy = transferActive || !byId("serial_step_result").hidden;
+    byId("serial_step_role").disabled = !connected || transferActive;
+    byId("serial_step_sender").hidden = busy || !connected || role !== "sender";
+    byId("serial_step_receiver").hidden = busy || !connected || role !== "receiver";
+    byId("disconnectSerialBtn").hidden = !connected;
+    setDisabled("connectSerialBtn", connected || !transport || (transport.needsPortList && !byId("serialPortSelect").value));
+    setDisabled("serialPortSelect", connected);
+    setDisabled("inviteBtn", !selectedFile || !connected);
+    setDisabled("startSerialTransferBtn", !selectedFile || !connected || !chosenParticipant());
+    byId("participantsEmpty").hidden = participants.length > 0;
+    byId("receiverWaiting").hidden = invitations.length > 0;
+    byId("invitationsSection").hidden = invitations.length === 0;
   }
 
   function showProgressStep() {
     byId("serial_step_sender").hidden = true;
     byId("serial_step_receiver").hidden = true;
+    byId("serial_step_result").hidden = true;
     byId("serial_step_progress").hidden = false;
+    byId("serial_step_role").disabled = true;
   }
 
   function setSerialProgress(percent) {
@@ -1861,131 +2161,52 @@ var serialTransfer = (function () {
     bar.setAttribute("aria-valuenow", String(Math.round(p)));
   }
 
-  // Handle WebSocket message for file transfer invitation (receiver side)
-  function handleInvitation(msg) {
-    var inv = {
-      senderMac: L.toText(msg.sender_mac),
-      senderName: L.toText(msg.sender_name),
-      fileName: L.toText(msg.fileName),
-      fileSize: msg.fileSize || 0,
-    };
-    invitations.push(inv);
-    renderInvitations();
-    updateReceiverUI();
-  }
-
-  // Handle WebSocket message for participant joined (sender side)
-  function handleParticipant(msg) {
-    var p = {
-      mac: L.toText(msg.mac),
-      name: L.toText(msg.name),
-    };
-    // Avoid duplicates
-    for (var i = 0; i < participants.length; i++) {
-      if (participants[i].mac === p.mac) return;
-    }
-    participants.push(p);
-    renderParticipants();
-    updateSenderUI();
-  }
-
   function renderParticipants() {
     var ul = byId("participantList");
+    if (!ul) return;
     ul.replaceChildren();
     participants.forEach(function (p) {
       var li = el("li", "spread");
-      li.append(el("span", "", p.name || p.mac));
+      var label = el("label", "switch");
+      var radio = el("input");
+      radio.type = "radio";
+      radio.name = "serial_participant";
+      radio.checked = p.nonce === chosenNonce;
+      radio.addEventListener("change", function () {
+        chosenNonce = p.nonce;
+        updateUI();
+      });
+      label.append(radio, el("span", "", p.name || p.mac));
+      li.append(label);
       ul.append(li);
     });
   }
 
   function renderInvitations() {
     var ul = byId("invitationList");
+    if (!ul) return;
     ul.replaceChildren();
-    invitations.forEach(function (inv, idx) {
+    invitations.forEach(function (inv) {
       var li = el("li", "spread");
       var info = el("span", "");
       info.append(el("b", "", inv.fileName));
-      info.append(document.createTextNode(" from " + (inv.senderName || inv.senderMac)));
-      info.append(document.createTextNode(" (" + L.formatSize(inv.fileSize) + ")"));
+      info.append(document.createTextNode(" from " + inv.sender + " (" + L.formatSize(inv.size) + ")"));
       li.append(info);
-
-      var btn = el("button", "btn primary", "Accept");
+      var mine = joined && joined.txId === inv.txId;
+      var btn = el("button", "btn primary", mine ? "Joined" : "Accept");
+      btn.type = "button";
+      btn.disabled = !!joined;
       btn.addEventListener("click", function () {
-        acceptInvitation(idx);
+        acceptInvitation(inv);
       });
       li.append(btn);
       ul.append(li);
     });
-  }
-
-  function acceptInvitation(idx) {
-    var inv = invitations[idx];
-    if (!inv) return;
-    if (!connected) {
-      alertText("Connect to a serial port first.");
-      return;
-    }
-    joinTransfer(inv.senderMac, "serial");
-    receivedFileName = inv.fileName;
-    showProgressStep();
-    setText("serialTransferStatus", "Starting YMODEM receiver...");
-    setSerialProgress(0);
-    transferActive = true;
-
-    if (typeof YMODEM === "undefined") {
-      endTransfer(false, "YMODEM module not loaded.");
-      return;
-    }
-
-    // Enable serial bridge on our device
-    ws_send({ "request-type": "file_tx_start" });
-
-    // Start YMODEM receiver
-    var expectedSize = inv.fileSize || 0;
-    ymodemInstance = YMODEM.createReceiver({
-      write: function (bytes) {
-        writeSerial(bytes);
-      },
-      onData: function (callback) {
-        registerDataCallback(callback);
-        // Store for cleanup
-        ymodemInstance._dataCallback = callback;
-      },
-      onFileStart: function (name, size) {
-        receivedFileName = name || inv.fileName;
-        setText("serialTransferStatus", "Receiving: " + receivedFileName);
-      },
-      onProgress: function (received, total) {
-        var t = total > 0 ? total : expectedSize;
-        var pct = t > 0 ? (received / t) * 100 : 0;
-        setSerialProgress(pct);
-        setText("serialTransferStatus", "Receiving: " + received + " / " + t + " bytes");
-      },
-      onComplete: function (success, fileData, error) {
-        if (ymodemInstance && ymodemInstance._dataCallback) {
-          unregisterDataCallback(ymodemInstance._dataCallback);
-        }
-        ymodemInstance = null;
-        if (success && fileData) {
-          receivedData = fileData;
-          endTransfer(true, "File received successfully: " + receivedFileName);
-        } else {
-          endTransfer(false, "Receive failed: " + (error || "unknown error"));
-        }
-      },
-      timeout: 30000
-    });
-
-    ymodemInstance.start();
+    updateUI();
   }
 
   return {
     init: init,
-    isSupported: isSupported,
-    connect: connect,
-    disconnect: disconnect,
-    handleInvitation: handleInvitation,
-    handleParticipant: handleParticipant,
+    handleLoraAction: handleLoraAction,
   };
 })();

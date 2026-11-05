@@ -396,7 +396,9 @@ static void handle_rx_frame(const uint8_t* buf, size_t n, int rssi, float snr)
         oled_lora_packet(false, true, rssi, snr);
         DebugQueueParam* d = new (std::nothrow) DebugQueueParam();
         if (d == NULL) return;
-        d->message = text;
+        // Binary-safe: YMODEM bytes include 0x00, so copy by length, never via strlen.
+        d->message.concat((const char*)p.payload, p.len);
+        if (d->message.length() != p.len) { delete d; return; }
         if (xQueueSend(serial_packet_rec, &d, 0) != pdTRUE) delete d;
         return;
     }

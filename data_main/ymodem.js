@@ -314,21 +314,23 @@ var YMODEM = (function () {
         collect();
       },
 
-      // Internal: process buffer against waiting callbacks
+      // Internal: process buffer against waiting callbacks. While someone is waiting,
+      // bytes nobody expects are discarded: over a lossy LoRa link stray control bytes
+      // and tails of broken blocks are normal, and leaving them at the head of the
+      // buffer would stall every later expect() (head-of-line deadlock).
       _process: function () {
-        if (buffer.length === 0 || callbacks.length === 0) return;
-
-        var byte = buffer[0];
-        for (var i = 0; i < callbacks.length; i++) {
-          var entry = callbacks[i];
-          if (entry.resolved) continue;
-          if (entry.expected.indexOf(byte) >= 0) {
-            entry.resolved = true;
-            if (entry.timer) clearTimeout(entry.timer);
-            callbacks.splice(i, 1);
-            buffer.shift();
-            entry.callback(byte, false);
-            return;
+        while (buffer.length > 0 && callbacks.length > 0) {
+          var byte = buffer.shift();
+          for (var i = 0; i < callbacks.length; i++) {
+            var entry = callbacks[i];
+            if (entry.resolved) continue;
+            if (entry.expected.indexOf(byte) >= 0) {
+              entry.resolved = true;
+              if (entry.timer) clearTimeout(entry.timer);
+              callbacks.splice(i, 1);
+              entry.callback(byte, false);
+              return;
+            }
           }
         }
       },
@@ -468,13 +470,25 @@ var YMODEM = (function () {
             waitForBlock0Ack();
           }
 
+          var block0Tries = 0;
+
           function waitForBlock0Ack() {
-            var nakCount = 0;
             function wait() {
               if (cancelled) return;
-              parser.expect([ACK, NAK, CAN], timeout, function (byte, timedOut) {
+              // 'C' here means the receiver never got block 0 (or its ACK was lost):
+              // resend block 0, the receiver ACKs a duplicate and asks for data again.
+              parser.expect([ACK, NAK, CAN, C], timeout, function (byte, timedOut) {
+                var nakCount = ++block0Tries;
+                if (byte === C) {
+                  if (nakCount >= MAX_RETRIES) {
+                    sendCancel();
+                    fail("Receiver keeps requesting block 0");
+                    return;
+                  }
+                  sendBlock0();
+                  return;
+                }
                 if (timedOut) {
-                  nakCount++;
                   if (nakCount >= MAX_CONSECUTIVE_NAK) {
                     sendCancel();
                     fail("Timeout waiting for block 0 ACK");
@@ -488,8 +502,7 @@ var YMODEM = (function () {
                   return;
                 }
                 if (byte === NAK) {
-                  nakCount++;
-                  if (nakCount >= MAX_CONSECUTIVE_NAK) {
+                  if (nakCount >= MAX_RETRIES) {
                     sendCancel();
                     fail("Too many NAKs on block 0");
                     return;
@@ -498,17 +511,24 @@ var YMODEM = (function () {
                   return;
                 }
                 // ACK received, wait for 'C' to start data
-                waitForDataC();
+                waitForDataC(0);
               });
             }
             wait();
           }
 
-          function waitForDataC() {
+          // A NAK here is the receiver's "still waiting for block 1" (sent on its
+          // timeout when our 'C' wait missed its request), so it starts data too.
+          function waitForDataC(tries) {
             if (cancelled) return;
-            parser.expect([C, CAN], timeout, function (byte, timedOut) {
+            parser.expect([C, NAK, CAN], timeout, function (byte, timedOut) {
               if (timedOut) {
-                fail("Timeout waiting for data start");
+                if (tries + 1 >= MAX_CONSECUTIVE_NAK) {
+                  sendCancel();
+                  fail("Timeout waiting for data start");
+                  return;
+                }
+                waitForDataC(tries + 1);
                 return;
               }
               if (byte === CAN) {
@@ -565,8 +585,10 @@ var YMODEM = (function () {
                   return;
                 }
                 if (byte === NAK) {
+                  // Shares the MAX_RETRIES budget with timeouts: a lost LoRa packet
+                  // shows up as a CRC NAK, and that is routine, not a reason to abort.
                   nakCount++;
-                  if (nakCount >= MAX_CONSECUTIVE_NAK) {
+                  if (nakCount >= MAX_RETRIES) {
                     sendCancel();
                     fail("Too many NAKs");
                     return;
@@ -814,14 +836,29 @@ var YMODEM = (function () {
           });
         }
 
+        var dataErrors = 0; // consecutive bad/missing blocks
+
+        function nakAndRetry(reason) {
+          dataErrors++;
+          if (dataErrors >= MAX_RETRIES) {
+            sendCancel();
+            fail("Too many errors receiving data: " + reason);
+            return;
+          }
+          // Purge the line before NAK (standard YMODEM): the tail of a broken block
+          // must not be read as the start of the retransmission.
+          parser.clear();
+          sendByte(NAK);
+          receiveDataBlocks();
+        }
+
         function receiveDataBlocks() {
           if (cancelled) return;
 
           parser.expectBlock(timeout, function (block, err) {
             if (err) {
               // CRC error or timeout - send NAK
-              sendByte(NAK);
-              receiveDataBlocks();
+              nakAndRetry(err);
               return;
             }
 
@@ -842,9 +879,20 @@ var YMODEM = (function () {
             }
 
             if (block.type === "data") {
+              // Block 0 again before any data: our ACK (or 'C') was lost and the
+              // sender is still waiting for it. ACK and ask for data again.
+              if (expectedBlockNum === 1 && block.blockNum === 0) {
+                dataErrors = 0;
+                sendByte(ACK);
+                sendByte(C);
+                receiveDataBlocks();
+                return;
+              }
+
               // Verify block number
               if (block.blockNum === ((expectedBlockNum - 1) & 0xff)) {
                 // Duplicate block, ACK but don't store
+                dataErrors = 0;
                 sendByte(ACK);
                 receiveDataBlocks();
                 return;
@@ -852,12 +900,12 @@ var YMODEM = (function () {
 
               if (block.blockNum !== (expectedBlockNum & 0xff)) {
                 // Out of sequence
-                sendByte(NAK);
-                receiveDataBlocks();
+                nakAndRetry("out of sequence block " + block.blockNum);
                 return;
               }
 
               // Store data
+              dataErrors = 0;
               fileData.push(block.data);
               receivedBytes += block.data.length;
               expectedBlockNum++;
@@ -882,6 +930,14 @@ var YMODEM = (function () {
 
             if (block.type === "cancel") {
               fail("Transfer cancelled by sender");
+              return;
+            }
+
+            if (block.type === "eot") {
+              // Our EOT ACK was lost and the sender repeated EOT: ACK it again.
+              sendByte(ACK);
+              sendByte(C);
+              receiveBatchEnd();
               return;
             }
 

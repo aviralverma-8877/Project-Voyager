@@ -428,7 +428,10 @@ void send_to_serial(void *param)
         DebugQueueParam *p = NULL;
         if (xQueueReceive(serial_packet_rec, &p, portMAX_DELAY) == pdTRUE && p)
         {
-            active_serial_print(p->message);
+            // Only devices that joined a transfer (bridge on) forward LORA_SERIAL bytes;
+            // otherwise a bystander's console would fill with another link's YMODEM traffic.
+            if (lora_serial)
+                active_serial_write((const uint8_t*)p->message.c_str(), p->message.length());
             delete p;
         }
     }

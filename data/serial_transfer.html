@@ -1,40 +1,38 @@
-<h2 class="panel-title">Serial File Transfer <small>YMODEM over USB/Bluetooth</small></h2>
+<h2 class="panel-title">Serial File Transfer <small>YMODEM over USB</small></h2>
 
-<p class="hint">Transfer files reliably using the YMODEM protocol over USB Serial or Bluetooth Serial. Web Serial API requires Chrome or Edge.</p>
+<p class="hint">Sends a file between two Voyager devices. Each computer talks to its own device over a USB cable, and the devices relay the data over LoRa. One sender, one receiver per transfer.</p>
 
-<!-- Step 1: Connection Mode -->
-<fieldset id="serial_step_mode" class="section">
-    <h3 class="section-label">1. Connection Mode</h3>
-    <div class="field">
-        <label class="switch">
-            <input type="radio" name="serial_mode" value="usb" checked>
-            <span>USB Serial</span>
-        </label>
-        <p class="hint">Device must be connected to this computer via USB.</p>
-    </div>
-    <div class="field">
-        <label class="switch">
-            <input type="radio" name="serial_mode" value="bt">
-            <span>Bluetooth Serial</span>
-        </label>
-        <p class="hint">Device will reboot to BT mode. Pair in OS settings first.</p>
-    </div>
-</fieldset>
-
-<!-- Step 2: Connect Serial Port -->
+<!-- Step 1: Serial connection -->
 <fieldset id="serial_step_connect" class="section">
-    <h3 class="section-label">2. Serial Connection</h3>
+    <h3 class="section-label">1. Serial Connection</h3>
+    <p id="serialLinkStatus" class="hint">Checking for Voyager Link...</p>
+    <div id="helperMissing" hidden>
+        <p class="hint">This page is served by the device over plain HTTP, so Chrome does not let it open serial ports itself. <b>Voyager Link</b> is a small Windows helper that runs in the system tray and connects this page to the USB port.</p>
+        <ol class="hint">
+            <li>Download Voyager Link while you have internet access, and run it (no install needed).</li>
+            <li>If Windows SmartScreen warns about it, choose <i>More info</i> &rarr; <i>Run anyway</i>.</li>
+            <li>If Chrome asks to let this page access apps on your device, choose <i>Allow</i>.</li>
+        </ol>
+        <div class="actions">
+            <a class="btn secondary" id="helperDownloadLink" href="#" target="_blank" rel="noopener">Download Voyager Link</a>
+            <button type="button" class="btn secondary" id="helperRetryBtn">Check again</button>
+        </div>
+    </div>
+    <div class="field" id="serialPortField" hidden>
+        <label for="serialPortSelect" class="label">Serial port</label>
+        <select id="serialPortSelect" class="select"></select>
+    </div>
     <div class="actions">
-        <button type="button" class="btn primary" id="connectSerialBtn">Select Serial Port</button>
+        <button type="button" class="btn primary" id="connectSerialBtn" disabled>Connect</button>
+        <button type="button" class="btn secondary" id="refreshPortsBtn" hidden>Refresh ports</button>
         <button type="button" class="btn secondary" id="disconnectSerialBtn" hidden>Disconnect</button>
     </div>
     <p id="serialStatus" class="hint mt-2">Not connected</p>
-    <p id="btModeNotice" class="hint text-bad" hidden></p>
 </fieldset>
 
-<!-- Step 3: Select Role -->
+<!-- Step 2: Select Role -->
 <fieldset id="serial_step_role" class="section" disabled>
-    <h3 class="section-label">3. Transfer Role</h3>
+    <h3 class="section-label">2. Transfer Role</h3>
     <div class="field">
         <label class="switch">
             <input type="radio" name="serial_role" value="sender" checked>
@@ -49,40 +47,41 @@
     </div>
 </fieldset>
 
-<!-- Step 4a: Sender View -->
+<!-- Step 3a: Sender View -->
 <fieldset id="serial_step_sender" class="section" hidden>
-    <h3 class="section-label">4. Send File</h3>
+    <h3 class="section-label">3. Send File</h3>
     <div class="field">
         <label for="serialSendFile" class="label">File to send</label>
         <input type="file" class="input" id="serialSendFile">
     </div>
     <div class="actions mb-2">
-        <button type="button" class="btn secondary" id="inviteBtn">Broadcast Invitation</button>
+        <button type="button" class="btn secondary" id="inviteBtn" disabled>Broadcast Invitation</button>
     </div>
     <div id="participantsSection" hidden>
-        <h5>Participants Ready</h5>
+        <h5>Ready to receive</h5>
         <ul class="list" id="participantList"></ul>
-        <p class="log-empty">Waiting for participants to join...</p>
+        <p class="log-empty" id="participantsEmpty">Waiting for someone to accept...</p>
     </div>
+    <p id="serialSenderStatus" class="hint"></p>
     <div class="actions mt-2">
         <button type="button" class="btn primary" id="startSerialTransferBtn" disabled>Start Transfer</button>
     </div>
 </fieldset>
 
-<!-- Step 4b: Receiver View -->
+<!-- Step 3b: Receiver View -->
 <fieldset id="serial_step_receiver" class="section" hidden>
-    <h3 class="section-label">4. Receive File</h3>
-    <p id="receiverWaiting">Waiting for file transfer invitation...</p>
+    <h3 class="section-label">3. Receive File</h3>
+    <p id="receiverWaiting">Waiting for a file transfer invitation...</p>
     <div id="invitationsSection" hidden>
         <h5>Incoming Invitations</h5>
         <ul class="list" id="invitationList"></ul>
     </div>
+    <p id="serialReceiverStatus" class="hint"></p>
 </fieldset>
 
 <!-- Progress -->
 <fieldset id="serial_step_progress" class="section" hidden>
     <h3 class="section-label">Transfer Progress</h3>
-    <div id="serialTransferInfo" class="mb-2"></div>
     <div class="progress">
         <div
             id="serialTransferProgress"

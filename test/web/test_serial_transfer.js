@@ -165,6 +165,57 @@ test("missing participant name falls back gracefully", function() {
     assertEq(displayName, "AA:BB:CC:DD:EE:FF");
 });
 
+// Handshake messages (file_tx_invite / join / go) round-trip through parseLoraRx the
+// way the device delivers them: {"name","mac","data":"<inner JSON string>"}.
+function wrap(inner) {
+    return JSON.stringify({ name: "Alice", mac: "AA:BB:CC:DD:EE:01", data: inner });
+}
+
+test("file_tx_invite round-trip keeps tx_id, name and size", function() {
+    var m = L.parseLoraRx(wrap(L.buildFileTxInvite("a1b2c3d4", "report.pdf", 123456)));
+    assertEq(m.packType, "action");
+    assertEq(m.action, "file_tx_invite");
+    assertEq(m.txId, "a1b2c3d4");
+    assertEq(m.fileName, "report.pdf");
+    assertEq(m.size, "123456");
+    assertEq(m.sender, "Alice");
+});
+
+test("file_tx_invite clips long names so the packet fits", function() {
+    var long = new Array(300).join("x") + ".bin";
+    var inner = L.buildFileTxInvite("a1b2c3d4", long, 1);
+    assertTrue(L.checkPayload("a-32-character-long-user-name-xx", inner).ok, "must fit in one LoRa packet");
+    assertEq(L.parseLoraRx(wrap(inner)).fileName.length, 64);
+});
+
+test("file_tx_join and file_tx_go carry tx_id and nonce", function() {
+    var j = L.parseLoraRx(wrap(L.buildFileTxJoin("t1", "n1")));
+    assertEq([j.action, j.txId, j.nonce], ["file_tx_join", "t1", "n1"]);
+    var g = L.parseLoraRx(wrap(L.buildFileTxGo("t1", "n1")));
+    assertEq([g.action, g.txId, g.nonce], ["file_tx_go", "t1", "n1"]);
+});
+
+test("other actions report empty txId / nonce", function() {
+    var m = L.parseLoraRx(wrap(L.buildAction("sos")));
+    assertEq([m.txId, m.nonce], ["", ""]);
+});
+
+test("loraAirtimeMs matches Semtech calculator values", function() {
+    // SF7 / 125 kHz / 4/5, 10 bytes: 41.22 ms; SF12 / 125 kHz / 4/5, 51 bytes: 2465.79 ms (LDRO on)
+    assertEq(Math.round(L.loraAirtimeMs(7, 125000, 5, 10) * 100) / 100, 41.22);
+    assertEq(Math.round(L.loraAirtimeMs(12, 125000, 5, 51) * 100) / 100, 2465.79);
+    assertTrue(isNaN(L.loraAirtimeMs(13, 125000, 5, 10)), "SF out of range");
+});
+
+test("ymodemTimeoutMs scales with the radio config", function() {
+    var def = { SpreadingFactor: 8, SignalBandwidth: 500000, CodingRate4: 7 };
+    var slow = { SpreadingFactor: 12, SignalBandwidth: 125000, CodingRate4: 8 };
+    assertEq(L.ymodemTimeoutMs(def), 15000);           // floor for the fast default
+    assertTrue(L.ymodemTimeoutMs(slow) > 120000, "SF12 needs minutes per block");
+    assertEq(L.ymodemTimeoutMs(null), 30000);
+    assertEq(L.ymodemTimeoutMs({ SpreadingFactor: "x" }), 30000);
+});
+
 test("file size 0 or missing handled correctly", function() {
     var msg1 = { fileSize: 0 };
     var msg2 = { /* fileSize missing */ };

@@ -237,6 +237,50 @@ var VoyagerLib = (function () {
     return JSON.stringify(o);
   }
 
+  // Serial (YMODEM) transfer handshake, sent as LORA_MSG actions through /lora_transmit:
+  //   sender   -> all : file_tx_invite {tx_id, name, size}
+  //   receiver -> all : file_tx_join   {tx_id, nonce}     (nonce: receiver's random id)
+  //   sender   -> all : file_tx_go     {tx_id, nonce}     (only that receiver starts)
+  // YMODEM is point-to-point, so exactly one receiver is picked per transfer. The name
+  // here is for display only (YMODEM block 0 carries the real one) and is clipped.
+  var FILE_TX_NAME_MAX = 64;
+  function buildFileTxInvite(txId, name, size) {
+    return buildAction("file_tx_invite", {
+      tx_id: toText(txId),
+      name: toText(name).slice(0, FILE_TX_NAME_MAX),
+      size: toText(size),
+    });
+  }
+  function buildFileTxJoin(txId, nonce) {
+    return buildAction("file_tx_join", { tx_id: toText(txId), nonce: toText(nonce) });
+  }
+  function buildFileTxGo(txId, nonce) {
+    return buildAction("file_tx_go", { tx_id: toText(txId), nonce: toText(nonce) });
+  }
+
+  // SX127x time on air (Semtech AN1200.13): explicit header, CRC on, 8-symbol preamble,
+  // low-data-rate optimisation when a symbol lasts 16 ms or more.
+  function loraAirtimeMs(sf, bw, cr4, payloadLen) {
+    sf = toNumber(sf); bw = toNumber(bw); cr4 = toNumber(cr4);
+    if (!(sf >= 6 && sf <= 12) || !(bw > 0) || !(cr4 >= 5 && cr4 <= 8)) return NaN;
+    var tSym = Math.pow(2, sf) / bw * 1000;
+    var de = tSym >= 16 ? 1 : 0;
+    var num = 8 * payloadLen - 4 * sf + 28 + 16;
+    var nPayload = 8 + Math.max(Math.ceil(num / (4 * (sf - 2 * de))) * cr4, 0); // cr4 = CR+4
+    return (8 + 4.25) * tSym + nPayload * tSym;
+  }
+
+  // YMODEM wait for one 1 KB block over the LoRa serial bridge: the block is five
+  // full LORA_SERIAL packets plus a 1-byte ACK packet back. Three times that plus
+  // slack, never under 15 s. Unknown config -> 30 s.
+  function ymodemTimeoutMs(cfg) {
+    if (!isObject(cfg)) return 30000;
+    var full = loraAirtimeMs(cfg.SpreadingFactor, cfg.SignalBandwidth, cfg.CodingRate4, 255);
+    var ack = loraAirtimeMs(cfg.SpreadingFactor, cfg.SignalBandwidth, cfg.CodingRate4, 5);
+    if (!isFinite(full) || !isFinite(ack)) return 30000;
+    return Math.max(15000, Math.ceil(3 * (5 * full + ack) + 3000));
+  }
+
   // enable_file_tx_mode; the file name is shortened (extension kept where
   // possible) until the wrapped payload fits. Returns null if nothing fits.
   function buildEnableFileTx(meta, username) {
@@ -290,6 +334,8 @@ var VoyagerLib = (function () {
       fileName: "",
       time: "",
       sha256: "",
+      txId: "",
+      nonce: "",
     };
     r.sender = r.name || r.mac || "unknown";
     if (r.packType === "msg") {
@@ -302,6 +348,8 @@ var VoyagerLib = (function () {
       r.fileName = toText(inner.name);
       r.time = toText(inner.time);
       r.sha256 = toText(inner.sha256).toLowerCase();
+      r.txId = toText(inner.tx_id);
+      r.nonce = toText(inner.nonce);
     } else {
       return null;
     }
@@ -882,6 +930,11 @@ var VoyagerLib = (function () {
     buildTextMessage: buildTextMessage,
     buildAction: buildAction,
     buildEnableFileTx: buildEnableFileTx,
+    buildFileTxInvite: buildFileTxInvite,
+    buildFileTxJoin: buildFileTxJoin,
+    buildFileTxGo: buildFileTxGo,
+    loraAirtimeMs: loraAirtimeMs,
+    ymodemTimeoutMs: ymodemTimeoutMs,
     buildDisableFileTx: buildDisableFileTx,
     parseLoraRx: parseLoraRx,
     parseWifiScan: parseWifiScan,
