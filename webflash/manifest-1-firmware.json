@@ -2,6 +2,7 @@
   "name": "Project Voyager v1 - Firmware Only",
   "version": "1.0.0",
   "new_install_prompt_erase": false,
+  "new_install_improv_wait_time": 20,
   "builds": [
     {
       "chipFamily": "ESP32",

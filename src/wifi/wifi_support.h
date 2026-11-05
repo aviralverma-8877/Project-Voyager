@@ -41,4 +41,17 @@
     bool wifi_switch_to_ap();
     bool wifi_set_ap_pass(const char* pass);   // "" = use wifi_default_ap_pass()
     String wifi_default_ap_pass();
+
+    // WiFi setup over USB serial (Improv, used by the web flasher). Unlike
+    // wifi_save_sta this connects *live* first, so the caller can report the device
+    // URL: blocks up to timeout_ms. On success saves STA config, sets url_out to
+    // "http://<ip>" and schedules one restart a few seconds later (clean STA boot).
+    // On failure nothing is saved and the previous WiFi state is restored.
+    bool wifi_improv_provision(const char* ssid, const char* pass, uint32_t timeout_ms, String& url_out);
+    // Blocking scan for the flasher's network list: one entry per SSID (strongest),
+    // strongest first, hidden SSIDs skipped. Returns the count (<= max).
+    struct WifiNet { char ssid[33]; int8_t rssi; bool secure; };
+    size_t wifi_improv_scan(WifiNet* out, size_t max);
+    // "http://<ip>" while STA is connected, else "".
+    String wifi_sta_url();
 #endif

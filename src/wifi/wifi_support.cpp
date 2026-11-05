@@ -22,6 +22,8 @@ static TaskHandle_t g_monitor_handle = NULL;
 
 static portMUX_TYPE g_wifi_mux = portMUX_INITIALIZER_UNLOCKED;
 static bool g_restart_scheduled = false;
+// Improv provisioning owns the STA interface; wifi_monitor stands still meanwhile.
+static volatile bool g_provisioning = false;
 static bool g_scan_running = false;
 
 // Serialises every scan channel and WiFi.begin(): Arduino keeps one shared scan
@@ -152,8 +154,17 @@ static void stop_fallback_ap()
     oled_set_wifi(WIFI_CONNECTED_STA, g_sta_ssid, ip.toString().c_str());
 }
 
+// Improv: give the browser time to read the result before core's restart().
+static void delayed_restart_task(void* param)
+{
+    vTaskDelay(pdMS_TO_TICKS((uint32_t)(uintptr_t)param));
+    restart(NULL);   // waits 500 ms, ESP.restart(); never returns
+    vTaskDelete(NULL);
+}
+
 // Exactly one restart per boot, no matter how many API calls request it.
-static bool schedule_restart()
+// extra_delay_ms > 0 waits that long first (Improv answer must reach the browser).
+static bool schedule_restart(uint32_t extra_delay_ms = 0)
 {
     bool first;
     portENTER_CRITICAL(&g_wifi_mux);
@@ -162,7 +173,10 @@ static bool schedule_restart()
     portEXIT_CRITICAL(&g_wifi_mux);
     if (!first) return true;
     // core's restart() waits 500 ms, then ESP.restart().
-    if (xTaskCreatePinnedToCore(restart, "Restart", 4096, NULL, 1, NULL, 1) != pdPASS)
+    BaseType_t ok = extra_delay_ms
+        ? xTaskCreatePinnedToCore(delayed_restart_task, "Restart", 4096, (void*)(uintptr_t)extra_delay_ms, 1, NULL, 1)
+        : xTaskCreatePinnedToCore(restart, "Restart", 4096, NULL, 1, NULL, 1);
+    if (ok != pdPASS)
     {
         portENTER_CRITICAL(&g_wifi_mux);
         g_restart_scheduled = false;
@@ -274,6 +288,131 @@ bool wifi_set_ap_pass(const char* pass)
     cfg.ap_pass = pass;
     serial_print(pass[0] ? "Saving new AP password" : "Resetting AP password to default");
     return write_config_and_restart(cfg);
+}
+
+// ---------------------------------------------------------------------------
+// Improv (WiFi setup from the web flasher over USB serial)
+// ---------------------------------------------------------------------------
+String wifi_sta_url()
+{
+    if (!WiFi.isConnected()) return "";
+    IPAddress ip = WiFi.localIP();
+    if (ip == IPAddress(0, 0, 0, 0)) return "";
+    return "http://" + ip.toString();
+}
+
+bool wifi_improv_provision(const char* ssid, const char* pass, uint32_t timeout_ms, String& url_out)
+{
+    if (!pass) pass = "";
+    url_out = "";
+    if (!wifi_valid_ssid(ssid) || !wifi_valid_sta_pass(pass)) return false;
+    if (g_provisioning) return false;
+    g_provisioning = true;   // wifi_monitor stands still from here on
+    serial_print("Improv: trying network " + String(ssid));
+
+    // Keep an AP up while trying (AP -> AP+STA) so a browser on the AP isn't cut off.
+    wifi_mode_t prev = WiFi.getMode();
+    SemaphoreHandle_t lock = radio_lock();
+    bool locked = lock && xSemaphoreTake(lock, pdMS_TO_TICKS(5000)) == pdTRUE;
+    if (prev & WIFI_MODE_STA)
+    {
+        WiFi.disconnect(false, false);
+        vTaskDelay(pdMS_TO_TICKS(300));
+    }
+    else
+    {
+        WiFi.mode(prev == WIFI_MODE_AP ? WIFI_AP_STA : WIFI_STA);
+    }
+    WiFi.setAutoReconnect(false);
+    WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);      // strongest node of a mesh
+    WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
+    wifi_apply_no_sleep();
+    WiFi.begin(ssid, pass);
+    if (locked) xSemaphoreGive(lock);
+
+    uint32_t t0 = millis();
+    while (millis() - t0 < timeout_ms)
+    {
+        if (WiFi.isConnected() && WiFi.localIP() != IPAddress(0, 0, 0, 0)) break;
+        vTaskDelay(pdMS_TO_TICKS(250));
+    }
+    url_out = wifi_sta_url();
+    if (url_out.length() > 0)
+    {
+        WifiConfig cfg = wifi_load_config();
+        cfg.mode = WIFI_CFG_STA;
+        cfg.ssid = ssid;
+        cfg.pass = pass;
+        String out;
+        wifi_serialize_config(cfg, out);
+        bool saved = write_file_atomic(WIFI_CONFIG_PATH, out);
+        serial_print(saved ? "Improv: connected (" + url_out + "), config saved, restarting"
+                           : "Improv: connected but saving the config failed, restarting");
+        // Reboot into a clean STA setup (monitor, mDNS, no leftover AP). DHCP normally
+        // hands the same IP back, so the URL we report stays valid. g_provisioning
+        // stays set so the monitor doesn't interfere until then.
+        schedule_restart(3000);
+        if (!saved) url_out = "";
+        return saved;
+    }
+
+    // Failed: back to how it was. Nothing was saved.
+    serial_print("Improv: could not connect to " + String(ssid));
+    WiFi.disconnect(false, false);
+    if (!(prev & WIFI_MODE_STA)) WiFi.mode(prev);
+    g_provisioning = false;
+    if (g_monitor_handle) xTaskNotifyGive(g_monitor_handle);   // reconnects the saved network
+    return false;
+}
+
+size_t wifi_improv_scan(WifiNet* out, size_t max)
+{
+    if (!out || max == 0 || g_provisioning) return 0;
+    SemaphoreHandle_t lock = radio_lock();
+    if (lock && xSemaphoreTake(lock, pdMS_TO_TICKS(5000)) != pdTRUE) return 0;
+    portENTER_CRITICAL(&g_wifi_mux);
+    g_scan_running = true;
+    portEXIT_CRITICAL(&g_wifi_mux);
+    wifi_mode_t prev = WiFi.getMode();
+    if (!(prev & WIFI_MODE_STA)) WiFi.mode(prev == WIFI_MODE_AP ? WIFI_AP_STA : WIFI_STA);  // scans need STA
+
+    size_t count = 0;
+    int n = WiFi.scanNetworks(false, false, false, 300);
+    for (int i = 0; i < n; i++)
+    {
+        String s = WiFi.SSID(i);
+        if (s.length() == 0 || s.length() > 32) continue;   // hidden / invalid
+        int rssi = WiFi.RSSI(i);
+        bool secure = WiFi.encryptionType(i) != WIFI_AUTH_OPEN;
+        size_t j = 0;
+        while (j < count && strcmp(out[j].ssid, s.c_str()) != 0) j++;
+        if (j < count)
+        {
+            if (rssi > out[j].rssi) { out[j].rssi = (int8_t)rssi; out[j].secure = secure; }
+            continue;
+        }
+        if (count == max) continue;
+        copy_str(out[count].ssid, sizeof(out[count].ssid), s.c_str());
+        out[count].rssi = (int8_t)(rssi < -128 ? -128 : rssi > 0 ? 0 : rssi);
+        out[count].secure = secure;
+        count++;
+    }
+    WiFi.scanDelete();
+    if (!(prev & WIFI_MODE_STA)) WiFi.mode(prev);
+    portENTER_CRITICAL(&g_wifi_mux);
+    g_scan_running = false;
+    portEXIT_CRITICAL(&g_wifi_mux);
+    if (lock) xSemaphoreGive(lock);
+
+    // strongest first (insertion sort, n <= max)
+    for (size_t a = 1; a < count; a++)
+    {
+        WifiNet e = out[a];
+        size_t b = a;
+        while (b > 0 && out[b - 1].rssi < e.rssi) { out[b] = out[b - 1]; b--; }
+        out[b] = e;
+    }
+    return count;
 }
 
 // ---------------------------------------------------------------------------
@@ -528,6 +667,15 @@ void wifi_monitor(void* param)
         // Woken early by onWifiConnect/onWifiDisconnect; otherwise poll every second.
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
         now = millis();
+
+        // Improv provisioning owns the STA interface: stand still, and forget the
+        // disconnects it caused (they are not failures of the saved network).
+        if (g_provisioning)
+        {
+            seen_disc = g_disc_count;
+            last_attempt = now;
+            continue;
+        }
 
         // Disconnect events (logged here, not in the event callback).
         uint32_t dc = g_disc_count;

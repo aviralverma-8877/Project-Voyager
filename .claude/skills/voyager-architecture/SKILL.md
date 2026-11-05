@@ -121,6 +121,16 @@ Device → client `response_type`:
 Every outbound WS and SSE message goes through **one** sender task (web_sockets).
 `send_to_ws` / `send_to_events` only enqueue a copy, so they're safe to call from any task.
 
+## Improv Serial (WiFi setup from the web flasher)
+
+While the LoRa-serial bridge is off, `serial_to_lora` feeds USB bytes to
+`improv_feed()` (core, `src/core/improv_serial.cpp`; framing in `improv.h`, unit-tested
+in `test/test_improv`). Supported RPCs: WIFI_SETTINGS, GET_CURRENT_STATE,
+GET_DEVICE_INFO, GET_WIFI_NETWORKS. WiFi work is `wifi_improv_provision()` (connects
+live, then saves STA config and restarts 3 s later; on failure restores the previous
+state, saves nothing) and `wifi_improv_scan()` (wifi). Manifests set
+`new_install_improv_wait_time: 20`.
+
 ## Contract 4: Server-sent events `/rawEvents` (valid `vsid` cookie or Digest)
 
 | Event | Data | Producer |

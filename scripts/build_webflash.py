@@ -53,6 +53,9 @@ DEFAULT_MANIFEST = {
     'name': 'Project Voyager v{n} - LoRa File Transfer',
     'version': '1.0.0',
     'new_install_prompt_erase': True,
+    # Seconds ESP Web Tools waits after flashing for the firmware to answer Improv
+    # (WiFi setup over serial, src/core/improv_serial.cpp) before giving up on it.
+    'new_install_improv_wait_time': 20,
 }
 
 

@@ -1,6 +1,7 @@
 #include "support_method.h"
 #include "core_dispatch.h"
 #include "bt_serial.h"
+#include "improv_serial.h"
 #include <web/web_sockets.h>
 #include <web/auth.h>
 #include <web/web_server.h>
@@ -500,8 +501,9 @@ void serial_to_lora(void* param)
         }
         else
         {
-            // Discard input when bridge is disabled (USB only; BT input is already buffered)
-            while (Serial.available()) Serial.read();
+            // Bridge off: USB input goes to Improv (WiFi setup from the web flasher);
+            // anything that isn't an Improv packet is dropped by its parser.
+            while (Serial.available()) improv_feed((uint8_t)Serial.read());
         }
         vTaskDelay(pdMS_TO_TICKS(10));
     }
