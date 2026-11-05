@@ -1168,7 +1168,7 @@ function set_coding_rate(val) {
 
 var HELPER_PORTS = [47321, 47322, 47323, 47324, 47325]; // = helperPorts in tools/voyager-link/server.go
 var HELPER_DOWNLOAD_URL =
-  "https://github.com/aviralverma-8877/Project-Voyager/releases/latest/download/voyager-link.exe";
+  "https://aviralverma-8877.github.io/Project-Voyager/webflash/voyager-link.exe";
 var SERIAL_BAUD = 115200;
 // Time for file_tx_start (WS) to reach the device before Kermit bytes do: while the
 // bridge is off the device discards serial input, and debug lines stop only once it is on.

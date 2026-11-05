@@ -9,6 +9,7 @@ on:
     paths:
       - index.html
       - webflash/**
+      - tools/voyager-link/**
       - .github/workflows/pages.yml
   workflow_dispatch:
 
@@ -36,11 +37,30 @@ jobs:
       - name: Check manifests against partition table
         run: python3 scripts/build_webflash.py --check
 
+      # Voyager Link (tools/voyager-link): the Windows tray helper the device's File
+      # Transfer page needs. Built here from source, so no 8 MB binary lives in git;
+      # its tests run first. Version comes from tools/voyager-link/VERSION.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/voyager-link/go.mod
+          cache-dependency-path: tools/voyager-link/go.sum
+
+      - name: Test and build voyager-link.exe
+        working-directory: tools/voyager-link
+        run: |
+          go vet ./...
+          go test ./...
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath \
+            -ldflags "-s -w -H windowsgui -X main.version=${VERSION}" -o voyager-link.exe .
+          ls -l voyager-link.exe
+
       - name: Stage site
         run: |
           mkdir -p _site/webflash
           cp index.html _site/
           cp webflash/*.json webflash/*.bin _site/webflash/
+          cp tools/voyager-link/voyager-link.exe _site/webflash/
           touch _site/.nojekyll
 
       - uses: actions/configure-pages@v5

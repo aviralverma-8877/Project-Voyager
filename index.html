@@ -190,6 +190,32 @@
             box-shadow: 0 0 50px rgba(0, 255, 136, 0.9);
         }
 
+        /* Same look as the flash button, one size smaller (secondary action). */
+        .download-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #00ff88, #00ccff);
+            color: #0a0e27;
+            padding: 12px 28px;
+            font-size: 1em;
+            font-weight: bold;
+            font-family: 'Courier New', 'Consolas', monospace;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-decoration: none;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+            transition: all 0.3s;
+        }
+
+        .download-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 35px rgba(0, 255, 136, 0.8);
+        }
+
+        .note .flash-button-container {
+            margin: 20px 0;
+        }
+
         .note {
             text-align: center;
             margin-top: 30px;
@@ -297,6 +323,23 @@
         <div id="notSupported" class="not-supported" style="display: none">
             Your browser does not support the Web Serial API.<br>
             Please use Google Chrome, Microsoft Edge, or Opera.
+        </div>
+
+        <hr>
+
+        <div class="version-selector">
+            <label>Voyager Link (Windows):</label>
+        </div>
+        <div class="note">
+            The device's <strong>File Transfer</strong> page sends files over LoRa through each
+            computer's USB connection to its board. Chrome does not allow the device's page
+            (plain http) to open serial ports itself, so on Windows run this small tray helper
+            first. Download it here while you have internet access: no installer, no admin rights.
+            <div class="flash-button-container">
+                <a id="voyagerLinkDownload" class="download-button" href="webflash/voyager-link.exe" download>Download voyager-link.exe</a>
+            </div>
+            If SmartScreen warns about an unknown publisher, choose <em>More info</em> &rarr; <em>Run anyway</em>.
+            When Chrome asks to let the device page access apps on this computer, choose <em>Allow</em>.
         </div>
     </div>
 
