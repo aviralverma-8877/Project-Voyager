@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#070a08">
     <link rel="stylesheet" href="style.css">
     <script type="text/javascript" src="lib.js"></script>
-    <script type="text/javascript" src="ymodem.js"></script>
+    <script type="text/javascript" src="kermit.js"></script>
     <script type="text/javascript" src="script.js"></script>
 </head>
     <body>
@@ -53,7 +53,6 @@
                 <ul class="links">
                     <li><a id="navbar-dashboard" href="#" data-page="dashboard">Dashboard</a></li>
                     <li><a id="navbar-file-transfer" href="#" data-page="file_transfer">File Transfer</a></li>
-                    <li><a id="navbar-serial-transfer" href="#" data-page="serial_transfer">Serial Transfer</a></li>
                     <li><a id="navbar-wifi" href="#" data-page="wifi">WiFi <span class="sig" id="wifi_bars" data-level="0" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span id="wifi_quality">...</span></a></li>
                     <li><a id="navbar-lora" href="#" data-page="lora">LoRa</a></li>
                     <!-- To include BLE, OTA needs to be disabled. -->
@@ -85,28 +84,6 @@
                             aria-valuemin="0"
                             aria-valuemax="100"
                         ></div>
-                    </div>
-                </section>
-                <section class="section">
-                    <h3 class="section-label">File transfer</h3>
-                    <div id="rec_info"></div>
-                    <div id="chunk_ratio"></div>
-                    <div id="rec_verify" class="bold"></div>
-                    <div class="progress">
-                        <div
-                            id="file_upload_progress_bar"
-                            class="bar"
-                            role="progressbar"
-                            style="width: 0%"
-                            aria-label="File transfer progress"
-                            aria-valuenow="0"
-                            aria-valuemin="0"
-                            aria-valuemax="100"
-                        ></div>
-                    </div>
-                    <div class="actions mt-2">
-                        <button type="button" class="btn primary" id="download_btn" disabled>Download</button>
-                        <button type="button" class="btn outline-danger" id="cancel_receive_btn" hidden>Cancel receiving</button>
                     </div>
                 </section>
                 <section class="section">

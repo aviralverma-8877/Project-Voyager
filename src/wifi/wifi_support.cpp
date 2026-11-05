@@ -505,8 +505,9 @@ void setup_ap(const char* wifi_ssid, const char* wifi_pass, int channel)
 // - an attempt still in progress (< 15 s, no result) is never interrupted;
 // - fallback AP (this boot only) after 20 s down, but not over a live attempt;
 //   it stops once STA has been up for 10 s;
-// - optional roam: on a settled weak link, at most every 5 min, move to a node of
-//   the same SSID that is >= 15 dB stronger.
+// - optional roam: on a settled link below WIFI_ROAM_SCAN_BELOW_DBM, at most every
+//   5 min and never while the serial bridge is on, move to a node of the same SSID
+//   that is >= WIFI_ROAM_MIN_GAIN_DB stronger.
 // Never writes config.
 void wifi_monitor(void* param)
 {
@@ -575,7 +576,10 @@ void wifi_monitor(void* param)
             if (g_fallback_ap && now - up_since >= WIFI_FALLBACK_STOP_MS) stop_fallback_ap();
 
             int rssi = WiFi.RSSI();
-            if (!g_fallback_ap && !scan_running() && wifi_roam_check_due(rssi, now - up_since, now - last_roam_check))
+            // Never scan/roam during a serial (YMODEM) transfer: the channel hops and a
+            // reconnect would stall the page's WebSocket mid-transfer.
+            if (!g_fallback_ap && !lora_serial && !scan_running() &&
+                wifi_roam_check_due(rssi, now - up_since, now - last_roam_check))
             {
                 WifiApSelector sel;
                 scan_channels(g_sta_ssid, WIFI_SCAN_HOME_MS, [&](int i) {

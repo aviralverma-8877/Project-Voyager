@@ -1,7 +1,7 @@
 # Voyager Link
 
 A small Windows tray helper that lets the Voyager web page use the device's USB
-serial port for **Serial Transfer** (YMODEM).
+serial port for **File Transfer** (Kermit).
 
 Chrome only allows Web Serial on secure pages (HTTPS or `localhost`). The device
 serves its UI over plain `http://`, so the page connects to Voyager Link on
@@ -17,7 +17,7 @@ Voyager page (http://192.168.4.1) ──ws://127.0.0.1:47321/serial──> voyag
 2. Run it. There is no installer and no admin rights are needed. A grey dot shows up
    in the system tray. It turns green while a Voyager page is connected.
 3. If SmartScreen warns about an unknown publisher: **More info → Run anyway**.
-4. Open **Serial Transfer** on the device page. If Chrome asks to let the page access
+4. Open **File Transfer** on the device page. If Chrome asks to let the page access
    apps and services on this device, choose **Allow**.
 5. Tray menu → **Start with Windows** keeps it running across reboots
    (`HKCU\...\Run`, per user).
@@ -34,7 +34,10 @@ Logs: `%LOCALAPPDATA%\VoyagerLink\voyager-link.log` (tray → **Open log folder*
   `localhost` only. Any other website open in the browser is refused (403), because
   WebSockets aren't protected by CORS. Add more origins with
   `-allow-origin host1,host2`.
-- One page at a time. A newer page takes over and the older one is disconnected.
+- Several pages can be connected at once (up to 8), for example one tab per board when
+  both boards are plugged into the same PC. Each COM port belongs to one page. If
+  another page tries to open a port that's already in use, it gets an error naming
+  the page that holds it.
 - DTR/RTS are held low when opening the port, so opening it doesn't reset the
   ESP32.
 

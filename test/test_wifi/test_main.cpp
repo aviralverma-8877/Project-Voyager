@@ -276,11 +276,12 @@ static void test_roam_decision() {
     const uint8_t other[6] = {9,9,9,9,9,9}, cur[6] = {1,1,1,1,1,1};
     TEST_ASSERT_FALSE(wifi_should_roam(-80, best, cur));          // nothing found
     wifi_consider_ap(best, "N", "N", -66, other, 6);
-    TEST_ASSERT_FALSE(wifi_should_roam(-80, best, cur));          // 14 dB: marginal, stay
-    TEST_ASSERT_TRUE(wifi_should_roam(-81, best, cur));           // 15 dB: roam
+    TEST_ASSERT_FALSE(wifi_should_roam(-75, best, cur));          // 9 dB: marginal, stay
+    TEST_ASSERT_TRUE(wifi_should_roam(-76, best, cur));           // 10 dB: roam
     TEST_ASSERT_FALSE(wifi_should_roam(-81, best, other));        // already on it
     TEST_ASSERT_FALSE(wifi_should_roam(0, best, cur));            // RSSI unknown
-    TEST_ASSERT_FALSE(wifi_roam_check_due(-50, 600000, 600000));  // link good: no scan
+    TEST_ASSERT_FALSE(wifi_roam_check_due(-45, 600000, 600000));  // link good: no scan
+    TEST_ASSERT_TRUE(wifi_roam_check_due(-55, 600000, 300000));   // far mesh node at -55: look
     TEST_ASSERT_FALSE(wifi_roam_check_due(-75, 30000, 600000));   // not settled
     TEST_ASSERT_FALSE(wifi_roam_check_due(-75, 600000, 60000));   // checked recently
     TEST_ASSERT_TRUE(wifi_roam_check_due(-75, 600000, 300000));

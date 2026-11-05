@@ -60,7 +60,6 @@
     void serial_print(String msg);
     void debugger_print(void *param);
     void setupTasks();
-    void stop_transmission();
     void show_alert(String msg);
     void handle_operations(JsonDocument& doc);
     void reset_device(void *param);

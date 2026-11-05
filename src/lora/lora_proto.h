@@ -148,17 +148,16 @@ inline void rx_commit(RxDedup& d, uint8_t seq) { d.have = true; d.last_seq = seq
 
 // ---- per-source dedup (multi-peer) -----------------------------------------------
 // Tracks the last accepted seq for up to N sources, identified by a 32-bit key
-// (MAC hash). Uses LRU replacement when full. Key 0 is reserved for RAW_DATA.
+// (MAC hash). Uses LRU replacement when full. Key 0 is unused (hash_mac never returns it).
 //
-// A sender uses ONE seq counter for LORA_MSG and RAW_DATA, but they're tracked under
-// different keys here. Without aging, a LORA_MSG that comes exactly 256*k packets
-// after the previous LORA_MSG (e.g. enable_file_tx_mode, 255 RAW chunks,
-// disable_file_tx_mode) would match the stale entry and be dropped as a "duplicate".
+// A sender uses ONE seq counter for all its packets (including unACKed LORA_SERIAL
+// frames, which are not tracked here). Without aging, a LORA_MSG that comes exactly
+// 256*k packets after the previous one would match the stale entry and be dropped as
+// a "duplicate".
 // A real duplicate is a retry of the packet we just ACKed, so it arrives within a few
 // accepted packets. An entry only counts if it was accepted within the last
 // DEDUP_WINDOW accepted packets.
 constexpr size_t DEDUP_SLOTS = 4;
-constexpr uint32_t DEDUP_KEY_RAW = 0;  // RAW_DATA packets share this slot
 constexpr uint32_t DEDUP_WINDOW = 16;  // must be well below 256
 
 struct RxDedupEntry {
@@ -176,7 +175,7 @@ struct RxDedupMulti {
 
 // Simple hash for MAC string (e.g., "AABBCCDD"). Returns non-zero for valid input.
 inline uint32_t hash_mac(const char* mac) {
-    if (mac == nullptr || mac[0] == '\0') return 1;  // fallback, distinct from DEDUP_KEY_RAW
+    if (mac == nullptr || mac[0] == '\0') return 1;  // fallback, never 0
     uint32_t h = 5381;
     for (const char* p = mac; *p; ++p)
         h = ((h << 5) + h) ^ (uint8_t)*p;
@@ -345,14 +344,12 @@ inline size_t config_to_json(const LoraConfig& c, char* out, size_t cap) {
 }
 
 // ---- LORA_MSG payload (Contract 1) --------------------------------------------
-enum class MsgKind : uint8_t { Invalid, Text, Sos, FileStart, FileEnd, OtherAction };
+enum class MsgKind : uint8_t { Invalid, Text, Sos, OtherAction };
 
 struct LoraMsgInfo {
     MsgKind kind = MsgKind::Invalid;
     std::string from;          // name, or mac if name is empty
     std::string text;          // pack_type msg
-    std::string file_name;     // enable_file_tx_mode
-    long total_packets = 0;    // enable/disable_file_tx_mode
 };
 
 inline LoraMsgInfo parse_lora_msg(const char* payload) {
@@ -375,22 +372,10 @@ inline LoraMsgInfo parse_lora_msg(const char* payload) {
         info.kind = MsgKind::Text;
     } else if (strcmp(pt, "action") == 0) {
         const char* a = inner["data"] | "";
-        info.total_packets = inner["total_packets"] | 0L;
         if (strcmp(a, "sos") == 0) info.kind = MsgKind::Sos;
-        else if (strcmp(a, "enable_file_tx_mode") == 0) {
-            info.kind = MsgKind::FileStart;
-            info.file_name = inner["name"] | "";
-        } else if (strcmp(a, "disable_file_tx_mode") == 0) info.kind = MsgKind::FileEnd;
         else info.kind = MsgKind::OtherAction;
     }
     return info;
-}
-
-// RX file progress as 0-100 (capped), for oled_progress.
-inline uint8_t progress_pct(long received, long total) {
-    if (total <= 0 || received <= 0) return 0;
-    if (received >= total) return 100;
-    return (uint8_t)((received * 100L) / total);
 }
 
 }  // namespace lora_proto

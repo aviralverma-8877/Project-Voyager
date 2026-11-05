@@ -55,31 +55,14 @@ test("SOS action", function () {
   assertEq(m.sender, XSS[0]);
 });
 
-test("enable_file_tx_mode with hostile file name/size/time", function () {
+test("file_tx_invite with hostile file name/size/tx_id passes through as text", function () {
   var m = L.parseLoraRx(loraMsg("bob", {
-    pack_type: "action", data: "enable_file_tx_mode",
-    total_packets: 12, size: XSS[1], name: XSS[2], time: XSS[0],
+    pack_type: "action", data: "file_tx_invite", name: XSS[2], size: XSS[1], tx_id: XSS[0],
   }));
-  assertEq(m.action, "enable_file_tx_mode");
-  assertEq(m.totalPackets, 12);
+  assertEq(m.action, "file_tx_invite");
   assertEq(m.fileName, XSS[2]);
   assertEq(m.size, XSS[1]);
-  assertEq(m.time, XSS[0]);
-});
-
-test("disable_file_tx_mode carries total_packets and lowercase sha256", function () {
-  var m = L.parseLoraRx(loraMsg("bob", {
-    pack_type: "action", data: "disable_file_tx_mode", total_packets: "3", sha256: "ABCDEF",
-  }));
-  assertEq(m.totalPackets, 3);
-  assertEq(m.sha256, "abcdef");
-});
-
-test("bad total_packets becomes -1", function () {
-  ["x", -1, 1.5, null].forEach(function (v) {
-    var m = L.parseLoraRx(loraMsg("b", { pack_type: "action", data: "enable_file_tx_mode", total_packets: v }));
-    assertEq(m.totalPackets, -1, JSON.stringify(v));
-  });
+  assertEq(m.txId, XSS[0]);
 });
 
 test("malformed lora_rx payloads return null instead of throwing", function () {
@@ -116,7 +99,7 @@ test("wifi quality clamps to 0..100", function () {
   assertEq(L.wifiQuality(-70), 60);
 });
 
-test("DEBUG / RAW_DATA SSE lines: data passes through as text", function () {
+test("DEBUG SSE lines: data passes through as text", function () {
   XSS.forEach(function (s) {
     var ev = L.parseSseData(JSON.stringify({ millis: 42, data: s }));
     assertEq(ev.millis, 42);

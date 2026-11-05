@@ -38,13 +38,10 @@ const state = {
   hostnameUrl: "",
   username: "",
   serialMode: false,
-  sending: false,
-  cancelSend: false,
   setupMode: false,
   signInRequired: false,
   sessionRequest: null,
   connectedOnce: false,
-  lastRawMillis: null,
   lastDebugKey: null,
   scanTimer: null,
   txActive: 0,
@@ -55,7 +52,6 @@ let promptModal = null;
 let alertModal = null;
 let loadingModal = null;
 
-const receiver = L.createFileReceiver();
 const txTracker = L.createTxTracker({
   setTimeout: (fn, ms) => window.setTimeout(fn, ms),
   clearTimeout: (t) => window.clearTimeout(t),
@@ -205,8 +201,6 @@ document.addEventListener("DOMContentLoaded", function () {
   loadingModal = createModal(byId("loadingModal"));
 
   byId("setup_form").addEventListener("submit", submit_setup);
-  byId("download_btn").addEventListener("click", downloadFile);
-  byId("cancel_receive_btn").addEventListener("click", cancel_receive);
 
   const toggler = byId("nav_toggler");
   toggler.addEventListener("click", function () {
@@ -463,26 +457,6 @@ function rx_led_blink() {
   flash_led("led_rx", "on", 400);
 }
 
-// cls: "ok" | "info" | "warn" | "bad" (omit to keep the current colour).
-function set_progress(percent, cls) {
-  const bar = byId("file_upload_progress_bar");
-  const p = Math.max(0, Math.min(100, Number(percent) || 0));
-  bar.style.width = p + "%";
-  bar.setAttribute("aria-valuenow", String(Math.round(p)));
-  if (cls) set_bar_class(bar, cls);
-}
-
-function reset_progress_bar() {
-  if (!state.sending && !receiver.isActive()) set_progress(0);
-}
-
-function set_verify(text, ok) {
-  const box = byId("rec_verify");
-  box.textContent = text;
-  box.classList.toggle("text-ok", ok === true);
-  box.classList.toggle("text-bad", ok === false);
-}
-
 function describe_err(err) {
   if (!err) return "unknown error";
   if (err.statusText === "timeout") return "timed out";
@@ -503,21 +477,10 @@ function set_fieldsets_disabled(cls, disabled) {
   });
 }
 
-// Locks:
-//  .lora_transmission (dashboard messaging): serial mode or sending a file
-//  .file_tx_controls  (file transfer form):  the above, or receiving a file
-//  .busy_lock         (WiFi / LoRa settings): sending or receiving a file
+// Locks: .lora_transmission (dashboard messaging) while the LoRa-serial bridge owns
+// the radio link (serial mode).
 function refresh_locks() {
-  const receiving = receiver.isActive();
-  const lockMsg = state.serialMode || state.sending;
-  const lockFile = lockMsg || receiving;
-  set_fieldsets_disabled("lora_transmission", lockMsg);
-  set_fieldsets_disabled("file_tx_controls", lockFile);
-  set_fieldsets_disabled("busy_lock", state.sending || receiving);
-  setDisabled("fileBroadcastButton", lockFile);
-  setDisabled("stopBroadcastButton", !state.sending);
-  byId("cancel_receive_btn").hidden = !receiving;
-  setDisabled("download_btn", !receiver.canDownload());
+  set_fieldsets_disabled("lora_transmission", state.serialMode);
 }
 
 /* ------------------------------------------------------------------ */
@@ -557,10 +520,6 @@ function dashboard() {
     }, function () {});
     ws_send({ "request-type": "get_username" }, true);
   });
-}
-
-function file_transfer() {
-  load_page("file_transfer.html", "navbar-file-transfer", null);
 }
 
 function wifi() {
@@ -613,8 +572,8 @@ function reset() {
   );
 }
 
-function serial_transfer() {
-  load_page("serial_transfer.html", "navbar-serial-transfer", function () {
+function file_transfer() {
+  load_page("file_transfer.html", "navbar-file-transfer", function () {
     serialTransfer.init();
   });
 }
@@ -623,7 +582,6 @@ function serial_transfer() {
 const PAGES = {
   dashboard: dashboard,
   file_transfer: file_transfer,
-  serial_transfer: serial_transfer,
   wifi: wifi,
   lora: lora,
   update: update,
@@ -733,9 +691,6 @@ function handle_ws_message(data) {
       refresh_locks();
       break;
     }
-    case "stop_transmission":
-      if (state.sending) state.cancelSend = true;
-      break;
     default:
       break;
   }
@@ -747,11 +702,9 @@ function handle_lora_rx(msg) {
     add_message(msg.sender, msg.text, false);
     return;
   }
-  if (msg.action === "enable_file_tx_mode") on_file_rx_start(msg);
-  else if (msg.action === "disable_file_tx_mode") on_file_rx_end(msg);
-  else if (msg.action === "sos") alertText("User " + msg.sender + " has sent a SOS request.");
-  // Serial (YMODEM) transfer handshake. Invites are kept even while another page is
-  // shown, so they are listed when the user opens Serial Transfer.
+  if (msg.action === "sos") alertText("User " + msg.sender + " has sent a SOS request.");
+  // Serial (Kermit) transfer handshake. Invites are kept even while another page is
+  // shown, so they are listed when the user opens File Transfer.
   else if (msg.action.indexOf("file_tx_") === 0) serialTransfer.handleLoraAction(msg);
 }
 
@@ -789,18 +742,6 @@ function init_events() {
     source.close();
     if (state.events === source) state.events = null;
     reconnect_events();
-  });
-
-  source.addEventListener("RAW_DATA", function (e) {
-    const ev = L.parseSseData(e.data);
-    if (!ev) return;
-    if (ev.millis !== undefined && ev.millis === state.lastRawMillis) return;
-    state.lastRawMillis = ev.millis;
-    if (!receiver.addChunk(ev.data)) return; // not receiving: ignore stray chunks
-    rx_led_blink();
-    const p = receiver.progress();
-    setText("chunk_ratio", "(" + p.received + " / " + p.total + ") " + p.sizeText + " received");
-    set_progress(p.percent);
   });
 
   source.addEventListener("WIFI_DATA", function (e) {
@@ -918,7 +859,7 @@ function lora_tx(url, payload, cb, onState) {
   );
 }
 
-// Control messages (enable/disable file mode) get the same retry budget as chunks.
+// lora_tx with up to `retries` more attempts (serial-transfer handshake messages).
 // isCancelled (optional): checked before each retry; a cancel ends with reason "cancelled".
 function lora_tx_retry(url, payload, retries, cb, isCancelled, onState) {
   lora_tx(url, payload, function (r) {
@@ -933,13 +874,6 @@ function lora_tx_retry(url, payload, retries, cb, isCancelled, onState) {
 
 function tx_state_text(txState) {
   return txState === "queued" ? "Waiting in queue..." : "Sending...";
-}
-
-// File transfer status line: "(sent / total) chunks sent, <what is happening now>".
-// Leaves the "Stopping..." notice alone once Stop was pressed.
-function show_send_stage(sent, total, what) {
-  if (state.cancelSend) return;
-  setText("chunk_ratio", "(" + sent + " / " + total + ") chunks sent, " + what);
 }
 
 function send_lora() {
@@ -990,214 +924,6 @@ function set_lora_to_serial(val) {
 /* File transfer                                                       */
 /* ------------------------------------------------------------------ */
 
-function file_broadcast() {
-  if (state.sending) {
-    alertText("A file transfer is already in progress.");
-    return;
-  }
-  if (receiver.isActive()) {
-    alertText("A file is being received. Cancel receiving first.");
-    return;
-  }
-  const input = byId("broadcastFile");
-  const file = input && input.files && input.files[0];
-  if (!file) {
-    alertText("Choose a file first.");
-    return;
-  }
-  const chunkRaw = getValue("chunk_size");
-  if (!L.validateChunkSize(chunkRaw)) {
-    alertText("Packet size must be a whole number from " + L.CHUNK_MIN + " to " + L.CHUNK_MAX + ".");
-    return;
-  }
-  const chunkSize = Number(chunkRaw);
-  const waitTime = Number(getValue("wait_time"));
-  if (!(isFinite(waitTime) && waitTime >= 10)) {
-    alertText("Wait time must be at least 10 ms.");
-    return;
-  }
-
-  state.sending = true;
-  state.cancelSend = false;
-  refresh_locks();
-
-  const reader = new FileReader();
-  reader.onerror = function () {
-    end_send();
-    alertText("Could not read the file.");
-  };
-  reader.onload = function () {
-    const dataURL = String(reader.result || "");
-    const chunks = L.chunkString(dataURL, chunkSize);
-    const total = chunks.length;
-    const sha = L.sha256Hex(dataURL);
-    const sizeText = L.get_string_size(dataURL);
-    const time = L.formatDuration(L.estimateSeconds(total, waitTime));
-    const enable = L.buildEnableFileTx(
-      { total_packets: total, size: sizeText, name: file.name, time: time },
-      state.username
-    );
-    if (!enable) {
-      end_send();
-      alertText("Could not fit the file details into one radio packet.");
-      return;
-    }
-
-    render_kv("rec_info", [
-      ["Sending", file.name],
-      ["Total size", sizeText],
-      ["Chunks", String(total)],
-      ["Estimated min time", time],
-    ]);
-    set_verify("");
-    setText("chunk_ratio", "(0 / " + total + ") chunks sent");
-    set_progress(0, "info");
-
-    const sender = L.createChunkSender({
-      chunks: chunks,
-      waitMs: waitTime,
-      retryDelayMs: RETRY_DELAY_MS,
-      maxRetries: L.CHUNK_MAX_RETRIES,
-      schedule: function (fn, ms) {
-        setTimeout(fn, ms);
-      },
-      isCancelled: function () {
-        return state.cancelSend;
-      },
-      send: function (chunk, i, done) {
-        lora_tx("/send_raw", chunk, done, function (txState) {
-          show_send_stage(i, total, txState === "queued"
-            ? "chunk " + (i + 1) + " waiting in queue..."
-            : "sending chunk " + (i + 1) + "...");
-        });
-      },
-      onProgress: function (sent, tot) {
-        setText("chunk_ratio", "(" + sent + " / " + tot + ") chunks sent");
-        set_progress((sent / tot) * 100);
-      },
-      onFinish: function (res) {
-        finish_send(res, sha);
-      },
-    });
-
-    const cancelled = function () {
-      return state.cancelSend;
-    };
-    lora_tx_retry("/lora_transmit", enable, L.CHUNK_MAX_RETRIES, function (r) {
-      // (If it was delivered but Stop was pressed, the sender below finishes at once
-      // as "cancelled" and finish_send still tells the receiver we're done.)
-      if (!r.ok) {
-        end_send();
-        const msg = r.reason === "cancelled"
-          ? "Transfer cancelled before the first chunk."
-          : "Could not start the transfer: " + r.reason + ".";
-        setText("chunk_ratio", "(0 / " + total + ") chunks sent");
-        set_progress(0, "bad");
-        set_verify(msg, false);
-        alertText(msg);
-        return;
-      }
-      // Give the receiving browser time to process enable_file_tx_mode (WS)
-      // before the first chunk arrives on SSE.
-      setTimeout(sender.start, RETRY_DELAY_MS);
-    }, cancelled, function (txState) {
-      show_send_stage(0, total, txState === "queued"
-        ? "start message waiting in queue..."
-        : "sending the start message...");
-    });
-  };
-  reader.readAsDataURL(file);
-}
-
-function finish_send(res, sha) {
-  // Always tell the receiver we're done, with what it should have received.
-  lora_tx_retry(
-    "/lora_transmit",
-    L.buildDisableFileTx(res.total, sha),
-    L.CHUNK_MAX_RETRIES,
-    function (r) {
-      end_send();
-      let msg;
-      if (res.ok) {
-        msg = "File sent: " + res.total + " chunks.";
-        if (!r.ok)
-          msg += "\nWarning: the end-of-transfer message failed (" + r.reason +
-            "), so the receiver can't verify the file.";
-        set_progress(100, "ok");
-      } else {
-        msg = "Transfer aborted after " + res.sent + " of " + res.total + " chunks: " + res.reason + ".";
-        set_progress((res.sent / Math.max(1, res.total)) * 100, "bad");
-      }
-      set_verify(msg, res.ok);
-      alertText(msg);
-    },
-    null,
-    function (txState) {
-      if (res.ok)
-        show_send_stage(res.sent, res.total, txState === "queued"
-          ? "end message waiting in queue..."
-          : "sending the end message...");
-    }
-  );
-}
-
-function end_send() {
-  state.sending = false;
-  state.cancelSend = false;
-  refresh_locks();
-}
-
-function stop_broadcast() {
-  if (!state.sending) return;
-  state.cancelSend = true;
-  setText("chunk_ratio", "Stopping after the current packet...");
-}
-
-function on_file_rx_start(msg) {
-  if (state.sending) {
-    console.log("Ignoring an incoming file while sending one.");
-    return;
-  }
-  if (msg.totalPackets < 0) return;
-  receiver.start({
-    totalPackets: msg.totalPackets,
-    fileName: msg.fileName,
-    size: msg.size,
-    time: msg.time,
-    sender: msg.sender,
-  });
-  state.lastRawMillis = null;
-  render_kv("rec_info", [
-    ["Receiving from", msg.sender],
-    ["File name", msg.fileName],
-    ["Total size", msg.size],
-    ["Chunks", String(msg.totalPackets)],
-    ["Estimated min time", msg.time],
-  ]);
-  set_verify("");
-  setText("chunk_ratio", "(0 / " + msg.totalPackets + ") 0 Bytes received");
-  set_progress(0, "ok");
-  refresh_locks();
-}
-
-function on_file_rx_end(msg) {
-  if (!receiver.isActive()) return;
-  const r = receiver.finish({ totalPackets: msg.totalPackets, sha256: msg.sha256 });
-  if (r.verified) {
-    set_verify("Verified: " + r.received + " packets, SHA-256 matches. Ready to download.", true);
-  } else {
-    set_verify("Corrupted: " + r.reason + ". Download is disabled.", false);
-    set_progress(receiver.progress().percent, "bad");
-  }
-  refresh_locks();
-}
-
-function cancel_receive() {
-  if (!receiver.cancel()) return;
-  set_verify("Receiving cancelled.", false);
-  refresh_locks();
-}
-
 function save_blob(blob, filename) {
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
@@ -1206,25 +932,6 @@ function save_blob(blob, filename) {
   setTimeout(function () {
     URL.revokeObjectURL(link.href);
   }, URL_REVOKE_DELAY_MS);
-}
-
-function downloadFile() {
-  if (receiver.isActive()) {
-    alertText("A file transfer is in progress.");
-    return;
-  }
-  if (!receiver.canDownload()) {
-    alertText("There is no verified file to download.");
-    return;
-  }
-  let decoded;
-  try {
-    decoded = L.dataURIToBytes(receiver.data());
-  } catch (e) {
-    alertText("The received data isn't a valid file.");
-    return;
-  }
-  save_blob(new Blob([decoded.bytes], { type: decoded.mime }), receiver.fileName() || "Voyager_Download");
 }
 
 /* ------------------------------------------------------------------ */
@@ -1442,10 +1149,10 @@ function set_coding_rate(val) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Serial File Transfer (YMODEM over USB serial, relayed over LoRa)    */
+/* File Transfer (Kermit over USB serial, relayed over LoRa)           */
 /* ------------------------------------------------------------------ */
 //
-// Each browser runs YMODEM against its own device's USB serial port; the devices
+// Each browser runs Kermit against its own device's USB serial port; the devices
 // relay the bytes as LORA_SERIAL packets while the bridge is on (file_tx_start).
 // The serial port is reached through one of two transports with the same shape:
 //   - Web Serial, when the page is a secure context (https / localhost);
@@ -1456,14 +1163,14 @@ function set_coding_rate(val) {
 //
 // Handshake (LORA_MSG actions via /lora_transmit, see lib.js buildFileTx*):
 //   sender: file_tx_invite -> receivers: file_tx_join{nonce} -> sender picks ONE:
-//   file_tx_go{nonce}. YMODEM is point-to-point, so only that receiver turns its
+//   file_tx_go{nonce}. The transfer is point-to-point, so only that receiver turns its
 //   bridge on; the others go back to waiting.
 
 var HELPER_PORTS = [47321, 47322, 47323, 47324, 47325]; // = helperPorts in tools/voyager-link/server.go
 var HELPER_DOWNLOAD_URL =
   "https://github.com/aviralverma-8877/Project-Voyager/releases/latest/download/voyager-link.exe";
 var SERIAL_BAUD = 115200;
-// Time for file_tx_start (WS) to reach the device before YMODEM bytes do: while the
+// Time for file_tx_start (WS) to reach the device before Kermit bytes do: while the
 // bridge is off the device discards serial input, and debug lines stop only once it is on.
 var BRIDGE_SETTLE_MS = 400;
 
@@ -1632,7 +1339,7 @@ function createHelperTransport(helper) {
           pending.reject(new Error("Voyager Link closed the connection"));
           pending = null;
         }
-        if (opened) lost(ev.code === 1008 ? "another page is now using Voyager Link" : "Voyager Link stopped");
+        if (opened) lost(ev.code === 1013 ? "too many pages are using Voyager Link" : "Voyager Link stopped");
       };
       sock.onmessage = function (ev) {
         if (typeof ev.data !== "string") {
@@ -1719,8 +1426,8 @@ var serialTransfer = (function () {
   var connected = false;
   var transferActive = false;
   var role = "sender";
-  var ymodemTimeout = 30000;
-  var ymodemInstance = null;
+  var kermitTimeout = 30000;
+  var kermitInstance = null;
 
   // sender
   var selectedFile = null;
@@ -1736,8 +1443,8 @@ var serialTransfer = (function () {
 
   function init() {
     // Page re-entered: drop whatever the previous visit left open.
-    if (ymodemInstance) ymodemInstance.cancel();
-    ymodemInstance = null;
+    if (kermitInstance) kermitInstance.cancel();
+    kermitInstance = null;
     if (transport) transport.close();
     transport = null;
     var keepInvitations = invitations; // heard while another page was shown
@@ -1776,7 +1483,7 @@ var serialTransfer = (function () {
     // Block timeout follows the radio settings (SF12 needs minutes, not 30 s).
     get_config("lora_config.json").then(
       function (cfg) {
-        ymodemTimeout = L.ymodemTimeoutMs(cfg);
+        kermitTimeout = L.kermitTimeoutMs(cfg);
       },
       function () {}
     );
@@ -2011,22 +1718,6 @@ var serialTransfer = (function () {
       ws_send({ "request-type": "file_tx_start" });
       setTimeout(function () {
         if (!transferActive) return;
-        // Start listening before telling the receiver to go, so its first 'C' is not missed.
-        ymodemInstance = YMODEM.createSender({
-          file: { name: selectedFile.name, size: data.length, data: data },
-          write: transport.write,
-          onData: transport.onData,
-          timeout: ymodemTimeout,
-          onProgress: function (sent, total) {
-            setSerialProgress(total > 0 ? (sent / total) * 100 : 0);
-            setText("serialTransferStatus", "Sending: " + L.formatSize(sent) + " / " + L.formatSize(total));
-          },
-          onComplete: function (ok, err) {
-            ymodemInstance = null;
-            endTransfer(ok, ok ? "File sent to " + p.name + "." : "Transfer failed: " + (err || "unknown error"), false);
-          },
-        });
-        ymodemInstance.start();
         setText("serialTransferStatus", "Asking " + p.name + " to start...");
         lora_tx_retry(
           "/lora_transmit",
@@ -2034,8 +1725,28 @@ var serialTransfer = (function () {
           2,
           function (r) {
             if (!transferActive) return;
-            if (r.ok) setText("serialTransferStatus", "Waiting for " + p.name + " to request the file...");
-            else endTransfer(false, "Could not reach " + p.name + ": " + r.reason + ".", true);
+            if (!r.ok) {
+              endTransfer(false, "Could not reach " + p.name + ": " + r.reason + ".", false);
+              return;
+            }
+            // Kermit's sender speaks first (S packet), so start once the receiver has
+            // the "go" and is turning its bridge on; a lost first S is simply resent.
+            setText("serialTransferStatus", "Connecting to " + p.name + "...");
+            kermitInstance = KERMIT.createSender({
+              file: { name: selectedFile.name, size: data.length, data: data },
+              write: transport.write,
+              onData: transport.onData,
+              timeout: kermitTimeout,
+              onProgress: function (sent, total) {
+                setSerialProgress(total > 0 ? (sent / total) * 100 : 0);
+                setText("serialTransferStatus", "Sending: " + L.formatSize(sent) + " / " + L.formatSize(total));
+              },
+              onComplete: function (ok, err) {
+                kermitInstance = null;
+                endTransfer(ok, ok ? "File sent to " + p.name + "." : "Transfer failed: " + (err || "unknown error"), false);
+              },
+            });
+            kermitInstance.start();
           },
           function () {
             return !transferActive;
@@ -2056,10 +1767,10 @@ var serialTransfer = (function () {
     ws_send({ "request-type": "file_tx_start" });
     setTimeout(function () {
       if (!transferActive) return;
-      ymodemInstance = YMODEM.createReceiver({
+      kermitInstance = KERMIT.createReceiver({
         write: transport.write,
         onData: transport.onData,
-        timeout: ymodemTimeout,
+        timeout: kermitTimeout,
         onFileStart: function (name) {
           receivedFileName = name || inv.fileName;
           setText("serialTransferStatus", "Receiving " + receivedFileName + "...");
@@ -2070,7 +1781,7 @@ var serialTransfer = (function () {
           setText("serialTransferStatus", "Receiving: " + L.formatSize(got) + " / " + L.formatSize(t));
         },
         onComplete: function (ok, data, err) {
-          ymodemInstance = null;
+          kermitInstance = null;
           if (ok && data) receivedData = data;
           endTransfer(
             ok && !!data,
@@ -2079,14 +1790,14 @@ var serialTransfer = (function () {
           );
         },
       });
-      ymodemInstance.start();
+      kermitInstance.start();
     }, BRIDGE_SETTLE_MS);
   }
 
-  // cancel=true aborts a running YMODEM session (sends CAN to the peer).
+  // cancel=true aborts a running Kermit session (sends an E packet to the peer).
   function endTransfer(success, message, cancel) {
-    if (cancel && ymodemInstance) ymodemInstance.cancel();
-    ymodemInstance = null;
+    if (cancel && kermitInstance) kermitInstance.cancel();
+    kermitInstance = null;
     var wasActive = transferActive;
     transferActive = false;
     joined = null;

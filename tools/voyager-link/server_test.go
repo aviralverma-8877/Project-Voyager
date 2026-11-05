@@ -134,24 +134,84 @@ func TestSerialSessionFlow(t *testing.T) {
 	}
 }
 
-func TestSecondPageTakesOver(t *testing.T) {
+// Two tabs (one per board) on the same PC must both stay connected.
+func TestTwoPagesStayConnected(t *testing.T) {
 	_, ts := newTestServer(t)
-	a, _, err := dial(t, ts, "http://192.168.4.1")
+	a, _, err := dial(t, ts, "http://192.168.1.37")
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer a.CloseNow()
 	readJSON(t, a)
-	b, _, err := dial(t, ts, "http://voyager.local")
+	b, _, err := dial(t, ts, "http://192.168.1.38")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer b.CloseNow()
 	readJSON(t, b)
 
+	// The first page still answers after the second connected.
+	writeJSON(t, a, map[string]any{"op": "list"})
+	if m := readJSON(t, a); m["op"] != "ports" {
+		t.Fatalf("first page lost its session: %v", m)
+	}
+	writeJSON(t, b, map[string]any{"op": "list"})
+	if m := readJSON(t, b); m["op"] != "ports" {
+		t.Fatalf("second page: %v", m)
+	}
+}
+
+func TestPortOwnership(t *testing.T) {
+	s := &server{status: func(string, bool) {}}
+	a := &session{srv: s, origin: "http://192.168.1.37"}
+	b := &session{srv: s, origin: "http://192.168.1.38"}
+	if err := s.claim("COM18", a); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.claim("com18", b); err == nil || !strings.Contains(err.Error(), "192.168.1.37") {
+		t.Fatalf("second page must be refused and told who holds the port, got %v", err)
+	}
+	if err := s.claim("COM13", b); err != nil {
+		t.Fatalf("a different port must be free: %v", err)
+	}
+	if err := s.claim("COM18", a); err != nil {
+		t.Fatalf("owner may re-claim: %v", err)
+	}
+	s.release("COM18", b) // not the owner: no effect
+	if err := s.claim("COM18", b); err == nil {
+		t.Fatal("release by a non-owner freed the port")
+	}
+	s.release("COM18", a)
+	if err := s.claim("COM18", b); err != nil {
+		t.Fatalf("port should be free after release: %v", err)
+	}
+}
+
+func TestTooManyPages(t *testing.T) {
+	_, ts := newTestServer(t)
+	var conns []*websocket.Conn
+	defer func() {
+		for _, c := range conns {
+			c.CloseNow()
+		}
+	}()
+	for i := 0; i < maxSessions; i++ {
+		c, _, err := dial(t, ts, "http://192.168.1.37")
+		if err != nil {
+			t.Fatal(err)
+		}
+		readJSON(t, c)
+		conns = append(conns, c)
+	}
+	c, _, err := dial(t, ts, "http://192.168.1.37")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.CloseNow()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if _, _, err := a.Read(ctx); websocket.CloseStatus(err) != websocket.StatusPolicyViolation {
-		t.Fatalf("old page should be closed with policy violation, got %v", err)
+	if _, _, err := c.Read(ctx); websocket.CloseStatus(err) != websocket.StatusTryAgainLater {
+		t.Fatalf("page %d should be refused with 1013, got %v", maxSessions+1, err)
 	}
 }
 

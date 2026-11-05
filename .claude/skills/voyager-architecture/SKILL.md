@@ -38,10 +38,14 @@ Rules:
 - `LORA_MAX_PAYLOAD` = **251** (255 FIFO bytes minus the 4-byte header). It's defined
   in `lora_support.h` and used by web_server for 413 checks.
 - `crc8` = CRC8 over the `seq` byte followed by the payload.
-- Types: `0 LORA_MSG`, `1 RAW_DATA`, `2 REC_AKNG`, `3 LORA_SERIAL`.
+- Types: `0 LORA_MSG`, `1 RAW_DATA` (**retired**: never sent; a received one is dropped
+  without an ACK), `2 REC_AKNG`, `3 LORA_SERIAL`.
 - `seq`: the sender seeds it randomly at boot (`esp_random`), then adds 1 for each
-  **new** packet. Retries reuse the same seq. LORA_SERIAL carries a seq, but isn't
-  ACKed or deduplicated.
+  **new** LORA_MSG. Retries reuse the same seq. LORA_SERIAL frames are sent with
+  seq 0 and don't consume the counter (they're never ACKed or deduplicated).
+- LORA_SERIAL framing (core `serial_to_lora`): a frame ends at CR, at 251 bytes, or
+  after 10 ms of serial silence, so one Kermit packet = one LoRa frame. Received
+  frames are written to serial only while the bridge is on (`lora_serial`).
 - `REC_AKNG`: `len=1`, `seq` = the seq of the packet being ACKed, `crc=0`, payload is
   one byte (`1` = OK, `0` = retry). The sender ignores an ACK whose seq doesn't match
   its outstanding packet, and treats any value other than 1 as a NACK.
@@ -56,10 +60,10 @@ Rules:
 - `LORA_MSG` payload JSON: `{"name","mac","data":"<inner JSON string>"}`. The inner
   object is `{"pack_type":"msg","data":text}` or `{"pack_type":"action","data":<action>,...}`:
   - `sos`
-  - `enable_file_tx_mode` + `total_packets`, `size`, `name`, `time`
-  - `disable_file_tx_mode` + `total_packets`, `sha256` (lowercase hex SHA-256 of the
-    full data-URL string the sender sent)
-- `RAW_DATA` payload: one slice of the data-URL, 1–200 chars.
+  - File Transfer handshake (sent by the UI via `/lora_transmit`):
+    `file_tx_invite` + `tx_id`, `name` (display only, max 64), `size`;
+    `file_tx_join` + `tx_id`, `nonce`; `file_tx_go` + `tx_id`, `nonce` (the one receiver
+    picked). The file itself then travels as Kermit over the LORA_SERIAL bridge.
 
 ## Contract 2: HTTP v2 (web_server, auth)
 
@@ -73,7 +77,6 @@ never the password. Passwords must be 8–63 chars.
 | POST | `/api/auth/setup` | no, but only works while no password is set | `password` | 200 / 400 / 409 |
 | POST | `/api/auth/change` | yes | `password` (new) | 200 / 400 |
 | POST | `/lora_transmit` | yes | form `data` (inner JSON string) | **202** `{"id":N}`; 400 missing; 413 if the wrapped payload > 251; 503 if the queue is full |
-| POST | `/send_raw` | yes | form `data` (chunk) | same as above (413 if > 251) |
 | GET | `/api/config?name=<file>` | yes | allowed files: `lora_config.json`, `long_lora_config.json`, `short_lora_config.json`, `config_list.json`, `lora_serial.json`, `wifi_config.json` | the file's JSON. `wifi_config.json` has `wifi_pass`/`ap_pass` **removed** |
 | GET | `/api/session` | yes | – | 200 `{"ok":true}` + `Set-Cookie: vsid=<128-bit random hex>; HttpOnly; SameSite=Strict; Path=/`. The cookie authenticates WS/SSE (and any HTTP route as an alternative to Digest). It lasts until reboot. At most 4 sessions, oldest dropped first |
 | GET | `/hostname`, `/username` | no | – | text/plain |
@@ -83,7 +86,7 @@ never the password. Passwords must be 8–63 chars.
 | GET | `/config/*` | – | – | **403 always** |
 | GET | other paths | no | – | static LittleFS (UI shell and assets), falls back to `/index.html` |
 
-- `/send_akn` and GET `/restart` / `/reset` are **removed**.
+- `/send_akn`, `/send_raw` and GET `/restart` / `/reset` are **removed**.
 - State-changing requests check that `Origin`/`Host` match the device. A mismatch gets 403.
 - The TX result arrives later over WS as `tx_result` (Contract 3).
 - Until a password is set, every auth-required endpoint returns 403
@@ -110,7 +113,8 @@ Device → client `response_type`:
 - `tx_result` (`id`, `akn` 0/1, `username`)
 - `set_uname` (`uname`)
 - `serial_mode` (`value`)
-- `stop_transmission`
+
+`stop_transmission` is **removed** (it belonged to the retired chunked file transfer).
 
 `set_sync_word` is removed from the UI.
 
@@ -121,8 +125,7 @@ Every outbound WS and SSE message goes through **one** sender task (web_sockets)
 
 | Event | Data | Producer |
 |---|---|---|
-| `RAW_DATA` | `{"millis","data"}` | lora_support (received file chunk, already deduplicated) |
-| `WIFI_DATA` | `{"rssi"}` every 1 s | tasks |
+| `WIFI_DATA` | STA: `{"mode":"STA","rssi","bssid","ch"}`; AP: `{"mode":"AP","clients"}`; else `{"mode":"OFF"}`; every 1 s | tasks |
 | `RAM_DATA` | `{"free_heap","heap_size"}` every 1 s | tasks |
 | `DEBUG` | `{"millis","data"}` | support_method. Sent only when built with `DEBUG=true` and `events_client_count()>0` (web_sockets.h; never call `rawEvents.count()` from other tasks) |
 

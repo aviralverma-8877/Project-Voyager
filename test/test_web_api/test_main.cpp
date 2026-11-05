@@ -74,13 +74,6 @@ static void test_lora_transmit_bad_json() {
   TEST_ASSERT_EQUAL_INT(400, wv::tx_check_status(wv::TX_BAD_JSON));
 }
 
-static void test_send_raw() {
-  TEST_ASSERT_EQUAL(wv::TX_MISSING, wv::check_send_raw(nullptr, MAX));
-  TEST_ASSERT_EQUAL(wv::TX_MISSING, wv::check_send_raw("", MAX));
-  TEST_ASSERT_EQUAL(wv::TX_OK, wv::check_send_raw(std::string(200, 'a').c_str(), MAX));
-  TEST_ASSERT_EQUAL(wv::TX_OK, wv::check_send_raw(std::string(251, 'a').c_str(), MAX));
-  TEST_ASSERT_EQUAL(wv::TX_TOO_LARGE, wv::check_send_raw(std::string(252, 'a').c_str(), MAX));
-}
 
 /* ---- config whitelist, path blocking, redaction ---- */
 
@@ -316,7 +309,6 @@ int main(int, char**) {
   RUN_TEST(test_lora_transmit_escaping_counts);
   RUN_TEST(test_lora_transmit_300_bytes_is_413);
   RUN_TEST(test_lora_transmit_bad_json);
-  RUN_TEST(test_send_raw);
   RUN_TEST(test_config_whitelist);
   RUN_TEST(test_path_blocking);
   RUN_TEST(test_page_request);

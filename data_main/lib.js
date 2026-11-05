@@ -11,13 +11,10 @@ var VoyagerLib = (function () {
   /* ---------- constants (Contracts 1, 2, 3, 5) ---------- */
 
   var LORA_MAX_PAYLOAD = 251; // Contract 1: 255 FIFO bytes - 4-byte header
-  var CHUNK_MIN = 1; // Contract 1: RAW_DATA is 1-200 chars
-  var CHUNK_MAX = 200;
   var MAC_PLACEHOLDER = "XX:XX:XX:XX:XX:XX";
   var TX_RESULT_TIMEOUT_MS = 30000; // fallback send window when tx_started has no usable expected_ms
   var TX_QUEUE_TIMEOUT_MS = 600000; // safety timer while an item waits in the device queue (10 min)
   var TX_START_SLACK_MS = 5000; // added to tx_started.expected_ms
-  var CHUNK_MAX_RETRIES = 2; // same chunk is retried up to 2 more times
   var USERNAME_MAX = 32;
 
   // Files GET /api/config?name= accepts (Contract 2).
@@ -162,45 +159,6 @@ var VoyagerLib = (function () {
     return (bytes / 1024 / 1024).toFixed(2) + " MB";
   }
 
-  function get_string_size(str) {
-    return formatSize(utf8ByteLength(str));
-  }
-
-  function formatDuration(totalSeconds) {
-    var t = Math.max(0, Math.ceil(Number(totalSeconds) || 0));
-    var h = Math.floor(t / 3600);
-    var m = Math.floor((t % 3600) / 60);
-    var s = t % 60;
-    return h + ":" + (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
-  }
-
-  // Rough lower bound: each chunk needs at least ~500 ms of air time + ACK.
-  function estimateSeconds(totalPackets, waitMs) {
-    var per = Math.max(Number(waitMs) || 0, 500) / 1000;
-    return Math.max(0, totalPackets) * per;
-  }
-
-  /* ---------- chunking ---------- */
-
-  function validateChunkSize(v) {
-    var n = toNumber(v);
-    return isInt(n) && n >= CHUNK_MIN && n <= CHUNK_MAX;
-  }
-
-  function totalPackets(length, chunkSize) {
-    if (!(length > 0) || !(chunkSize > 0)) return 0;
-    return Math.ceil(length / chunkSize);
-  }
-
-  function chunkString(str, chunkSize) {
-    str = toText(str);
-    var size = toNumber(chunkSize);
-    if (!validateChunkSize(size)) throw new Error("chunk size must be 1-200");
-    var out = [];
-    for (var i = 0; i < str.length; i += size) out.push(str.slice(i, i + size));
-    return out;
-  }
-
   /* ---------- LoRa message building (Contract 1) ---------- */
 
   function wrapperName(username) {
@@ -237,12 +195,12 @@ var VoyagerLib = (function () {
     return JSON.stringify(o);
   }
 
-  // Serial (YMODEM) transfer handshake, sent as LORA_MSG actions through /lora_transmit:
+  // Serial (Kermit) transfer handshake, sent as LORA_MSG actions through /lora_transmit:
   //   sender   -> all : file_tx_invite {tx_id, name, size}
   //   receiver -> all : file_tx_join   {tx_id, nonce}     (nonce: receiver's random id)
   //   sender   -> all : file_tx_go     {tx_id, nonce}     (only that receiver starts)
-  // YMODEM is point-to-point, so exactly one receiver is picked per transfer. The name
-  // here is for display only (YMODEM block 0 carries the real one) and is clipped.
+  // The transfer is point-to-point, so exactly one receiver is picked. The name
+  // here is for display only (the Kermit F packet carries the real one) and is clipped.
   var FILE_TX_NAME_MAX = 64;
   function buildFileTxInvite(txId, name, size) {
     return buildAction("file_tx_invite", {
@@ -270,47 +228,15 @@ var VoyagerLib = (function () {
     return (8 + 4.25) * tSym + nPayload * tSym;
   }
 
-  // YMODEM wait for one 1 KB block over the LoRa serial bridge: the block is five
-  // full LORA_SERIAL packets plus a 1-byte ACK packet back. Three times that plus
-  // slack, never under 15 s. Unknown config -> 30 s.
-  function ymodemTimeoutMs(cfg) {
-    if (!isObject(cfg)) return 30000;
+  // Kermit wait for one packet's answer over the LoRa serial bridge: a packet is one
+  // full LORA_SERIAL frame, its ACK one short frame back. Three times that plus slack
+  // for the USB/bridge hops, never under 5 s. Unknown config -> 10 s.
+  function kermitTimeoutMs(cfg) {
+    if (!isObject(cfg)) return 10000;
     var full = loraAirtimeMs(cfg.SpreadingFactor, cfg.SignalBandwidth, cfg.CodingRate4, 255);
-    var ack = loraAirtimeMs(cfg.SpreadingFactor, cfg.SignalBandwidth, cfg.CodingRate4, 5);
-    if (!isFinite(full) || !isFinite(ack)) return 30000;
-    return Math.max(15000, Math.ceil(3 * (5 * full + ack) + 3000));
-  }
-
-  // enable_file_tx_mode; the file name is shortened (extension kept where
-  // possible) until the wrapped payload fits. Returns null if nothing fits.
-  function buildEnableFileTx(meta, username) {
-    var name = toText(meta.name);
-    var dot = name.lastIndexOf(".");
-    var ext = dot > 0 && name.length - dot <= 10 ? name.slice(dot) : "";
-    var base = ext ? name.slice(0, dot) : name;
-    function build(n) {
-      return buildAction("enable_file_tx_mode", {
-        total_packets: meta.total_packets,
-        size: toText(meta.size),
-        name: n,
-        time: toText(meta.time),
-      });
-    }
-    var inner = build(name);
-    if (checkPayload(username, inner).ok) return inner;
-    for (var keep = base.length - 1; keep >= 0; keep--) {
-      inner = build(base.slice(0, keep) + "~" + ext);
-      if (checkPayload(username, inner).ok) return inner;
-    }
-    inner = build("~");
-    return checkPayload(username, inner).ok ? inner : null;
-  }
-
-  function buildDisableFileTx(total, sha256) {
-    return buildAction("disable_file_tx_mode", {
-      total_packets: total,
-      sha256: toText(sha256),
-    });
+    var ack = loraAirtimeMs(cfg.SpreadingFactor, cfg.SignalBandwidth, cfg.CodingRate4, 20);
+    if (!isFinite(full) || !isFinite(ack)) return 10000;
+    return Math.max(5000, Math.ceil(3 * (full + ack) + 2000));
   }
 
   /* ---------- message parsing (Contracts 1, 3, 4) ---------- */
@@ -329,11 +255,8 @@ var VoyagerLib = (function () {
       packType: toText(inner.pack_type),
       text: "",
       action: "",
-      totalPackets: -1,
       size: "",
       fileName: "",
-      time: "",
-      sha256: "",
       txId: "",
       nonce: "",
     };
@@ -342,12 +265,8 @@ var VoyagerLib = (function () {
       r.text = toText(inner.data);
     } else if (r.packType === "action") {
       r.action = toText(inner.data);
-      var tp = toNumber(inner.total_packets);
-      r.totalPackets = isInt(tp) && tp >= 0 ? tp : -1;
       r.size = toText(inner.size);
       r.fileName = toText(inner.name);
-      r.time = toText(inner.time);
-      r.sha256 = toText(inner.sha256).toLowerCase();
       r.txId = toText(inner.tx_id);
       r.nonce = toText(inner.nonce);
     } else {
@@ -494,127 +413,6 @@ var VoyagerLib = (function () {
       CodingRate4: toNumber(v.codingRate),
       SyncWord: toNumber(v.syncWord),
     };
-  }
-
-  /* ---------- SHA-256 (crypto.subtle is unavailable over plain http) ---------- */
-
-  var K = [
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
-    0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
-    0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786,
-    0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147,
-    0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
-    0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-    0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a,
-    0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
-    0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
-  ];
-
-  function ror(x, n) {
-    return (x >>> n) | (x << (32 - n));
-  }
-
-  function sha256Bytes(bytes) {
-    var H = [
-      0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c,
-      0x1f83d9ab, 0x5be0cd19,
-    ];
-    var len = bytes.length;
-    var msg = Array.prototype.slice.call(bytes);
-    msg.push(0x80);
-    while (msg.length % 64 !== 56) msg.push(0);
-    var hi = Math.floor(len / 0x20000000);
-    var lo = (len * 8) >>> 0;
-    msg.push(
-      (hi >>> 24) & 255, (hi >>> 16) & 255, (hi >>> 8) & 255, hi & 255,
-      (lo >>> 24) & 255, (lo >>> 16) & 255, (lo >>> 8) & 255, lo & 255
-    );
-    var W = new Array(64);
-    for (var off = 0; off < msg.length; off += 64) {
-      var t;
-      for (t = 0; t < 16; t++) {
-        var p = off + 4 * t;
-        W[t] = (msg[p] << 24) | (msg[p + 1] << 16) | (msg[p + 2] << 8) | msg[p + 3];
-      }
-      for (t = 16; t < 64; t++) {
-        var x = W[t - 15];
-        var y = W[t - 2];
-        var s0 = ror(x, 7) ^ ror(x, 18) ^ (x >>> 3);
-        var s1 = ror(y, 17) ^ ror(y, 19) ^ (y >>> 10);
-        W[t] = (W[t - 16] + s0 + W[t - 7] + s1) | 0;
-      }
-      var a = H[0], b = H[1], c = H[2], d = H[3];
-      var e = H[4], f = H[5], g = H[6], h = H[7];
-      for (t = 0; t < 64; t++) {
-        var S1 = ror(e, 6) ^ ror(e, 11) ^ ror(e, 25);
-        var ch = (e & f) ^ (~e & g);
-        var t1 = (h + S1 + ch + K[t] + W[t]) | 0;
-        var S0 = ror(a, 2) ^ ror(a, 13) ^ ror(a, 22);
-        var maj = (a & b) ^ (a & c) ^ (b & c);
-        var t2 = (S0 + maj) | 0;
-        h = g;
-        g = f;
-        f = e;
-        e = (d + t1) | 0;
-        d = c;
-        c = b;
-        b = a;
-        a = (t1 + t2) | 0;
-      }
-      H[0] = (H[0] + a) | 0;
-      H[1] = (H[1] + b) | 0;
-      H[2] = (H[2] + c) | 0;
-      H[3] = (H[3] + d) | 0;
-      H[4] = (H[4] + e) | 0;
-      H[5] = (H[5] + f) | 0;
-      H[6] = (H[6] + g) | 0;
-      H[7] = (H[7] + h) | 0;
-    }
-    var hex = "";
-    for (var i = 0; i < 8; i++) hex += ("00000000" + (H[i] >>> 0).toString(16)).slice(-8);
-    return hex;
-  }
-
-  function sha256Hex(str) {
-    return sha256Bytes(utf8Encode(str));
-  }
-
-  /* ---------- data URL decoding ---------- */
-
-  var B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-  function base64Decode(s) {
-    s = toText(s).replace(/\s+/g, "");
-    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(s) || s.length % 4 === 1)
-      throw new Error("invalid base64");
-    s = s.replace(/=+$/, "");
-    var out = new Uint8Array(Math.floor((s.length * 3) / 4));
-    var buf = 0, bits = 0, j = 0;
-    for (var i = 0; i < s.length; i++) {
-      buf = (buf << 6) | B64.indexOf(s.charAt(i));
-      bits += 6;
-      if (bits >= 8) {
-        bits -= 8;
-        out[j++] = (buf >> bits) & 255;
-      }
-    }
-    return out;
-  }
-
-  // "data:<mime>[;base64],<body>" -> { mime, bytes: Uint8Array }. Throws if malformed.
-  function dataURIToBytes(uri) {
-    uri = toText(uri);
-    var comma = uri.indexOf(",");
-    if (uri.slice(0, 5) !== "data:" || comma < 0) throw new Error("not a data URL");
-    var header = uri.slice(5, comma);
-    var body = uri.slice(comma + 1);
-    var mime = header.split(";")[0] || "application/octet-stream";
-    var bytes = /;base64$/i.test(header)
-      ? base64Decode(body)
-      : new Uint8Array(utf8Encode(decodeURIComponent(body)));
-    return { mime: mime, bytes: bytes };
   }
 
   /* ---------- TX result tracking (Contract 2: 202 {id}, Contract 3: tx_result) ---------- */
@@ -766,151 +564,12 @@ var VoyagerLib = (function () {
     };
   }
 
-  /* ---------- file sender: one chunk at a time, retry the same chunk ---------- */
-
-  /*
-   * opts:
-   *   chunks      array of strings
-   *   send(chunk, index, done)  done({ok:bool, fatal:bool, reason:string})
-   *   schedule(fn, ms)
-   *   waitMs      delay between chunks
-   *   retryDelayMs delay before a retry
-   *   maxRetries  extra attempts per chunk (default 2)
-   *   isCancelled() -> bool
-   *   onProgress(sent, total)
-   *   onFinish({ok, sent, total, reason})
-   */
-  function createChunkSender(opts) {
-    var chunks = opts.chunks;
-    var total = chunks.length;
-    var maxRetries = opts.maxRetries === undefined ? CHUNK_MAX_RETRIES : opts.maxRetries;
-    var finished = false;
-    var attempts = 0;
-
-    function finish(ok, sent, reason) {
-      if (finished) return;
-      finished = true;
-      opts.onFinish({ ok: ok, sent: sent, total: total, reason: reason || "" });
-    }
-
-    function attempt(index, tries) {
-      if (opts.isCancelled && opts.isCancelled()) return finish(false, index, "cancelled");
-      attempts++;
-      opts.send(chunks[index], index, function (res) {
-        if (finished) return;
-        if (res && res.ok) {
-          var sent = index + 1;
-          if (opts.onProgress) opts.onProgress(sent, total);
-          if (sent >= total) return finish(true, sent, "");
-          opts.schedule(function () {
-            attempt(sent, 0);
-          }, opts.waitMs || 0);
-        } else if (res && res.fatal) {
-          finish(false, index, res.reason || "failed");
-        } else if (tries < maxRetries) {
-          opts.schedule(function () {
-            attempt(index, tries + 1);
-          }, opts.retryDelayMs || 0);
-        } else {
-          finish(false, index, (res && res.reason) || "no acknowledgement");
-        }
-      });
-    }
-
-    return {
-      start: function () {
-        if (total === 0) return finish(true, 0, "");
-        attempt(0, 0);
-      },
-      attempts: function () {
-        return attempts;
-      },
-    };
-  }
-
-  /* ---------- file receiver: count + SHA-256 verification ---------- */
-
-  function createFileReceiver() {
-    var st = { active: false, meta: null, data: "", count: 0, result: null };
-    return {
-      start: function (meta) {
-        st.active = true;
-        st.meta = meta || {};
-        st.data = "";
-        st.count = 0;
-        st.result = null;
-      },
-      isActive: function () {
-        return st.active;
-      },
-      addChunk: function (chunk) {
-        if (!st.active || typeof chunk !== "string" || chunk === "") return false;
-        st.data += chunk;
-        st.count++;
-        return true;
-      },
-      progress: function () {
-        var total = st.meta && st.meta.totalPackets > 0 ? st.meta.totalPackets : 0;
-        return {
-          received: st.count,
-          total: total,
-          percent: total > 0 ? clamp((st.count / total) * 100, 0, 100) : 0,
-          sizeText: get_string_size(st.data),
-        };
-      },
-      finish: function (info) {
-        if (!st.active) return null;
-        st.active = false;
-        var expected = info ? info.totalPackets : -1;
-        var expectedHash = info ? toText(info.sha256).toLowerCase() : "";
-        var countOk = expected >= 0 && st.count === expected;
-        var hash = sha256Hex(st.data);
-        var hashOk = /^[0-9a-f]{64}$/.test(expectedHash) && hash === expectedHash;
-        st.result = {
-          verified: countOk && hashOk,
-          countOk: countOk,
-          hashOk: hashOk,
-          received: st.count,
-          expected: expected,
-          sha256: hash,
-          reason: !countOk
-            ? "received " + st.count + " of " + expected + " packets"
-            : !hashOk
-            ? "SHA-256 mismatch"
-            : "",
-        };
-        return st.result;
-      },
-      cancel: function () {
-        if (!st.active) return false;
-        st.active = false;
-        st.result = { verified: false, reason: "cancelled" };
-        return true;
-      },
-      result: function () {
-        return st.result;
-      },
-      canDownload: function () {
-        return !!(st.result && st.result.verified && st.data.length > 0);
-      },
-      data: function () {
-        return st.data;
-      },
-      fileName: function () {
-        return st.meta && st.meta.fileName ? st.meta.fileName : "";
-      },
-    };
-  }
-
   return {
     LORA_MAX_PAYLOAD: LORA_MAX_PAYLOAD,
-    CHUNK_MIN: CHUNK_MIN,
-    CHUNK_MAX: CHUNK_MAX,
     MAC_PLACEHOLDER: MAC_PLACEHOLDER,
     TX_RESULT_TIMEOUT_MS: TX_RESULT_TIMEOUT_MS,
     TX_QUEUE_TIMEOUT_MS: TX_QUEUE_TIMEOUT_MS,
     TX_START_SLACK_MS: TX_START_SLACK_MS,
-    CHUNK_MAX_RETRIES: CHUNK_MAX_RETRIES,
     LORA_BANDWIDTHS: LORA_BANDWIDTHS,
     LORA_LIMITS: LORA_LIMITS,
     toText: toText,
@@ -919,23 +578,15 @@ var VoyagerLib = (function () {
     utf8Encode: utf8Encode,
     utf8ByteLength: utf8ByteLength,
     formatSize: formatSize,
-    get_string_size: get_string_size,
-    formatDuration: formatDuration,
-    estimateSeconds: estimateSeconds,
-    validateChunkSize: validateChunkSize,
-    totalPackets: totalPackets,
-    chunkString: chunkString,
     wrappedPayloadSize: wrappedPayloadSize,
     checkPayload: checkPayload,
     buildTextMessage: buildTextMessage,
     buildAction: buildAction,
-    buildEnableFileTx: buildEnableFileTx,
     buildFileTxInvite: buildFileTxInvite,
     buildFileTxJoin: buildFileTxJoin,
     buildFileTxGo: buildFileTxGo,
     loraAirtimeMs: loraAirtimeMs,
-    ymodemTimeoutMs: ymodemTimeoutMs,
-    buildDisableFileTx: buildDisableFileTx,
+    kermitTimeoutMs: kermitTimeoutMs,
     parseLoraRx: parseLoraRx,
     parseWifiScan: parseWifiScan,
     wifiQuality: wifiQuality,
@@ -952,12 +603,6 @@ var VoyagerLib = (function () {
     isLoraPreset: isLoraPreset,
     validateLoraConfig: validateLoraConfig,
     loraConfigFromForm: loraConfigFromForm,
-    sha256Bytes: sha256Bytes,
-    sha256Hex: sha256Hex,
-    base64Decode: base64Decode,
-    dataURIToBytes: dataURIToBytes,
     createTxTracker: createTxTracker,
-    createChunkSender: createChunkSender,
-    createFileReceiver: createFileReceiver,
   };
 })();

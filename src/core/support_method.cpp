@@ -447,13 +447,22 @@ void send_to_lora(void *param)
             // Snapshot the flag once per message to avoid partial-send if toggled mid-packet.
             bool enabled = lora_serial;
             if (enabled)
-                LoRa_send(p->message, LORA_SERIAL);
+                // seq 0, not a fresh one: LORA_SERIAL is never ACKed or deduplicated, and
+                // taking seqs here would let a later LORA_MSG land exactly 256 seqs after
+                // the previous one and be dropped by the receiver's dedup as a "duplicate".
+                LoRa_send(p->message, LORA_SERIAL, 0);
             delete p;
         }
     }
 }
 
-// Active serial (USB or BT) -> LoRa. Each chunk is at most LORA_MAX_PAYLOAD bytes.
+// A frame also ends when the line goes quiet this long (end of a burst that has no CR).
+#define SERIAL_FRAME_IDLE_MS 10
+
+// Active serial (USB or BT) -> LoRa. A LoRa frame ends at CR, at LORA_MAX_PAYLOAD
+// bytes, or after SERIAL_FRAME_IDLE_MS of silence. Kermit packets never contain a raw
+// CR except their terminator, so each packet (<= 251 bytes) travels as exactly one
+// frame and a lost frame costs one packet. Terminal text gets one frame per line.
 void serial_to_lora(void* param)
 {
     while (true)
@@ -462,20 +471,31 @@ void serial_to_lora(void* param)
         bool enabled = lora_serial;
         if (enabled)
         {
-            if (active_serial_available())
+            if (active_serial_available() > 0)
             {
-                // Give a short burst time to arrive so we send fuller chunks.
-                vTaskDelay(pdMS_TO_TICKS(20));
                 DebugQueueParam *p = new (std::nothrow) DebugQueueParam();
                 if (p)
                 {
                     p->message.reserve(LORA_MAX_PAYLOAD);
-                    while (active_serial_available() && p->message.length() < LORA_MAX_PAYLOAD)
-                        p->message += (char)active_serial_read();
+                    uint32_t last = millis();
+                    while (p->message.length() < LORA_MAX_PAYLOAD)
+                    {
+                        if (active_serial_available() > 0)
+                        {
+                            char c = (char)active_serial_read();
+                            p->message += c;
+                            last = millis();
+                            if (c == '\r') break;
+                        }
+                        else if (millis() - last >= SERIAL_FRAME_IDLE_MS)
+                            break;
+                        else
+                            vTaskDelay(1);
+                    }
                     if (xQueueSend(serial_packet_send, (void*)&p, pdMS_TO_TICKS(100)) != pdTRUE)
                         delete p;
                 }
-                continue;   // drain any remainder immediately
+                continue;   // next frame immediately
             }
         }
         else
@@ -548,10 +568,6 @@ bool save_username(const String& uname)
 
 // ------------------------------------------------------------ WS helpers
 
-void stop_transmission()
-{
-    send_to_ws("{\"response_type\":\"stop_transmission\"}");
-}
 
 void show_alert(String msg)
 {

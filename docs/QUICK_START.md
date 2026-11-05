@@ -134,7 +134,7 @@ To connect device to your WiFi network:
 ### 6. Test Communication
 
 **On first device:**
-1. Go to **"File Transfer"** page
+1. Go to the **Dashboard** page
 2. Type a message
 3. Click **"Send"**
 

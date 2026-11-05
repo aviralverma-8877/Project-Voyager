@@ -157,9 +157,9 @@ Project Voyager is an ESP32-based wireless communication platform that enables f
 
 **Message Types:**
 - `0x00` - LORA_MSG: Text messages
-- `0x01` - RAW_DATA: File chunks / binary data
+- `0x01` - RAW_DATA: retired (old chunked file transfer); ignored on receive
 - `0x02` - REC_AKNG: Acknowledgment packets
-- `0x03` - LORA_SERIAL: Serial communication
+- `0x03` - LORA_SERIAL: Serial bridge (used by File Transfer); one frame per Kermit packet, not ACKed
 
 **Transmission Flow:**
 ```
@@ -323,7 +323,6 @@ All settings are stored in `/config/` directory on LittleFS:
   "password": "",
   "pub_topic": "tx",
   "sub_topic": "rx",
-  "raw_data": "send_raw",
   "ping_topic": "ping"
 }
 ```
@@ -347,7 +346,7 @@ Access the web dashboard at:
 
 **Dashboard Pages:**
 - **Home** (`/`) - Main dashboard with device status
-- **File Transfer** (`/file_transfer.html`) - Upload/send files via LoRa
+- **File Transfer** (`/file_transfer.html`) - Send a file to one other device with Kermit: each PC talks to its own board over USB (through [Voyager Link](tools/voyager-link/README.md) on Windows), and the boards relay the packets over LoRa
 - **LoRa Config** (`/lora.html`) - Configure LoRa parameters
 - **WiFi Config** (`/wifi.html`) - Connect to WiFi networks
 - **MQTT Config** (`/mqtt.html`) - MQTT broker settings
@@ -359,12 +358,6 @@ Access the web dashboard at:
 ```bash
 curl -X POST http://192.168.4.1/lora_transmit \
   -d "message=Hello Voyager"
-```
-
-#### Send Raw Data (File Chunk)
-```bash
-curl -X POST http://192.168.4.1/send_raw \
-  -d "base64EncodedData"
 ```
 
 #### Get Device Info
@@ -447,9 +440,7 @@ When MQTT is enabled, Voyager bridges LoRa messages to MQTT topics:
 **Topic Structure:**
 ```
 voyager/<MAC_ADDRESS>/<pub_topic>/LORA_MSG
-voyager/<MAC_ADDRESS>/<pub_topic>/RAW_DATA
 voyager/<MAC_ADDRESS>/<sub_topic>
-voyager/<MAC_ADDRESS>/send_raw
 voyager/<MAC_ADDRESS>/ping
 ```
 

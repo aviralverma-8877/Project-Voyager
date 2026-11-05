@@ -1,56 +1,111 @@
-<h2 class="panel-title">File Transfer <small>Broadcast over LoRa</small></h2>
-<fieldset class="file_tx_controls">
-    <div class="field">
-        <label for="broadcastFile" class="label">File</label>
-        <input
-            type="file"
-            class="input"
-            onchange="reset_progress_bar()"
-            id="broadcastFile"
-        >
-        <div class="hint">Small files only: every 200 characters of the encoded file is one radio packet.</div>
+<h2 class="panel-title">File Transfer <small>Kermit over USB, relayed over LoRa</small></h2>
+
+<p class="hint">Sends a file between two Voyager devices. Each computer talks to its own device over a USB cable, and the devices relay the data over LoRa. One sender, one receiver per transfer.</p>
+
+<!-- Step 1: Serial connection -->
+<fieldset id="serial_step_connect" class="section">
+    <h3 class="section-label">1. Serial Connection</h3>
+    <p id="serialLinkStatus" class="hint">Checking for Voyager Link...</p>
+    <div id="helperMissing" hidden>
+        <p class="hint">This page is served by the device over plain HTTP, so Chrome does not let it open serial ports itself. <b>Voyager Link</b> is a small Windows helper that runs in the system tray and connects this page to the USB port.</p>
+        <ol class="hint">
+            <li>Download Voyager Link while you have internet access, and run it (no install needed).</li>
+            <li>If Windows SmartScreen warns about it, choose <i>More info</i> &rarr; <i>Run anyway</i>.</li>
+            <li>If Chrome asks to let this page access apps on your device, choose <i>Allow</i>.</li>
+        </ol>
+        <div class="actions">
+            <a class="btn secondary" id="helperDownloadLink" href="#" target="_blank" rel="noopener">Download Voyager Link</a>
+            <button type="button" class="btn secondary" id="helperRetryBtn">Check again</button>
+        </div>
     </div>
-    <div class="grid-2">
-        <div class="field">
-            <label for="wait_time" class="label">Wait between packets <span class="unit">ms</span></label>
-            <input
-                class="input"
-                id="wait_time"
-                value="10"
-                min="10"
-                step="1"
-                type="number"
-                placeholder="At least 10"
-            >
-        </div>
-        <div class="field">
-            <label for="chunk_size" class="label">Packet size <span class="unit">1-200 chars</span></label>
-            <input
-                class="input"
-                id="chunk_size"
-                value="200"
-                min="1"
-                max="200"
-                step="1"
-                type="number"
-                placeholder="1-200"
-            >
-        </div>
+    <div class="field" id="serialPortField" hidden>
+        <label for="serialPortSelect" class="label">Serial port</label>
+        <select id="serialPortSelect" class="select"></select>
+    </div>
+    <div class="actions">
+        <button type="button" class="btn primary" id="connectSerialBtn" disabled>Connect</button>
+        <button type="button" class="btn secondary" id="refreshPortsBtn" hidden>Refresh ports</button>
+        <button type="button" class="btn secondary" id="disconnectSerialBtn" hidden>Disconnect</button>
+    </div>
+    <p id="serialStatus" class="hint mt-2">Not connected</p>
+</fieldset>
+
+<!-- Step 2: Select Role -->
+<fieldset id="serial_step_role" class="section" disabled>
+    <h3 class="section-label">2. Transfer Role</h3>
+    <div class="field">
+        <label class="switch">
+            <input type="radio" name="serial_role" value="sender" checked>
+            <span>Send a file</span>
+        </label>
+    </div>
+    <div class="field">
+        <label class="switch">
+            <input type="radio" name="serial_role" value="receiver">
+            <span>Receive a file</span>
+        </label>
     </div>
 </fieldset>
-<div class="actions">
-    <button
-        type="button"
-        id="fileBroadcastButton"
-        class="btn primary"
-        onclick="file_broadcast()"
-    >Broadcast</button>
-    <button
-        type="button"
-        id="stopBroadcastButton"
-        class="btn danger"
-        onclick="stop_broadcast()"
-        disabled
-    >Stop</button>
-</div>
-<p class="hint mt-2">Progress and the result appear in the Telemetry panel.</p>
+
+<!-- Step 3a: Sender View -->
+<fieldset id="serial_step_sender" class="section" hidden>
+    <h3 class="section-label">3. Send File</h3>
+    <div class="field">
+        <label for="serialSendFile" class="label">File to send</label>
+        <input type="file" class="input" id="serialSendFile">
+    </div>
+    <div class="actions mb-2">
+        <button type="button" class="btn secondary" id="inviteBtn" disabled>Broadcast Invitation</button>
+    </div>
+    <div id="participantsSection" hidden>
+        <h5>Ready to receive</h5>
+        <ul class="list" id="participantList"></ul>
+        <p class="log-empty" id="participantsEmpty">Waiting for someone to accept...</p>
+    </div>
+    <p id="serialSenderStatus" class="hint"></p>
+    <div class="actions mt-2">
+        <button type="button" class="btn primary" id="startSerialTransferBtn" disabled>Start Transfer</button>
+    </div>
+</fieldset>
+
+<!-- Step 3b: Receiver View -->
+<fieldset id="serial_step_receiver" class="section" hidden>
+    <h3 class="section-label">3. Receive File</h3>
+    <p id="receiverWaiting">Waiting for a file transfer invitation...</p>
+    <div id="invitationsSection" hidden>
+        <h5>Incoming Invitations</h5>
+        <ul class="list" id="invitationList"></ul>
+    </div>
+    <p id="serialReceiverStatus" class="hint"></p>
+</fieldset>
+
+<!-- Progress -->
+<fieldset id="serial_step_progress" class="section" hidden>
+    <h3 class="section-label">Transfer Progress</h3>
+    <div class="progress">
+        <div
+            id="serialTransferProgress"
+            class="bar"
+            role="progressbar"
+            style="width: 0%"
+            aria-label="Serial transfer progress"
+            aria-valuenow="0"
+            aria-valuemin="0"
+            aria-valuemax="100"
+        ></div>
+    </div>
+    <p id="serialTransferStatus" class="hint mt-2"></p>
+    <div class="actions mt-2">
+        <button type="button" class="btn danger" id="cancelSerialTransferBtn">Cancel Transfer</button>
+    </div>
+</fieldset>
+
+<!-- Result -->
+<fieldset id="serial_step_result" class="section" hidden>
+    <h3 class="section-label">Result</h3>
+    <p id="serialResultMessage" class="bold"></p>
+    <div class="actions">
+        <button type="button" class="btn primary" id="serialDownloadBtn" hidden>Download File</button>
+        <button type="button" class="btn secondary" id="serialResetBtn">New Transfer</button>
+    </div>
+</fieldset>

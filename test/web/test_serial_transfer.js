@@ -207,13 +207,13 @@ test("loraAirtimeMs matches Semtech calculator values", function() {
     assertTrue(isNaN(L.loraAirtimeMs(13, 125000, 5, 10)), "SF out of range");
 });
 
-test("ymodemTimeoutMs scales with the radio config", function() {
+test("kermitTimeoutMs scales with the radio config", function() {
     var def = { SpreadingFactor: 8, SignalBandwidth: 500000, CodingRate4: 7 };
     var slow = { SpreadingFactor: 12, SignalBandwidth: 125000, CodingRate4: 8 };
-    assertEq(L.ymodemTimeoutMs(def), 15000);           // floor for the fast default
-    assertTrue(L.ymodemTimeoutMs(slow) > 120000, "SF12 needs minutes per block");
-    assertEq(L.ymodemTimeoutMs(null), 30000);
-    assertEq(L.ymodemTimeoutMs({ SpreadingFactor: "x" }), 30000);
+    assertEq(L.kermitTimeoutMs(def), 5000);            // floor for the fast default
+    assertTrue(L.kermitTimeoutMs(slow) > 30000, "SF12: a full frame takes ~10 s on air");
+    assertEq(L.kermitTimeoutMs(null), 10000);
+    assertEq(L.kermitTimeoutMs({ SpreadingFactor: "x" }), 10000);
 });
 
 test("file size 0 or missing handled correctly", function() {

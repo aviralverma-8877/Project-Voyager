@@ -51,34 +51,4 @@ test("longer usernames shrink the room for text", function () {
   assertTrue(!L.checkPayload(rep("n", 32), t).ok);
 });
 
-test("enable_file_tx_mode fits and shortens long file names", function () {
-  var meta = { total_packets: 137, size: "20.00 KB", name: "photo.jpg", time: "0:01:09" };
-  var inner = L.buildEnableFileTx(meta, rep("n", 32));
-  assertTrue(inner !== null);
-  assertEq(JSON.parse(inner).name, "photo.jpg");
-  meta.name = rep("x", 300) + ".jpg";
-  inner = L.buildEnableFileTx(meta, rep("n", 32));
-  assertTrue(inner !== null, "shortened");
-  assertTrue(L.checkPayload(rep("n", 32), inner).ok, "fits");
-  var o = JSON.parse(inner);
-  assertEq(o.pack_type, "action");
-  assertEq(o.data, "enable_file_tx_mode");
-  assertEq(o.total_packets, 137);
-  assertTrue(/~\.jpg$/.test(o.name), "keeps extension: " + o.name);
-});
-
-test("disable_file_tx_mode carries total_packets and sha256 and fits", function () {
-  var inner = L.buildDisableFileTx(137, L.sha256Hex("x"));
-  var o = JSON.parse(inner);
-  assertEq(o.data, "disable_file_tx_mode");
-  assertEq(o.total_packets, 137);
-  assertEq(o.sha256.length, 64);
-  var long32 = rep("n", 32);
-  assertTrue(L.checkPayload(long32, inner).ok);
-});
-
-test("a 200-char RAW_DATA chunk is under 251", function () {
-  assertTrue(L.utf8ByteLength(rep("A", 200)) <= 251);
-});
-
 done();

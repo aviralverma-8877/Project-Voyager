@@ -246,30 +246,30 @@ static void test_dedup_multi_lru_eviction() {
     TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, 1, 0));
 }
 
-static void test_dedup_multi_raw_data_key() {
+static void test_dedup_multi_peers_independent() {
     RxDedupMulti d;
-    // RAW_DATA uses DEDUP_KEY_RAW (0)
-    TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, DEDUP_KEY_RAW, 50));
-    rx_commit_multi(d, DEDUP_KEY_RAW, 50);
-    TEST_ASSERT_TRUE(rx_is_duplicate_multi(d, DEDUP_KEY_RAW, 50));
-    // Different peer (LORA_MSG) doesn't collide
-    uint32_t mac = hash_mac("AABBCCDD");
-    TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, mac, 50));
+    uint32_t a = hash_mac("54:43:B2:16:E8:EC"), b = hash_mac("54:43:B2:16:F1:5C");
+    TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, a, 50));
+    rx_commit_multi(d, a, 50);
+    TEST_ASSERT_TRUE(rx_is_duplicate_multi(d, a, 50));
+    // Same seq from a different peer doesn't collide
+    TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, b, 50));
 }
 
-// Regression: one sender, shared seq counter. enable_file_tx_mode (LORA_MSG seq s),
-// then 255 RAW chunks (s+1..s+255), then disable_file_tx_mode (LORA_MSG seq s+256 == s).
-// The closing message must NOT be dropped as a duplicate.
+// Regression: peer A sends seq s, then 255 packets from peer B are accepted, then A
+// sends again with seq s+256 == s. Aging (DEDUP_WINDOW) must keep A's new message
+// from being dropped as a duplicate of the stale entry.
 static void test_dedup_multi_seq_wrap_across_types() {
     RxDedupMulti d;
     uint32_t mac = hash_mac("54:43:B2:16:F1:5C");
+    uint32_t other = hash_mac("54:43:B2:16:E8:EC");
     uint8_t s = 200;
     TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, mac, s));
     rx_commit_multi(d, mac, s);
     for (int i = 1; i <= 255; ++i) {
         uint8_t q = (uint8_t)(s + i);
-        TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, DEDUP_KEY_RAW, q));
-        rx_commit_multi(d, DEDUP_KEY_RAW, q);
+        TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, other, q));
+        rx_commit_multi(d, other, q);
     }
     TEST_ASSERT_FALSE(rx_is_duplicate_multi(d, mac, (uint8_t)(s + 256)));
 }
@@ -444,16 +444,10 @@ static void test_parse_lora_msg() {
     TEST_ASSERT_EQUAL_INT((int)MsgKind::Sos, (int)m.kind);
     TEST_ASSERT_EQUAL_STRING("AA", m.from.c_str());
 
+    // Any other action (e.g. the serial-transfer handshake) is OtherAction.
     m = parse_lora_msg("{\"name\":\"a\",\"mac\":\"AA\",\"data\":\"{\\\"pack_type\\\":\\\"action\\\",\\\"data\\\":"
-                       "\\\"enable_file_tx_mode\\\",\\\"total_packets\\\":102,\\\"size\\\":20000,"
-                       "\\\"name\\\":\\\"f.txt\\\",\\\"time\\\":1}\"}");
-    TEST_ASSERT_EQUAL_INT((int)MsgKind::FileStart, (int)m.kind);
-    TEST_ASSERT_EQUAL_STRING("f.txt", m.file_name.c_str());
-    TEST_ASSERT_EQUAL_INT32(102, m.total_packets);
-
-    m = parse_lora_msg("{\"name\":\"a\",\"mac\":\"AA\",\"data\":\"{\\\"pack_type\\\":\\\"action\\\",\\\"data\\\":"
-                       "\\\"disable_file_tx_mode\\\",\\\"total_packets\\\":102,\\\"sha256\\\":\\\"ab\\\"}\"}");
-    TEST_ASSERT_EQUAL_INT((int)MsgKind::FileEnd, (int)m.kind);
+                       "\\\"file_tx_invite\\\",\\\"tx_id\\\":\\\"ab12\\\"}\"}");
+    TEST_ASSERT_EQUAL_INT((int)MsgKind::OtherAction, (int)m.kind);
 
     TEST_ASSERT_EQUAL_INT((int)MsgKind::Invalid, (int)parse_lora_msg("garbage").kind);
     TEST_ASSERT_EQUAL_INT((int)MsgKind::Invalid, (int)parse_lora_msg("{\"name\":\"a\"}").kind);
@@ -461,13 +455,6 @@ static void test_parse_lora_msg() {
     TEST_ASSERT_EQUAL_INT((int)MsgKind::Invalid, (int)parse_lora_msg(nullptr).kind);
 }
 
-static void test_progress_pct() {
-    TEST_ASSERT_EQUAL_UINT8(0, progress_pct(0, 100));
-    TEST_ASSERT_EQUAL_UINT8(0, progress_pct(5, 0));
-    TEST_ASSERT_EQUAL_UINT8(50, progress_pct(51, 102));
-    TEST_ASSERT_EQUAL_UINT8(100, progress_pct(102, 102));
-    TEST_ASSERT_EQUAL_UINT8(100, progress_pct(200, 102));
-}
 
 int main(int, char**) {
     UNITY_BEGIN();
@@ -494,7 +481,7 @@ int main(int, char**) {
     RUN_TEST(test_dedup_multi_basic);
     RUN_TEST(test_dedup_multi_new_seq_accepted);
     RUN_TEST(test_dedup_multi_lru_eviction);
-    RUN_TEST(test_dedup_multi_raw_data_key);
+    RUN_TEST(test_dedup_multi_peers_independent);
     RUN_TEST(test_dedup_multi_seq_wrap_across_types);
     RUN_TEST(test_dedup_multi_retry_after_interleave);
     RUN_TEST(test_dedup_multi_check_has_no_side_effect);
@@ -506,6 +493,5 @@ int main(int, char**) {
     RUN_TEST(test_config_valid_and_roundtrip);
     RUN_TEST(test_config_rejects);
     RUN_TEST(test_parse_lora_msg);
-    RUN_TEST(test_progress_pct);
     return UNITY_END();
 }

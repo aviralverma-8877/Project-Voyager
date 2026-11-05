@@ -42,6 +42,11 @@ static void create_task(TaskFunction_t fn, const char* name, uint32_t stack,
 }
 
 void setup() {
+  // The LoRa-serial bridge receives whole YMODEM blocks (1029 bytes in ~90 ms at
+  // 115200) while the radio may be busy transmitting the previous chunk. With the
+  // default 256-byte buffer (+128-byte FIFO) everything past 384 bytes was dropped.
+  // Must be set before begin().
+  Serial.setRxBufferSize(4096);
   Serial.begin(BAUD);
   init_oled();   // no-op without a panel; never hangs
   oled_status("Booting");

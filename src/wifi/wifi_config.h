@@ -142,7 +142,10 @@ inline void wifi_scan_sort(WifiScanEntry* list, size_t count) {
 // ---------------------------------------------------------------------------
 // STA BSSID selection (several APs / mesh nodes broadcasting the saved SSID).
 // ---------------------------------------------------------------------------
-#define WIFI_ROAM_MIN_GAIN_DB 15          // roam only for a big improvement
+// 10 dB: on a two-node mesh a board stuck on the far node at -55 dBm still lost a
+// quarter of its packets (uplink is weaker than the RSSI it hears), so 15 dB never
+// triggered. 10 dB is still well above normal RSSI jitter (a few dB).
+#define WIFI_ROAM_MIN_GAIN_DB 10          // roam only for a clear improvement
 #define WIFI_ROAM_CHECK_MS    300000u     // at most one background roam check per 5 min
 #define WIFI_ROAM_SETTLE_MS   60000u      // never roam in the first minute of a connection
 
@@ -286,7 +289,7 @@ inline const char* wifi_reason_name(int r) {
 }
 
 // Background roam check gate: only on a settled, weak-ish link, rate-limited.
-#define WIFI_ROAM_SCAN_BELOW_DBM -60
+#define WIFI_ROAM_SCAN_BELOW_DBM -50
 inline bool wifi_roam_check_due(int cur_rssi, uint32_t ms_connected, uint32_t ms_since_check) {
     if (cur_rssi >= 0 || cur_rssi > WIFI_ROAM_SCAN_BELOW_DBM) return false;
     return ms_connected >= WIFI_ROAM_SETTLE_MS && ms_since_check >= WIFI_ROAM_CHECK_MS;

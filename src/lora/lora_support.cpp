@@ -277,7 +277,7 @@ static void send_tx_started(uint32_t id, size_t payload_len)
 // Sends one queued packet with ACK/retry. Returns true on ACK 1.
 static bool send_with_retry(const QueueParam* p)
 {
-    if (p->type != LORA_MSG && p->type != RAW_DATA) {
+    if (p->type != LORA_MSG) {
         serial_print("ERROR: send_packets item has type " + String(p->type));
         return false;
     }
@@ -348,7 +348,6 @@ void LoRa_sendRaw(void* param)
         if (!ok) {
             show_alert("Transmission failed after " + String(LORA_MAX_RETRIES) + " retries");
             oled_alert("TX failed", "no ACK from peer", 3000);
-            if (p->id != 0) stop_transmission();
         }
         if (p->id != 0) send_tx_result(p->id, ok);
         delete p;
@@ -376,7 +375,7 @@ static void handle_rx_frame(const uint8_t* buf, size_t n, int rssi, float snr)
         oled_lora_packet(false, false, rssi, snr);
         // A data packet with a bad CRC gets a NACK so the sender retries early.
         // If the seq byte itself is corrupt, the sender ignores the mismatched NACK.
-        if (p.err == ParseErr::BadCrc && (p.type == LORA_MSG || p.type == RAW_DATA))
+        if (p.err == ParseErr::BadCrc && p.type == LORA_MSG)
             LoRa_sendAkn(p.seq, ACK_RETRY);
         return;
     }
@@ -396,15 +395,19 @@ static void handle_rx_frame(const uint8_t* buf, size_t n, int rssi, float snr)
         oled_lora_packet(false, true, rssi, snr);
         DebugQueueParam* d = new (std::nothrow) DebugQueueParam();
         if (d == NULL) return;
-        // Binary-safe: YMODEM bytes include 0x00, so copy by length, never via strlen.
+        // Binary-safe: bridged serial bytes may include 0x00, so copy by length, never via strlen.
         d->message.concat((const char*)p.payload, p.len);
         if (d->message.length() != p.len) { delete d; return; }
         if (xQueueSend(serial_packet_rec, &d, 0) != pdTRUE) delete d;
         return;
     }
-    default: {   // LORA_MSG / RAW_DATA
-        // Per-source dedup: LORA_MSG uses MAC hash, RAW_DATA uses a shared key.
-        uint32_t dedup_key = (p.type == LORA_MSG) ? extract_mac_key(text) : DEDUP_KEY_RAW;
+    case RAW_DATA:
+        // Retired type (old chunked file transfer from older firmware): drop, no ACK.
+        serial_print("LoRa RX RAW_DATA seq=" + String(p.seq) + " ignored (file transfer retired)");
+        return;
+    default: {   // LORA_MSG
+        // Per-source dedup keyed by the sender's MAC hash.
+        uint32_t dedup_key = extract_mac_key(text);
         if (rx_is_duplicate_multi(rx_dedup, dedup_key, p.seq)) {
             LoRa_sendAkn(p.seq, ACK_OK);
             serial_print("LoRa RX duplicate seq=" + String(p.seq) + ", re-ACKed");
@@ -461,15 +464,6 @@ void lora_rx_task(void* param)
 
 // ---------------------------------------------------------------- forwarding
 
-struct RxFileState {
-    bool active = false;
-    long total = 0;
-    long received = 0;
-    uint8_t last_pct = 255;
-    char title[40] = {0};
-};
-static RxFileState rx_file;               // only touched by manage_recv_queue
-
 static void handle_lora_msg_for_oled(const String& payload)
 {
     LoraMsgInfo m = parse_lora_msg(payload.c_str());
@@ -479,18 +473,6 @@ static void handle_lora_msg_for_oled(const String& payload)
         break;
     case MsgKind::Sos:
         oled_alert("SOS", m.from.c_str(), 5000);
-        break;
-    case MsgKind::FileStart:
-        rx_file.active = true;
-        rx_file.total = m.total_packets;
-        rx_file.received = 0;
-        rx_file.last_pct = 0;
-        snprintf(rx_file.title, sizeof rx_file.title, "RX %s", m.file_name.c_str());
-        oled_progress(rx_file.title, 0);
-        break;
-    case MsgKind::FileEnd:
-        if (rx_file.active) oled_progress(rx_file.title, 255);
-        rx_file.active = false;
         break;
     default:
         break;
@@ -503,32 +485,12 @@ void manage_recv_queue(void* param)
         QueueParam* p = NULL;
         if (xQueueReceive(recv_packets, &p, portMAX_DELAY) != pdTRUE || p == NULL) continue;
         led_nortifier();
-        if (p->type == RAW_DATA) {
-            send_msg_to_events(p->message);
-            if (rx_file.active) {
-                rx_file.received++;
-                uint8_t pct = progress_pct(rx_file.received, rx_file.total);
-                if (pct != rx_file.last_pct) {
-                    rx_file.last_pct = pct;
-                    oled_progress(rx_file.title, pct);
-                }
-            }
-        } else if (p->type == LORA_MSG) {
+        if (p->type == LORA_MSG) {
             send_msg_to_ws(p->message);
             handle_lora_msg_for_oled(p->message);
         }
         delete p;
     }
-}
-
-void send_msg_to_events(const String& data)
-{
-    JsonDocument doc;
-    doc["millis"] = millis();
-    doc["data"] = data;
-    String value;
-    serializeJson(doc, value);
-    send_to_events(value, "RAW_DATA");
 }
 
 void send_msg_to_ws(const String& data)

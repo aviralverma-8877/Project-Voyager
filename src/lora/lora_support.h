@@ -1,5 +1,5 @@
 // LoRa radio layer (owner: lora-radio-engineer). Implements Contract 1 (packet v2),
-// Contract 4 (RAW_DATA producer), Contract 5 (lora_config.json) and Contract 6.
+// Contract 5 (lora_config.json) and Contract 6.
 #ifndef lora_support
     #define lora_support
     #include <Arduino.h>
@@ -23,7 +23,7 @@
 
     // Packet types
     #define LORA_MSG 0               // JSON message / action
-    #define RAW_DATA 1               // file chunk (slice of a data-URL)
+    #define RAW_DATA 1               // retired (old chunked file transfer); received ones are dropped
     #define REC_AKNG 2               // acknowledgement
     #define LORA_SERIAL 3            // serial bridge, not ACKed or deduplicated
 
@@ -68,8 +68,6 @@
     void LoRa_txMode();
     // DIO0 ISR: only signals lora_rx_task (no SPI, no alloc).
     void onReceive();
-    // Send RAW_DATA event to SSE (for file chunks).
-    void send_msg_to_events(const String& data);
     // Send lora_rx message to WebSocket (for chat/actions).
     void send_msg_to_ws(const String& data);
 #endif

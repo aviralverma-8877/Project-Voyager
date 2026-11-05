@@ -5,7 +5,8 @@ package main
 // Chrome only exposes Web Serial on secure origins, and the device UI is plain
 // http://<device-ip>. The page instead opens ws://127.0.0.1:<port>/serial here.
 //
-// Protocol on /serial (one client at a time; a new connection takes over):
+// Protocol on /serial (up to maxSessions pages at once, each COM port owned by one
+// page; opening a port another page holds fails with an "error" naming that page):
 //   text   page -> helper  {"op":"list"} | {"op":"open","port":"COM5","baud":115200} | {"op":"close"}
 //   text   helper -> page  {"op":"hello","version":..} | {"op":"ports","ports":[..]} |
 //                          {"op":"opened","port":..} | {"op":"closed","reason":..} | {"op":"error","msg":..}
@@ -21,6 +22,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -104,6 +106,7 @@ type wsMsg struct {
 }
 
 type session struct {
+	srv    *server
 	conn   *websocket.Conn
 	origin string
 	ctx    context.Context
@@ -116,19 +119,68 @@ type session struct {
 	portDone chan struct{}
 }
 
+// Several pages may be connected at once (e.g. one tab per Voyager board on the
+// same PC), but each COM port belongs to at most one page at a time.
+const maxSessions = 8
+
 type server struct {
 	version     string
 	extraOrigin []string
 	status      func(text string, connected bool)
 
-	mu      sync.Mutex
-	current *session
+	mu       sync.Mutex
+	sessions map[*session]struct{}
+	owners   map[string]*session // portKey(name) -> page holding it
 }
+
+func portKey(name string) string { return strings.ToUpper(strings.TrimSpace(name)) }
 
 func (s *server) busy() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.current != nil
+	return len(s.sessions) > 0
+}
+
+// claim reserves a port for sess; it fails if another page already holds it.
+func (s *server) claim(name string, sess *session) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.owners == nil {
+		s.owners = map[string]*session{}
+	}
+	if o, ok := s.owners[portKey(name)]; ok && o != sess {
+		return fmt.Errorf("%s is in use by the page from %s; disconnect it there first", name, hostOf(o.origin))
+	}
+	s.owners[portKey(name)] = sess
+	return nil
+}
+
+func (s *server) release(name string, sess *session) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.owners[portKey(name)] == sess {
+		delete(s.owners, portKey(name))
+	}
+}
+
+// refreshStatus summarises all pages for the tray: "COM18 → 192.168.1.37, COM13 → ...".
+func (s *server) refreshStatus() {
+	s.mu.Lock()
+	n := len(s.sessions)
+	var parts []string
+	for name, o := range s.owners {
+		parts = append(parts, name+" -> "+hostOf(o.origin))
+	}
+	s.mu.Unlock()
+	sort.Strings(parts)
+	switch {
+	case n == 0:
+		s.status("Idle - waiting for the Voyager page", false)
+	case len(parts) == 0:
+		s.status(fmt.Sprintf("%d page(s) connected, no port open", n), true)
+	default:
+		s.status(strings.Join(parts, ", "), true)
+	}
 }
 
 func (s *server) cors(w http.ResponseWriter, r *http.Request) bool {
@@ -182,20 +234,23 @@ func (s *server) handleSerial(w http.ResponseWriter, r *http.Request) {
 	c.SetReadLimit(1 << 20)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	sess := &session{conn: c, origin: origin, ctx: ctx, cancel: cancel, out: make(chan wsMsg, 256)}
+	sess := &session{srv: s, conn: c, origin: origin, ctx: ctx, cancel: cancel, out: make(chan wsMsg, 256)}
 
 	s.mu.Lock()
-	old := s.current
-	s.current = sess
-	s.mu.Unlock()
-	if old != nil {
-		log.Printf("new client %s takes over from %s", origin, old.origin)
-		old.closePort("taken over by another page")
-		old.cancel()
-		old.conn.Close(websocket.StatusPolicyViolation, "another page connected")
+	if s.sessions == nil {
+		s.sessions = map[*session]struct{}{}
 	}
+	if len(s.sessions) >= maxSessions {
+		s.mu.Unlock()
+		cancel()
+		log.Printf("rejected %s: %d pages already connected", origin, maxSessions)
+		c.Close(websocket.StatusTryAgainLater, "too many pages connected")
+		return
+	}
+	s.sessions[sess] = struct{}{}
+	s.mu.Unlock()
 	log.Printf("client connected: %s", origin)
-	s.status("Page connected ("+hostOf(origin)+")", true)
+	s.refreshStatus()
 
 	go sess.writer()
 	sess.sendJSON(map[string]any{"op": "hello", "app": appName, "version": s.version})
@@ -205,13 +260,9 @@ func (s *server) handleSerial(w http.ResponseWriter, r *http.Request) {
 	cancel()
 	c.CloseNow()
 	s.mu.Lock()
-	if s.current == sess {
-		s.current = nil
-		s.mu.Unlock()
-		s.status("Idle - waiting for the Voyager page", false)
-	} else {
-		s.mu.Unlock()
-	}
+	delete(s.sessions, sess)
+	s.mu.Unlock()
+	s.refreshStatus()
 	log.Printf("client disconnected: %s", origin)
 }
 
@@ -292,11 +343,11 @@ func (s *server) readLoop(sess *session) {
 				sess.sendJSON(map[string]any{"op": "error", "msg": err.Error()})
 				continue
 			}
-			s.status(fmt.Sprintf("%s open for %s", req.Port, hostOf(sess.origin)), true)
+			s.refreshStatus()
 			sess.sendJSON(map[string]any{"op": "opened", "port": req.Port})
 		case "close":
 			sess.closePort("closed by page")
-			s.status("Page connected ("+hostOf(sess.origin)+")", true)
+			s.refreshStatus()
 		default:
 			sess.sendJSON(map[string]any{"op": "error", "msg": "unknown op " + req.Op})
 		}
@@ -311,6 +362,9 @@ func (sess *session) openPort(name string, baud int) error {
 		baud = 115200
 	}
 	sess.closePort("reopening")
+	if err := sess.srv.claim(name, sess); err != nil {
+		return err
+	}
 	// DTR and RTS low from the first instant: on ESP32 dev boards these drive EN/IO0
 	// through the auto-reset circuit, and toggling them reboots (or bricks into the
 	// bootloader) the device mid-transfer.
@@ -323,12 +377,14 @@ func (sess *session) openPort(name string, baud int) error {
 	}
 	p, err := serial.Open(name, mode)
 	if err != nil {
+		sess.srv.release(name, sess)
 		return fmt.Errorf("cannot open %s: %v (is a serial monitor using it?)", name, err)
 	}
 	p.SetDTR(false)
 	p.SetRTS(false)
 	if err := p.SetReadTimeout(50 * time.Millisecond); err != nil {
 		p.Close()
+		sess.srv.release(name, sess)
 		return fmt.Errorf("cannot configure %s: %v", name, err)
 	}
 	p.ResetInputBuffer()
@@ -374,6 +430,7 @@ func (sess *session) closePort(reason string) {
 	if p == nil {
 		return
 	}
+	sess.srv.release(name, sess)
 	p.Close()
 	if done != nil {
 		select {

@@ -195,18 +195,6 @@ static void handle_lora_transmit(AsyncWebServerRequest* r) {
   enqueue_tx(r, LORA_MSG, payload);
 }
 
-static void handle_send_raw(AsyncWebServerRequest* r) {
-  if (!guard(r, true)) return;
-  const AsyncWebParameter* p = r->getParam("data", true);
-  wv::TxCheck c = wv::check_send_raw(p ? p->value().c_str() : nullptr, LORA_MAX_PAYLOAD);
-  if (c != wv::TX_OK) {
-    send_error(r, wv::tx_check_status(c), tx_error_name(c));
-    return;
-  }
-  String data = p->value();
-  enqueue_tx(r, RAW_DATA, data);
-}
-
 /* ------------------------------------------------------------------ */
 /* auth endpoints                                                      */
 /* ------------------------------------------------------------------ */
@@ -333,7 +321,6 @@ void define_api(void* param) {
   server.on("/username", HTTP_GET, [](AsyncWebServerRequest* r) {
     r->send(200, "text/plain", get_username());
   });
-  server.on("/send_raw", HTTP_POST, handle_send_raw);
   server.on("/lora_transmit", HTTP_POST, handle_lora_transmit);
   server.on("/api/config", HTTP_GET, handle_api_config);
 

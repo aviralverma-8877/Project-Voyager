@@ -155,6 +155,11 @@ void get_wifi_rssi(void* params)
             {
                 doc["mode"] = "STA";
                 doc["rssi"] = rssi;
+                // Which node of a mesh / multi-AP network we are on.
+                char bs[18];
+                wifi_format_bssid(WiFi.BSSID(), bs);
+                doc["bssid"] = bs;
+                doc["ch"] = WiFi.channel();
             }
             else if (WiFi.getMode() & WIFI_MODE_AP)
             {

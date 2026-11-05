@@ -72,13 +72,6 @@ inline TxCheck check_lora_transmit(const char* data, const char* name, const cha
   return TX_OK;
 }
 
-// /send_raw: data = one data-URL slice, sent as-is.
-inline TxCheck check_send_raw(const char* data, size_t max_payload) {
-  if (data == nullptr || data[0] == '\0') return TX_MISSING;
-  if (strlen(data) > max_payload) return TX_TOO_LARGE;
-  return TX_OK;
-}
-
 // GET /api/config?name= whitelist (Contract 2).
 inline bool is_allowed_config_name(const char* name) {
   if (name == nullptr) return false;
@@ -285,7 +278,7 @@ inline bool ota_keep_size_ok(bool exists, size_t size) {
 }
 
 // Outbound WS/SSE queue admission. WS replies (alerts, tx_result, set_uname...) and
-// SSE events (RAM_DATA/WIFI_DATA every second, DEBUG per log line, RAW_DATA) share one
+// SSE events (RAM_DATA/WIFI_DATA every second, DEBUG per log line) share one
 // queue. SSE items may only take a free slot while more than `reserved` slots are
 // free, so a burst of DEBUG/telemetry can never crowd out a WS reply.
 inline bool out_queue_admit(bool to_ws, size_t spaces_free, size_t reserved) {
