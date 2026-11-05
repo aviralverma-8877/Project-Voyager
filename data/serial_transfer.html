@@ -1,0 +1,112 @@
+<h2 class="panel-title">Serial File Transfer <small>YMODEM over USB/Bluetooth</small></h2>
+
+<p class="hint">Transfer files reliably using the YMODEM protocol over USB Serial or Bluetooth Serial. Web Serial API requires Chrome or Edge.</p>
+
+<!-- Step 1: Connection Mode -->
+<fieldset id="serial_step_mode" class="section">
+    <h3 class="section-label">1. Connection Mode</h3>
+    <div class="field">
+        <label class="switch">
+            <input type="radio" name="serial_mode" value="usb" checked>
+            <span>USB Serial</span>
+        </label>
+        <p class="hint">Device must be connected to this computer via USB.</p>
+    </div>
+    <div class="field">
+        <label class="switch">
+            <input type="radio" name="serial_mode" value="bt">
+            <span>Bluetooth Serial</span>
+        </label>
+        <p class="hint">Device will reboot to BT mode. Pair in OS settings first.</p>
+    </div>
+</fieldset>
+
+<!-- Step 2: Connect Serial Port -->
+<fieldset id="serial_step_connect" class="section">
+    <h3 class="section-label">2. Serial Connection</h3>
+    <div class="actions">
+        <button type="button" class="btn primary" id="connectSerialBtn">Select Serial Port</button>
+        <button type="button" class="btn secondary" id="disconnectSerialBtn" hidden>Disconnect</button>
+    </div>
+    <p id="serialStatus" class="hint mt-2">Not connected</p>
+    <p id="btModeNotice" class="hint text-bad" hidden></p>
+</fieldset>
+
+<!-- Step 3: Select Role -->
+<fieldset id="serial_step_role" class="section" disabled>
+    <h3 class="section-label">3. Transfer Role</h3>
+    <div class="field">
+        <label class="switch">
+            <input type="radio" name="serial_role" value="sender" checked>
+            <span>Send a file</span>
+        </label>
+    </div>
+    <div class="field">
+        <label class="switch">
+            <input type="radio" name="serial_role" value="receiver">
+            <span>Receive a file</span>
+        </label>
+    </div>
+</fieldset>
+
+<!-- Step 4a: Sender View -->
+<fieldset id="serial_step_sender" class="section" hidden>
+    <h3 class="section-label">4. Send File</h3>
+    <div class="field">
+        <label for="serialSendFile" class="label">File to send</label>
+        <input type="file" class="input" id="serialSendFile">
+    </div>
+    <div class="actions mb-2">
+        <button type="button" class="btn secondary" id="inviteBtn">Broadcast Invitation</button>
+    </div>
+    <div id="participantsSection" hidden>
+        <h5>Participants Ready</h5>
+        <ul class="list" id="participantList"></ul>
+        <p class="log-empty">Waiting for participants to join...</p>
+    </div>
+    <div class="actions mt-2">
+        <button type="button" class="btn primary" id="startSerialTransferBtn" disabled>Start Transfer</button>
+    </div>
+</fieldset>
+
+<!-- Step 4b: Receiver View -->
+<fieldset id="serial_step_receiver" class="section" hidden>
+    <h3 class="section-label">4. Receive File</h3>
+    <p id="receiverWaiting">Waiting for file transfer invitation...</p>
+    <div id="invitationsSection" hidden>
+        <h5>Incoming Invitations</h5>
+        <ul class="list" id="invitationList"></ul>
+    </div>
+</fieldset>
+
+<!-- Progress -->
+<fieldset id="serial_step_progress" class="section" hidden>
+    <h3 class="section-label">Transfer Progress</h3>
+    <div id="serialTransferInfo" class="mb-2"></div>
+    <div class="progress">
+        <div
+            id="serialTransferProgress"
+            class="bar"
+            role="progressbar"
+            style="width: 0%"
+            aria-label="Serial transfer progress"
+            aria-valuenow="0"
+            aria-valuemin="0"
+            aria-valuemax="100"
+        ></div>
+    </div>
+    <p id="serialTransferStatus" class="hint mt-2"></p>
+    <div class="actions mt-2">
+        <button type="button" class="btn danger" id="cancelSerialTransferBtn">Cancel Transfer</button>
+    </div>
+</fieldset>
+
+<!-- Result -->
+<fieldset id="serial_step_result" class="section" hidden>
+    <h3 class="section-label">Result</h3>
+    <p id="serialResultMessage" class="bold"></p>
+    <div class="actions">
+        <button type="button" class="btn primary" id="serialDownloadBtn" hidden>Download File</button>
+        <button type="button" class="btn secondary" id="serialResetBtn">New Transfer</button>
+    </div>
+</fieldset>

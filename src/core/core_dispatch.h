@@ -33,6 +33,15 @@ enum class CoreAction : uint8_t {
     SetSerialMode,  // flag
     GetSerialMode,
     GetWifiScan,    // resend the last scan result (no new scan)
+    // Bluetooth Serial (file transfer support)
+    GetBtConfig,    // returns current BT config (name, enabled)
+    SetBtMode,      // flag = enable/disable BT, saves config and reboots if enabling
+    RebootToBt,     // saves bt_enabled=true and restarts
+    // File transfer handshake (LORA_MSG actions)
+    FileTxInvite,   // arg1 = fileName, arg2 = fileSize (as string)
+    FileTxJoin,     // arg1 = sender_mac, arg2 = mode ("usb" or "bt")
+    FileTxStart,    // enables lora_serial bridge
+    FileTxEnd,      // disables lora_serial bridge
 };
 
 struct CoreCommand {
@@ -66,6 +75,13 @@ inline const char* core_action_name(CoreAction a) {
         case CoreAction::SetSerialMode: return "set_serial_mode";
         case CoreAction::GetSerialMode: return "get_serial_mode";
         case CoreAction::GetWifiScan: return "get_wifi_scan";
+        case CoreAction::GetBtConfig: return "get_bt_config";
+        case CoreAction::SetBtMode: return "set_bt_mode";
+        case CoreAction::RebootToBt: return "reboot_to_bt";
+        case CoreAction::FileTxInvite: return "file_tx_invite";
+        case CoreAction::FileTxJoin: return "file_tx_join";
+        case CoreAction::FileTxStart: return "file_tx_start";
+        case CoreAction::FileTxEnd: return "file_tx_end";
     }
     return "?";
 }
@@ -194,6 +210,46 @@ inline CoreCommand core_parse_request(JsonVariantConst doc) {
         c.flag = v.as<bool>();
         return c;
     }
+    // Bluetooth Serial commands
+    if (strcmp(t, "get_bt_config") == 0)  { c.action = CoreAction::GetBtConfig; return c; }
+    if (strcmp(t, "reboot_to_bt") == 0)   { c.action = CoreAction::RebootToBt; return c; }
+    if (strcmp(t, "set_bt_mode") == 0) {
+        JsonVariantConst v = doc["value"];
+        if (!v.is<bool>()) return core_invalid("value must be bool");
+        c.action = CoreAction::SetBtMode;
+        c.flag = v.as<bool>();
+        return c;
+    }
+    // File transfer handshake commands
+    if (strcmp(t, "file_tx_invite") == 0) {
+        JsonVariantConst fn = doc["fileName"];
+        JsonVariantConst fs = doc["fileSize"];
+        if (!fn.is<const char*>()) return core_invalid("fileName missing");
+        if (!fs.is<long>() && !fs.is<const char*>()) return core_invalid("fileSize missing");
+        c.action = CoreAction::FileTxInvite;
+        c.arg1 = fn.as<const char*>();
+        // Accept fileSize as number or string
+        if (fs.is<long>())
+            c.arg2 = std::to_string(fs.as<long>());
+        else
+            c.arg2 = fs.as<const char*>();
+        return c;
+    }
+    if (strcmp(t, "file_tx_join") == 0) {
+        JsonVariantConst sm = doc["sender_mac"];
+        JsonVariantConst m = doc["mode"];
+        if (!sm.is<const char*>()) return core_invalid("sender_mac missing");
+        if (!m.is<const char*>()) return core_invalid("mode missing");
+        std::string mode = m.as<const char*>();
+        if (mode != "usb" && mode != "bt") return core_invalid("mode must be usb or bt");
+        c.action = CoreAction::FileTxJoin;
+        c.arg1 = sm.as<const char*>();
+        c.arg2 = mode;
+        return c;
+    }
+    if (strcmp(t, "file_tx_start") == 0) { c.action = CoreAction::FileTxStart; return c; }
+    if (strcmp(t, "file_tx_end") == 0)   { c.action = CoreAction::FileTxEnd; return c; }
+
     c.action = CoreAction::Unknown;   // includes the removed "send_akn"
     c.error = "unknown request-type";
     return c;

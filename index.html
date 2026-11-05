@@ -268,9 +268,18 @@
         <div id="main" style="display: none">
             <div class="version-selector">
                 <label>Hardware Version:</label>
-                <select id="versionSelect" onchange="select_version(this.value)">
+                <select id="versionSelect" onchange="update_manifest()">
                     <option value="1" selected>Version 1</option>
                     <option value="2">Version 2</option>
+                </select>
+            </div>
+
+            <div class="version-selector" style="margin-top: 15px;">
+                <label>Flash Mode:</label>
+                <select id="flashMode" onchange="update_manifest()">
+                    <option value="full" selected>Full (Firmware + Filesystem)</option>
+                    <option value="firmware">Firmware Only (faster)</option>
+                    <option value="filesystem">Filesystem Only</option>
                 </select>
             </div>
 
@@ -280,7 +289,8 @@
             </div>
 
             <div class="note">
-                <strong>Important:</strong> Make sure to close any applications using your device's COM port (e.g., Serial Monitor) before flashing.
+                <strong>Important:</strong> Keep this tab in the foreground during flashing. Full flash takes 2-4 minutes.
+                If you get a timeout, try "Firmware Only" first, then "Filesystem Only" separately.
             </div>
         </div>
 
@@ -295,10 +305,14 @@
         // errors), so this page only chooses which manifest the button uses.
         const installButton = document.getElementById('installButton');
 
-        function select_version(val) {
-            if (val === "1" || val === "2") {
-                installButton.setAttribute("manifest", "webflash/manifest-" + val + ".json");
-            }
+        function update_manifest() {
+            const version = document.getElementById('versionSelect').value;
+            const mode = document.getElementById('flashMode').value;
+            let manifest = "webflash/manifest-" + version;
+            if (mode === "firmware") manifest += "-firmware";
+            else if (mode === "filesystem") manifest += "-filesystem";
+            manifest += ".json";
+            installButton.setAttribute("manifest", manifest);
         }
 
         // Flashing needs Web Serial (desktop Chrome, Edge or Opera).

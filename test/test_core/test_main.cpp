@@ -205,6 +205,60 @@ static void test_set_serial_mode() {
     ASSERT_ACTION(CoreAction::Invalid, "{\"request-type\":\"set_serial_mode\",\"value\":\"true\"}");
 }
 
+// ---------------------------------------------------- Bluetooth Serial commands
+
+static void test_bt_no_arg_commands() {
+    ASSERT_ACTION(CoreAction::GetBtConfig, "{\"request-type\":\"get_bt_config\"}");
+    ASSERT_ACTION(CoreAction::RebootToBt, "{\"request-type\":\"reboot_to_bt\"}");
+    ASSERT_ACTION(CoreAction::FileTxStart, "{\"request-type\":\"file_tx_start\"}");
+    ASSERT_ACTION(CoreAction::FileTxEnd, "{\"request-type\":\"file_tx_end\"}");
+}
+
+static void test_set_bt_mode() {
+    CoreCommand c = parse("{\"request-type\":\"set_bt_mode\",\"value\":true}");
+    TEST_ASSERT_EQUAL(CoreAction::SetBtMode, c.action);
+    TEST_ASSERT_TRUE(c.flag);
+    c = parse("{\"request-type\":\"set_bt_mode\",\"value\":false}");
+    TEST_ASSERT_EQUAL(CoreAction::SetBtMode, c.action);
+    TEST_ASSERT_FALSE(c.flag);
+    ASSERT_ACTION(CoreAction::Invalid, "{\"request-type\":\"set_bt_mode\"}");
+    ASSERT_ACTION(CoreAction::Invalid, "{\"request-type\":\"set_bt_mode\",\"value\":1}");
+    ASSERT_ACTION(CoreAction::Invalid, "{\"request-type\":\"set_bt_mode\",\"value\":\"true\"}");
+}
+
+static void test_file_tx_invite() {
+    CoreCommand c = parse("{\"request-type\":\"file_tx_invite\",\"fileName\":\"test.bin\",\"fileSize\":1024}");
+    TEST_ASSERT_EQUAL(CoreAction::FileTxInvite, c.action);
+    TEST_ASSERT_EQUAL_STRING("test.bin", c.arg1.c_str());
+    TEST_ASSERT_EQUAL_STRING("1024", c.arg2.c_str());
+    // fileSize as string
+    c = parse("{\"request-type\":\"file_tx_invite\",\"fileName\":\"data.txt\",\"fileSize\":\"2048\"}");
+    TEST_ASSERT_EQUAL(CoreAction::FileTxInvite, c.action);
+    TEST_ASSERT_EQUAL_STRING("2048", c.arg2.c_str());
+    // missing args
+    ASSERT_ACTION(CoreAction::Invalid, "{\"request-type\":\"file_tx_invite\"}");
+    ASSERT_ACTION(CoreAction::Invalid, "{\"request-type\":\"file_tx_invite\",\"fileName\":\"test.bin\"}");
+    ASSERT_ACTION(CoreAction::Invalid, "{\"request-type\":\"file_tx_invite\",\"fileSize\":1024}");
+    ASSERT_ACTION(CoreAction::Invalid, "{\"request-type\":\"file_tx_invite\",\"fileName\":123,\"fileSize\":1024}");
+}
+
+static void test_file_tx_join() {
+    CoreCommand c = parse("{\"request-type\":\"file_tx_join\",\"sender_mac\":\"AA:BB:CC:DD:EE:FF\",\"mode\":\"usb\"}");
+    TEST_ASSERT_EQUAL(CoreAction::FileTxJoin, c.action);
+    TEST_ASSERT_EQUAL_STRING("AA:BB:CC:DD:EE:FF", c.arg1.c_str());
+    TEST_ASSERT_EQUAL_STRING("usb", c.arg2.c_str());
+    c = parse("{\"request-type\":\"file_tx_join\",\"sender_mac\":\"11:22:33:44:55:66\",\"mode\":\"bt\"}");
+    TEST_ASSERT_EQUAL(CoreAction::FileTxJoin, c.action);
+    TEST_ASSERT_EQUAL_STRING("bt", c.arg2.c_str());
+    // invalid mode
+    ASSERT_ACTION(CoreAction::Invalid, "{\"request-type\":\"file_tx_join\",\"sender_mac\":\"AA:BB:CC:DD:EE:FF\",\"mode\":\"serial\"}");
+    ASSERT_ACTION(CoreAction::Invalid, "{\"request-type\":\"file_tx_join\",\"sender_mac\":\"AA:BB:CC:DD:EE:FF\",\"mode\":\"USB\"}");
+    // missing args
+    ASSERT_ACTION(CoreAction::Invalid, "{\"request-type\":\"file_tx_join\"}");
+    ASSERT_ACTION(CoreAction::Invalid, "{\"request-type\":\"file_tx_join\",\"sender_mac\":\"AA:BB:CC:DD:EE:FF\"}");
+    ASSERT_ACTION(CoreAction::Invalid, "{\"request-type\":\"file_tx_join\",\"mode\":\"usb\"}");
+}
+
 static void test_invalid_error_has_no_secret() {
     CoreCommand c = parse("{\"request-type\":\"connect_wifi\",\"wifi_ssid\":\"x\",\"wifi_pass\":\"sekret\"}");
     TEST_ASSERT_EQUAL(CoreAction::Invalid, c.action);
@@ -352,6 +406,10 @@ int main(int, char**) {
     RUN_TEST(test_set_lora_config);
     RUN_TEST(test_set_serial_mode);
     RUN_TEST(test_invalid_error_has_no_secret);
+    RUN_TEST(test_bt_no_arg_commands);
+    RUN_TEST(test_set_bt_mode);
+    RUN_TEST(test_file_tx_invite);
+    RUN_TEST(test_file_tx_join);
     RUN_TEST(test_parse_username);
     RUN_TEST(test_parse_lora_serial);
     RUN_TEST(test_parse_device_mode);

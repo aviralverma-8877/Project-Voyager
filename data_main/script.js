@@ -613,10 +613,17 @@ function reset() {
   );
 }
 
+function serial_transfer() {
+  load_page("serial_transfer.html", "navbar-serial-transfer", function () {
+    serialTransfer.init();
+  });
+}
+
 // Navbar data-page -> handler.
 const PAGES = {
   dashboard: dashboard,
   file_transfer: file_transfer,
+  serial_transfer: serial_transfer,
   wifi: wifi,
   lora: lora,
   update: update,
@@ -728,6 +735,14 @@ function handle_ws_message(data) {
     }
     case "stop_transmission":
       if (state.sending) state.cancelSend = true;
+      break;
+    case "file_tx_invite":
+      // Incoming file transfer invitation (receiver side)
+      serialTransfer.handleInvitation(data);
+      break;
+    case "file_tx_participant":
+      // Participant joined (sender side)
+      serialTransfer.handleParticipant(data);
       break;
     default:
       break;
@@ -1430,3 +1445,547 @@ function set_spreading_factor(val) {
 function set_coding_rate(val) {
   setText("selected_lora_coding_rate", val);
 }
+
+/* ------------------------------------------------------------------ */
+/* Serial File Transfer (YMODEM over Web Serial API)                   */
+/* ------------------------------------------------------------------ */
+
+var serialTransfer = (function () {
+  var port = null;
+  var reader = null;
+  var writer = null;
+  var connected = false;
+  var transferActive = false;
+  var role = "sender"; // "sender" or "receiver"
+  var participants = [];
+  var invitations = [];
+  var selectedFile = null;
+  var receivedData = null;
+  var receivedFileName = "";
+  var ymodemInstance = null;
+  var dataCallbacks = []; // Callbacks waiting for serial data
+
+  // Check Web Serial API support
+  function isSupported() {
+    return "serial" in navigator;
+  }
+
+  // Initialize the page UI
+  function init() {
+    if (!isSupported()) {
+      setText("serialStatus", "Web Serial API not supported. Use Chrome or Edge.");
+      setDisabled("connectSerialBtn", true);
+      return;
+    }
+
+    // Mode selection
+    document.querySelectorAll('input[name="serial_mode"]').forEach(function (radio) {
+      radio.addEventListener("change", onModeChange);
+    });
+
+    // Role selection
+    document.querySelectorAll('input[name="serial_role"]').forEach(function (radio) {
+      radio.addEventListener("change", onRoleChange);
+    });
+
+    // Buttons
+    byId("connectSerialBtn").addEventListener("click", connect);
+    byId("disconnectSerialBtn").addEventListener("click", disconnect);
+    byId("inviteBtn").addEventListener("click", sendInvitation);
+    byId("startSerialTransferBtn").addEventListener("click", startTransfer);
+    byId("cancelSerialTransferBtn").addEventListener("click", cancelTransfer);
+    byId("serialDownloadBtn").addEventListener("click", downloadReceivedFile);
+    byId("serialResetBtn").addEventListener("click", resetTransfer);
+
+    // File input
+    var fileInput = byId("serialSendFile");
+    if (fileInput) {
+      fileInput.addEventListener("change", function () {
+        selectedFile = fileInput.files && fileInput.files[0];
+        updateSenderUI();
+      });
+    }
+
+    resetState();
+    updateUI();
+  }
+
+  function resetState() {
+    connected = false;
+    transferActive = false;
+    role = "sender";
+    participants = [];
+    invitations = [];
+    selectedFile = null;
+    receivedData = null;
+    receivedFileName = "";
+  }
+
+  function onModeChange() {
+    var mode = getSelectedMode();
+    var notice = byId("btModeNotice");
+    if (mode === "bt") {
+      notice.textContent =
+        "Bluetooth will be enabled when you click Connect. " +
+        "Pair 'Voyager_XXXX' in your OS Bluetooth settings, " +
+        "then select the Bluetooth serial port.";
+      notice.hidden = false;
+    } else {
+      notice.hidden = true;
+    }
+  }
+
+  function onRoleChange() {
+    role = getSelectedRole();
+    updateUI();
+  }
+
+  function getSelectedMode() {
+    var radios = document.querySelectorAll('input[name="serial_mode"]');
+    for (var i = 0; i < radios.length; i++) {
+      if (radios[i].checked) return radios[i].value;
+    }
+    return "usb";
+  }
+
+  function getSelectedRole() {
+    var radios = document.querySelectorAll('input[name="serial_role"]');
+    for (var i = 0; i < radios.length; i++) {
+      if (radios[i].checked) return radios[i].value;
+    }
+    return "sender";
+  }
+
+  // Connect to serial port
+  async function connect() {
+    if (!isSupported()) {
+      alertText("Web Serial API not supported. Use Chrome or Edge.");
+      return;
+    }
+
+    var mode = getSelectedMode();
+    if (mode === "bt") {
+      // Start Bluetooth on demand (no reboot needed)
+      ws_send({ "request-type": "set_bt_mode", value: true });
+      setText("serialStatus", "Starting Bluetooth... Pair device in OS settings, then select port.");
+    }
+
+    try {
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+
+      // Set up binary reader/writer (no text encoding for YMODEM)
+      reader = port.readable.getReader();
+      writer = port.writable.getWriter();
+
+      connected = true;
+      setText("serialStatus", "Connected to serial port");
+      byId("disconnectSerialBtn").hidden = false;
+      byId("btModeNotice").hidden = true;
+
+      updateUI();
+
+      // Start reading loop (handle in background)
+      readLoop();
+    } catch (e) {
+      console.error("Serial connect error:", e);
+      if (e.name === "NotFoundError") {
+        setText("serialStatus", "No port selected");
+      } else {
+        setText("serialStatus", "Connection failed: " + (e.message || "unknown error"));
+      }
+    }
+  }
+
+  // Read loop for incoming serial data (binary)
+  async function readLoop() {
+    try {
+      while (port && port.readable && reader) {
+        var result = await reader.read();
+        if (result.done) {
+          break;
+        }
+        if (result.value) {
+          handleSerialData(result.value);
+        }
+      }
+    } catch (e) {
+      if (e.name !== "TypeError") { // Ignore errors from port closing
+        console.error("Serial read error:", e);
+      }
+    }
+  }
+
+  function handleSerialData(data) {
+    // data is Uint8Array - dispatch to any registered callbacks (YMODEM)
+    for (var i = 0; i < dataCallbacks.length; i++) {
+      try {
+        dataCallbacks[i](data);
+      } catch (e) {
+        console.error("Serial data callback error:", e);
+      }
+    }
+  }
+
+  function registerDataCallback(cb) {
+    dataCallbacks.push(cb);
+  }
+
+  function unregisterDataCallback(cb) {
+    var idx = dataCallbacks.indexOf(cb);
+    if (idx >= 0) dataCallbacks.splice(idx, 1);
+  }
+
+  // Write binary data to serial port
+  async function writeSerial(data) {
+    if (!writer) return false;
+    try {
+      var arr = data instanceof Uint8Array ? data : new Uint8Array(data);
+      await writer.write(arr);
+      return true;
+    } catch (e) {
+      console.error("Serial write error:", e);
+      return false;
+    }
+  }
+
+  // Disconnect from serial port
+  async function disconnect() {
+    // Cancel any active YMODEM transfer
+    if (ymodemInstance && ymodemInstance.cancel) {
+      ymodemInstance.cancel();
+      ymodemInstance = null;
+    }
+    dataCallbacks = [];
+
+    try {
+      if (reader) {
+        await reader.cancel().catch(function () {});
+        reader.releaseLock();
+        reader = null;
+      }
+      if (writer) {
+        writer.releaseLock();
+        writer = null;
+      }
+      if (port) {
+        await port.close();
+        port = null;
+      }
+    } catch (e) {
+      console.error("Serial disconnect error:", e);
+    }
+
+    connected = false;
+    setText("serialStatus", "Disconnected");
+    byId("disconnectSerialBtn").hidden = true;
+    updateUI();
+  }
+
+  // Send file transfer invitation via WebSocket
+  function sendInvitation() {
+    if (!selectedFile) {
+      alertText("Select a file first.");
+      return;
+    }
+    ws_send({
+      "request-type": "file_tx_invite",
+      fileName: selectedFile.name,
+      fileSize: selectedFile.size,
+    });
+    byId("participantsSection").hidden = false;
+    setText("serialTransferStatus", "Invitation sent, waiting for participants...");
+  }
+
+  // Join a file transfer (receiver side)
+  function joinTransfer(senderMac, mode) {
+    ws_send({
+      "request-type": "file_tx_join",
+      sender_mac: senderMac,
+      mode: mode || "serial",
+    });
+  }
+
+  // Start the transfer (sender side)
+  function startTransfer() {
+    if (!selectedFile || participants.length === 0) {
+      alertText("No participants have joined yet.");
+      return;
+    }
+    if (!connected) {
+      alertText("Serial port is not connected.");
+      return;
+    }
+
+    transferActive = true;
+    ws_send({ "request-type": "file_tx_start" });
+    showProgressStep();
+
+    // Read file and start YMODEM transfer
+    var fileReader = new FileReader();
+    fileReader.onerror = function () {
+      endTransfer(false, "Could not read the file.");
+    };
+    fileReader.onload = function () {
+      var fileData = new Uint8Array(fileReader.result);
+      setText("serialTransferStatus", "Starting YMODEM transfer...");
+      setSerialProgress(0);
+
+      if (typeof YMODEM === "undefined") {
+        endTransfer(false, "YMODEM module not loaded.");
+        return;
+      }
+
+      ymodemInstance = YMODEM.createSender({
+        file: { name: selectedFile.name, size: fileData.length, data: fileData },
+        write: function (bytes) {
+          writeSerial(bytes);
+        },
+        onData: function (callback) {
+          registerDataCallback(callback);
+        },
+        onProgress: function (sent, total) {
+          var pct = total > 0 ? (sent / total) * 100 : 0;
+          setSerialProgress(pct);
+          setText("serialTransferStatus", "Sending: " + sent + " / " + total + " bytes");
+        },
+        onComplete: function (success, error) {
+          unregisterDataCallback(ymodemInstance._dataCallback);
+          ymodemInstance = null;
+          if (success) {
+            endTransfer(true, "File sent successfully!");
+          } else {
+            endTransfer(false, "Transfer failed: " + (error || "unknown error"));
+          }
+        },
+        timeout: 30000 // 30s timeout for LoRa latency
+      });
+
+      // Store callback reference for cleanup
+      ymodemInstance._dataCallback = ymodemInstance._internalDataCallback;
+      ymodemInstance.start();
+    };
+    fileReader.readAsArrayBuffer(selectedFile);
+  }
+
+  // Cancel the transfer
+  function cancelTransfer() {
+    if (ymodemInstance && ymodemInstance.cancel) {
+      ymodemInstance.cancel();
+      if (ymodemInstance._dataCallback) {
+        unregisterDataCallback(ymodemInstance._dataCallback);
+      }
+      ymodemInstance = null;
+    }
+    transferActive = false;
+    ws_send({ "request-type": "file_tx_end" });
+    endTransfer(false, "Transfer cancelled.");
+  }
+
+  // End the transfer (show result)
+  function endTransfer(success, message) {
+    transferActive = false;
+    ws_send({ "request-type": "file_tx_end" });
+
+    byId("serial_step_progress").hidden = true;
+    byId("serial_step_result").hidden = false;
+
+    var resultEl = byId("serialResultMessage");
+    resultEl.textContent = message;
+    resultEl.classList.toggle("text-ok", success);
+    resultEl.classList.toggle("text-bad", !success);
+
+    if (success && role === "receiver" && receivedData) {
+      byId("serialDownloadBtn").hidden = false;
+    }
+  }
+
+  // Download received file
+  function downloadReceivedFile() {
+    if (!receivedData) {
+      alertText("No file to download.");
+      return;
+    }
+    save_blob(new Blob([receivedData]), receivedFileName || "Voyager_Serial_Download");
+  }
+
+  // Reset for a new transfer
+  function resetTransfer() {
+    resetState();
+    updateUI();
+    byId("serial_step_result").hidden = true;
+    byId("serial_step_progress").hidden = true;
+    byId("serialDownloadBtn").hidden = true;
+    byId("participantsSection").hidden = true;
+    byId("invitationsSection").hidden = true;
+  }
+
+  // Update UI based on state
+  function updateUI() {
+    var roleFieldset = byId("serial_step_role");
+    var senderFieldset = byId("serial_step_sender");
+    var receiverFieldset = byId("serial_step_receiver");
+
+    roleFieldset.disabled = !connected;
+
+    senderFieldset.hidden = !connected || role !== "sender";
+    receiverFieldset.hidden = !connected || role !== "receiver";
+
+    updateSenderUI();
+    updateReceiverUI();
+  }
+
+  function updateSenderUI() {
+    var hasFile = !!selectedFile;
+    var hasParticipants = participants.length > 0;
+    setDisabled("inviteBtn", !hasFile || !connected);
+    setDisabled("startSerialTransferBtn", !hasFile || !hasParticipants || !connected);
+  }
+
+  function updateReceiverUI() {
+    var hasInvitations = invitations.length > 0;
+    byId("receiverWaiting").hidden = hasInvitations;
+    byId("invitationsSection").hidden = !hasInvitations;
+  }
+
+  function showProgressStep() {
+    byId("serial_step_sender").hidden = true;
+    byId("serial_step_receiver").hidden = true;
+    byId("serial_step_progress").hidden = false;
+  }
+
+  function setSerialProgress(percent) {
+    var bar = byId("serialTransferProgress");
+    var p = Math.max(0, Math.min(100, Number(percent) || 0));
+    bar.style.width = p + "%";
+    bar.setAttribute("aria-valuenow", String(Math.round(p)));
+  }
+
+  // Handle WebSocket message for file transfer invitation (receiver side)
+  function handleInvitation(msg) {
+    var inv = {
+      senderMac: L.toText(msg.sender_mac),
+      senderName: L.toText(msg.sender_name),
+      fileName: L.toText(msg.fileName),
+      fileSize: msg.fileSize || 0,
+    };
+    invitations.push(inv);
+    renderInvitations();
+    updateReceiverUI();
+  }
+
+  // Handle WebSocket message for participant joined (sender side)
+  function handleParticipant(msg) {
+    var p = {
+      mac: L.toText(msg.mac),
+      name: L.toText(msg.name),
+    };
+    // Avoid duplicates
+    for (var i = 0; i < participants.length; i++) {
+      if (participants[i].mac === p.mac) return;
+    }
+    participants.push(p);
+    renderParticipants();
+    updateSenderUI();
+  }
+
+  function renderParticipants() {
+    var ul = byId("participantList");
+    ul.replaceChildren();
+    participants.forEach(function (p) {
+      var li = el("li", "spread");
+      li.append(el("span", "", p.name || p.mac));
+      ul.append(li);
+    });
+  }
+
+  function renderInvitations() {
+    var ul = byId("invitationList");
+    ul.replaceChildren();
+    invitations.forEach(function (inv, idx) {
+      var li = el("li", "spread");
+      var info = el("span", "");
+      info.append(el("b", "", inv.fileName));
+      info.append(document.createTextNode(" from " + (inv.senderName || inv.senderMac)));
+      info.append(document.createTextNode(" (" + L.formatSize(inv.fileSize) + ")"));
+      li.append(info);
+
+      var btn = el("button", "btn primary", "Accept");
+      btn.addEventListener("click", function () {
+        acceptInvitation(idx);
+      });
+      li.append(btn);
+      ul.append(li);
+    });
+  }
+
+  function acceptInvitation(idx) {
+    var inv = invitations[idx];
+    if (!inv) return;
+    if (!connected) {
+      alertText("Connect to a serial port first.");
+      return;
+    }
+    joinTransfer(inv.senderMac, "serial");
+    receivedFileName = inv.fileName;
+    showProgressStep();
+    setText("serialTransferStatus", "Starting YMODEM receiver...");
+    setSerialProgress(0);
+    transferActive = true;
+
+    if (typeof YMODEM === "undefined") {
+      endTransfer(false, "YMODEM module not loaded.");
+      return;
+    }
+
+    // Enable serial bridge on our device
+    ws_send({ "request-type": "file_tx_start" });
+
+    // Start YMODEM receiver
+    var expectedSize = inv.fileSize || 0;
+    ymodemInstance = YMODEM.createReceiver({
+      write: function (bytes) {
+        writeSerial(bytes);
+      },
+      onData: function (callback) {
+        registerDataCallback(callback);
+        // Store for cleanup
+        ymodemInstance._dataCallback = callback;
+      },
+      onFileStart: function (name, size) {
+        receivedFileName = name || inv.fileName;
+        setText("serialTransferStatus", "Receiving: " + receivedFileName);
+      },
+      onProgress: function (received, total) {
+        var t = total > 0 ? total : expectedSize;
+        var pct = t > 0 ? (received / t) * 100 : 0;
+        setSerialProgress(pct);
+        setText("serialTransferStatus", "Receiving: " + received + " / " + t + " bytes");
+      },
+      onComplete: function (success, fileData, error) {
+        if (ymodemInstance && ymodemInstance._dataCallback) {
+          unregisterDataCallback(ymodemInstance._dataCallback);
+        }
+        ymodemInstance = null;
+        if (success && fileData) {
+          receivedData = fileData;
+          endTransfer(true, "File received successfully: " + receivedFileName);
+        } else {
+          endTransfer(false, "Receive failed: " + (error || "unknown error"));
+        }
+      },
+      timeout: 30000
+    });
+
+    ymodemInstance.start();
+  }
+
+  return {
+    init: init,
+    isSupported: isSupported,
+    connect: connect,
+    disconnect: disconnect,
+    handleInvitation: handleInvitation,
+    handleParticipant: handleParticipant,
+  };
+})();

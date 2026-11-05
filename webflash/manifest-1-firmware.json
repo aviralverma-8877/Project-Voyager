@@ -1,0 +1,28 @@
+{
+  "name": "Project Voyager v1 - Firmware Only",
+  "version": "1.0.0",
+  "new_install_prompt_erase": false,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        {
+          "path": "bootloader.bin",
+          "offset": 4096
+        },
+        {
+          "path": "partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "boot_app0.bin",
+          "offset": 57344
+        },
+        {
+          "path": "firmware-1.bin",
+          "offset": 65536
+        }
+      ]
+    }
+  ]
+}

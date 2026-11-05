@@ -1,5 +1,6 @@
 #include "support_method.h"
 #include "core_dispatch.h"
+#include "bt_serial.h"
 #include <web/web_sockets.h>
 #include <web/auth.h>
 #include <web/web_server.h>
@@ -141,6 +142,144 @@ static void send_serial_mode_to_ws()
     send_to_ws(payload);
 }
 
+static void send_bt_config_to_ws()
+{
+    BtConfig cfg = get_bt_config();
+    JsonDocument out;
+    out["response_type"] = "bt_config";
+    out["bt_name"] = cfg.bt_name;
+    out["bt_enabled"] = cfg.bt_enabled;
+    out["bt_available"] = bt_is_available();   // true if VOYAGER_BT_ENABLED was compiled
+    out["bt_running"] = bt_is_running();       // true if BluetoothSerial is currently active
+    out["bt_connected"] = bt_is_connected();   // true if a BT client is connected
+    String payload;
+    serializeJson(out, payload);
+    send_to_ws(payload);
+}
+
+// Task for reboot_to_bt: save config and restart. Every path ends in vTaskDelete.
+static void reboot_to_bt_task(void* param)
+{
+    BtConfig cfg = get_bt_config();
+    cfg.bt_enabled = true;
+    if (save_bt_config(cfg)) {
+        serial_print("BT enabled, rebooting...");
+        show_alert("Bluetooth enabled, rebooting...");
+    } else {
+        serial_print("Failed to save BT config");
+        show_alert("Failed to enable Bluetooth");
+        vTaskDelete(NULL);
+        return;
+    }
+    vTaskDelay(pdMS_TO_TICKS(500));
+    ESP.restart();
+    vTaskDelete(NULL);
+}
+
+// Task for set_bt_mode: start/stop BT on demand (no reboot). Every path ends in vTaskDelete.
+struct SetBtModeParam {
+    bool enable;
+};
+
+static void set_bt_mode_task(void* param)
+{
+    SetBtModeParam* p = (SetBtModeParam*)param;
+    bool enable = p->enable;
+    delete p;
+
+    bool success = false;
+    if (enable) {
+        // Start BT on demand (no reboot needed)
+        success = start_bt_serial();
+        if (success) {
+            show_alert("Bluetooth started - pair with device now");
+        } else {
+            show_alert("Failed to start Bluetooth");
+        }
+    } else {
+        // Stop BT to free resources
+        success = stop_bt_serial();
+        if (success) {
+            show_alert("Bluetooth stopped");
+        } else {
+            show_alert("Bluetooth was not running");
+        }
+    }
+    send_bt_config_to_ws();
+    vTaskDelete(NULL);
+}
+
+// Send a file transfer invite broadcast over LoRa (LORA_MSG with pack_type=action)
+static void send_file_tx_invite(const String& fileName, const String& fileSize)
+{
+    JsonDocument inner;
+    inner["pack_type"] = "action";
+    inner["data"] = "file_tx_invite";
+    inner["sender_mac"] = WiFi.macAddress();
+    inner["sender_name"] = get_username();
+    inner["file_name"] = fileName;
+    inner["file_size"] = fileSize;
+    String inner_str;
+    serializeJson(inner, inner_str);
+
+    JsonDocument doc;
+    doc["name"] = get_username();
+    doc["mac"] = WiFi.macAddress();
+    doc["data"] = inner_str;
+    String payload;
+    serializeJson(doc, payload);
+
+    QueueParam* p = new (std::nothrow) QueueParam();
+    if (!p) {
+        show_alert("File invite failed: no memory");
+        return;
+    }
+    p->type = LORA_MSG;
+    p->message = payload;
+    p->id = 0;   // no tx_result for broadcast
+    if (send_packets == NULL || xQueueSend(send_packets, (void*)&p, pdMS_TO_TICKS(50)) != pdTRUE) {
+        delete p;
+        show_alert("File invite failed: queue full");
+        return;
+    }
+    serial_print("File TX invite sent: " + fileName);
+}
+
+// Send a file transfer join/ack over LoRa (unicast LORA_MSG)
+static void send_file_tx_join(const String& sender_mac, const String& mode)
+{
+    JsonDocument inner;
+    inner["pack_type"] = "action";
+    inner["data"] = "file_tx_ack";
+    inner["receiver_mac"] = WiFi.macAddress();
+    inner["receiver_name"] = get_username();
+    inner["mode"] = mode;
+    String inner_str;
+    serializeJson(inner, inner_str);
+
+    JsonDocument doc;
+    doc["name"] = get_username();
+    doc["mac"] = WiFi.macAddress();
+    doc["data"] = inner_str;
+    String payload;
+    serializeJson(doc, payload);
+
+    QueueParam* p = new (std::nothrow) QueueParam();
+    if (!p) {
+        show_alert("File join failed: no memory");
+        return;
+    }
+    p->type = LORA_MSG;
+    p->message = payload;
+    p->id = 0;
+    if (send_packets == NULL || xQueueSend(send_packets, (void*)&p, pdMS_TO_TICKS(50)) != pdTRUE) {
+        delete p;
+        show_alert("File join failed: queue full");
+        return;
+    }
+    serial_print("File TX join sent to " + sender_mac + " mode=" + mode);
+}
+
 // WS command dispatcher (Contract 3). Runs on the web_sockets worker task.
 // Validation lives in core_dispatch.h (unit-tested natively); this only routes.
 // Never logs argument values for wifi / ap passwords.
@@ -213,6 +352,55 @@ void handle_operations(JsonDocument& doc)
             send_to_ws(scan);
         return;
     }
+    // Bluetooth Serial commands
+    case CoreAction::GetBtConfig:
+        send_bt_config_to_ws();
+        return;
+    case CoreAction::SetBtMode:
+    {
+        if (cmd.flag && !bt_is_available()) {
+            show_alert("BT not available (firmware not compiled with VOYAGER_BT_ENABLED)");
+            send_bt_config_to_ws();
+            return;
+        }
+        SetBtModeParam* p = new (std::nothrow) SetBtModeParam();
+        if (!p) {
+            show_alert("Failed: out of memory");
+            return;
+        }
+        p->enable = cmd.flag;
+        if (xTaskCreatePinnedToCore(set_bt_mode_task, "set_bt_mode", 4096, p, 1, NULL, 1) != pdPASS) {
+            delete p;
+            serial_print("set_bt_mode task create failed");
+        }
+        return;
+    }
+    case CoreAction::RebootToBt:
+        if (!bt_is_available()) {
+            show_alert("BT not available (firmware not compiled with VOYAGER_BT_ENABLED)");
+            send_bt_config_to_ws();
+            return;
+        }
+        if (xTaskCreatePinnedToCore(reboot_to_bt_task, "reboot_to_bt", 4096, NULL, 1, NULL, 1) != pdPASS)
+            serial_print("reboot_to_bt task create failed");
+        return;
+    // File transfer handshake commands
+    case CoreAction::FileTxInvite:
+        send_file_tx_invite(String(cmd.arg1.c_str()), String(cmd.arg2.c_str()));
+        return;
+    case CoreAction::FileTxJoin:
+        send_file_tx_join(String(cmd.arg1.c_str()), String(cmd.arg2.c_str()));
+        return;
+    case CoreAction::FileTxStart:
+        lora_serial = true;
+        serial_print("File TX started (serial bridge enabled)");
+        send_serial_mode_to_ws();
+        return;
+    case CoreAction::FileTxEnd:
+        lora_serial = false;
+        serial_print("File TX ended (serial bridge disabled)");
+        send_serial_mode_to_ws();
+        return;
     }
 }
 
@@ -232,7 +420,7 @@ void save_lora_serial_config(void* param)
 
 // ------------------------------------------------------ LoRa <-> serial bridge
 
-// Received LORA_SERIAL payloads -> UART. Runs in every build (not DEBUG-gated).
+// Received LORA_SERIAL payloads -> active serial (USB or BT). Runs in every build (not DEBUG-gated).
 void send_to_serial(void *param)
 {
     while (true)
@@ -240,7 +428,7 @@ void send_to_serial(void *param)
         DebugQueueParam *p = NULL;
         if (xQueueReceive(serial_packet_rec, &p, portMAX_DELAY) == pdTRUE && p)
         {
-            Serial.print(p->message);
+            active_serial_print(p->message);
             delete p;
         }
     }
@@ -262,7 +450,7 @@ void send_to_lora(void *param)
     }
 }
 
-// UART -> LoRa. Each chunk is at most LORA_MAX_PAYLOAD bytes.
+// Active serial (USB or BT) -> LoRa. Each chunk is at most LORA_MAX_PAYLOAD bytes.
 void serial_to_lora(void* param)
 {
     while (true)
@@ -271,7 +459,7 @@ void serial_to_lora(void* param)
         bool enabled = lora_serial;
         if (enabled)
         {
-            if (Serial.available())
+            if (active_serial_available())
             {
                 // Give a short burst time to arrive so we send fuller chunks.
                 vTaskDelay(pdMS_TO_TICKS(20));
@@ -279,8 +467,8 @@ void serial_to_lora(void* param)
                 if (p)
                 {
                     p->message.reserve(LORA_MAX_PAYLOAD);
-                    while (Serial.available() && p->message.length() < LORA_MAX_PAYLOAD)
-                        p->message += (char)Serial.read();
+                    while (active_serial_available() && p->message.length() < LORA_MAX_PAYLOAD)
+                        p->message += (char)active_serial_read();
                     if (xQueueSend(serial_packet_send, (void*)&p, pdMS_TO_TICKS(100)) != pdTRUE)
                         delete p;
                 }
@@ -289,7 +477,8 @@ void serial_to_lora(void* param)
         }
         else
         {
-            while (Serial.available()) Serial.read();   // discard console input
+            // Discard input when bridge is disabled (USB only; BT input is already buffered)
+            while (Serial.available()) Serial.read();
         }
         vTaskDelay(pdMS_TO_TICKS(10));
     }

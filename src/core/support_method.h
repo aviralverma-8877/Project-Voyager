@@ -4,6 +4,7 @@
     #include <string.h>
     #include <display/oled_display.h>
     #include "tasks.h"
+    #include "bt_serial.h"
     #include <ESPmDNS.h>
     #include <DNSServer.h>
     #include <WiFi.h>

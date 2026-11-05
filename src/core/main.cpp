@@ -69,6 +69,10 @@ void setup() {
   // Note: device_mode config exists but is reserved for future use (e.g., BLE, LoRa-only).
   // Currently only "WiFi" is supported, so we don't read it at boot.
 
+  // Initialize Bluetooth Serial if enabled in config. Must run after WiFi.macAddress()
+  // is available and LittleFS is mounted. Does nothing if bt_enabled is false.
+  init_bt_serial();
+
   // LED, buttons and telemetry first so led_nortifier() has a target before the radio starts.
   setupTasks();
 
