@@ -27,6 +27,26 @@ open a COM port at a time.
 
 Logs: `%LOCALAPPDATA%\VoyagerLink\voyager-link.log` (tray → **Open log folder**).
 
+## Bluetooth instead of the USB cable
+
+Voyager Link lists every COM port, and Windows gives a paired Bluetooth serial
+device a COM port of its own, so no extra software is needed:
+
+1. On the device page, File Transfer, switch **Bluetooth serial** on. The device
+   shows up as `Voyager_XXXX`.
+2. Pair with it in Windows: Settings, Bluetooth & devices, Add device.
+3. Windows creates two COM ports for it (More Bluetooth settings, COM Ports tab).
+   Use the **Outgoing** one.
+4. On the File Transfer page press **Refresh ports** and pick that COM port. Ports
+   that are not USB are labelled "Bluetooth or other serial port".
+
+The device uses Bluetooth while something is connected to it that way and USB
+otherwise, so you can switch by connecting through the other port. The LoRa
+network below works over the USB cable only.
+
+On Android, the Voyager Link app in `android/voyager-link` does the same job over a
+USB OTG cable or Bluetooth.
+
 ## LoRa network (TCP/IP over LoRa)
 
 Every PC running Voyager Link with its board plugged in can join one shared IP

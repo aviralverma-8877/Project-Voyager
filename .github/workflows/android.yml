@@ -1,0 +1,50 @@
+# Builds the Android Voyager Link app (android/voyager-link) and runs its unit tests.
+# The debug APK is attached to the run as an artifact.
+name: Android app
+
+on:
+  push:
+    paths:
+      - android/**
+      - .github/workflows/android.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # The project has no Gradle wrapper checked in; use a pinned Gradle instead.
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Unit tests and debug APK
+        working-directory: android/voyager-link
+        run: |
+          set -o pipefail
+          gradle --no-daemon --console=plain testDebugUnitTest assembleDebug 2>&1 | tee build.log
+
+      # Puts compiler / build errors on the run summary, so a failure can be read
+      # without downloading the log.
+      - name: Report build errors
+        if: failure()
+        working-directory: android/voyager-link
+        run: |
+          msg="$(grep -E '^e: |^w: .*error|error:|FAILED|What went wrong|^> ' build.log | head -60 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+          echo "::error title=Android build failed::${msg:-see build.log}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voyager-link-debug-apk
+          path: android/voyager-link/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

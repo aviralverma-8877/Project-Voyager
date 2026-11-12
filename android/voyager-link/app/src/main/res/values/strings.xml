@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Voyager Link</string>
+    <string name="intro">Connects the Voyager device page in your browser to the device over a USB OTG cable or Bluetooth, for File Transfer.</string>
+    <string name="start">Start</string>
+    <string name="stop">Stop</string>
+    <string name="status_stopped">Stopped. Tap Start, then open the device page.</string>
+    <string name="section_ports">Devices this phone can use</string>
+    <string name="refresh">Refresh</string>
+    <string name="no_ports">None yet. Plug the device in with a USB OTG cable, or pair it in Bluetooth settings.</string>
+    <string name="bt_permission">Allow Bluetooth</string>
+    <string name="bt_settings">Bluetooth settings (pair the device)</string>
+    <string name="section_page">Device page</string>
+    <string name="page_hint">Address of the device page</string>
+    <string name="open_page">Open in browser</string>
+    <string name="page_note">The phone must be on the device\'s WiFi (or the same network) to load the page. On the page, open File Transfer and pick the USB or Bluetooth entry in step 1.</string>
+    <string name="channel_name">Voyager Link helper</string>
+    <string name="notif_idle">Running. Waiting for the device page.</string>
+    <string name="notif_stop">Stop</string>
+</resources>
