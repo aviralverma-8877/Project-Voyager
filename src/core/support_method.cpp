@@ -457,6 +457,9 @@ void handle_operations(JsonDocument& doc)
         }
         sensor_send_config_to_ws();
         return;
+    case CoreAction::ReadSensors:
+        sensor_read_now();
+        return;
     case CoreAction::GetSensorConfig:
         sensor_send_config_to_ws();
         return;

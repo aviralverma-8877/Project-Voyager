@@ -50,7 +50,12 @@
 </fieldset>
 <section class="section">
     <h3 class="section-label">This device</h3>
+    <div class="hint mb-2">Shows whether each saved sensor answers and what it reads. Save the sensors first; this works with the broadcast switched off too.</div>
     <ul class="list" id="sensor_local"></ul>
+    <div class="actions mt-2">
+        <button type="button" class="btn secondary" id="sensor_read_btn" onclick="sensor_read_now()">Read now</button>
+        <span class="ms-2" id="sensor_read_status" role="status"></span>
+    </div>
 </section>
 <section class="section">
     <h3 class="section-label">Received from other devices</h3>

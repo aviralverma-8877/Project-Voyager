@@ -22,6 +22,10 @@
     // the file is not changed in that case.
     bool sensor_save_config(const char* json);
 
+    // Reads every configured sensor once and sends WS `sensor_data` (web page only,
+    // nothing is transmitted). Works with the mode off. Returns immediately.
+    void sensor_read_now();
+
     // Sends WS `sensor_config`: the active config plus this board's usable pins.
     void sensor_send_config_to_ws();
 #endif

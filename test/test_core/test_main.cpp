@@ -262,6 +262,7 @@ static void test_file_tx_join() {
 
 static void test_sensor_config_commands() {
     ASSERT_ACTION(CoreAction::GetSensorConfig, "{\"request-type\":\"get_sensor_config\"}");
+    ASSERT_ACTION(CoreAction::ReadSensors, "{\"request-type\":\"read_sensors\"}");
     CoreCommand c = parse("{\"request-type\":\"set_sensor_config\",\"val\":\"{\\\"enabled\\\":false}\"}");
     TEST_ASSERT_EQUAL(CoreAction::SetSensorConfig, c.action);
     TEST_ASSERT_EQUAL_STRING("{\"enabled\":false}", c.arg1.c_str());

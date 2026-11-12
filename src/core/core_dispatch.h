@@ -45,6 +45,7 @@ enum class CoreAction : uint8_t {
     FileTxEnd,      // disables lora_serial bridge
     SetSensorConfig, // arg1 = JSON string (validated by sensor_save_config)
     GetSensorConfig,
+    ReadSensors,     // read the configured sensors once, reply with sensor_data
 };
 
 struct CoreCommand {
@@ -89,6 +90,7 @@ inline const char* core_action_name(CoreAction a) {
         case CoreAction::FileTxEnd: return "file_tx_end";
         case CoreAction::SetSensorConfig: return "set_sensor_config";
         case CoreAction::GetSensorConfig: return "get_sensor_config";
+        case CoreAction::ReadSensors: return "read_sensors";
     }
     return "?";
 }
@@ -160,6 +162,7 @@ inline CoreCommand core_parse_request(JsonVariantConst doc) {
     if (strcmp(t, "get_net_status") == 0) { c.action = CoreAction::GetNetStatus; return c; }
     if (strcmp(t, "get_wifi_scan") == 0)  { c.action = CoreAction::GetWifiScan; return c; }
     if (strcmp(t, "get_sensor_config") == 0){ c.action = CoreAction::GetSensorConfig; return c; }
+    if (strcmp(t, "read_sensors") == 0)   { c.action = CoreAction::ReadSensors; return c; }
 
     if (strcmp(t, "connect_wifi") == 0) {
         JsonVariantConst s = doc["wifi_ssid"];

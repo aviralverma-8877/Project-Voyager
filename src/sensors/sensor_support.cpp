@@ -240,9 +240,12 @@ static void read_sensor(const Sensor& s, Reading& r)
 // Local copy for the device's own web UI (WS `sensor_data`).
 static void send_readings_to_ws(const Reading* r, size_t n)
 {
+    // ArduinoJson keeps a const char* by pointer, so the string must outlive
+    // serializeJson (a temporary here used to send garbage to the page).
+    const std::string inner = inner_json(r, n);
     JsonDocument doc;
     doc["response_type"] = "sensor_data";
-    doc["data"] = inner_json(r, n).c_str();
+    doc["data"] = inner.c_str();
     String out;
     serializeJson(doc, out);
     send_to_ws(out);
@@ -289,33 +292,65 @@ static void broadcast(const Reading* r, size_t n, bool ack)
     }
 }
 
+// Task notification bits.
+static const uint32_t NOTIFY_CONFIG = 0x01;   // config changed: start over with the new one
+static const uint32_t NOTIFY_READ   = 0x02;   // "Read now" from the web page
+
+static void read_all(const Config& c, Reading* readings)
+{
+    for (uint8_t i = 0; i < c.count; i++) {
+        read_sensor(c.sensors[i], readings[i]);
+        if (!readings[i].ok)
+            serial_print(String("Sensor read failed: ") + c.sensors[i].name);
+    }
+}
+
+// One-off read for the web page only (nothing goes on the air). Works with the
+// mode off, so wiring can be checked before enabling the broadcast.
+static void read_for_page()
+{
+    Config c = config_snapshot();
+    Reading readings[MAX_COUNT];
+    read_all(c, readings);
+    send_readings_to_ws(readings, c.count);
+}
+
 static void sensor_task(void* param)
 {
     for (;;) {
         Config c = config_snapshot();
+        uint32_t bits = 0;
         if (!c.enabled || c.count == 0) {
-            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);    // woken by sensor_save_config
+            xTaskNotifyWait(0, 0xFFFFFFFF, &bits, portMAX_DELAY);
+            if (bits & NOTIFY_READ) read_for_page();
             continue;
         }
         TickType_t started = xTaskGetTickCount();
 
         Reading readings[MAX_COUNT];
-        for (uint8_t i = 0; i < c.count; i++) {
-            read_sensor(c.sensors[i], readings[i]);
-            if (!readings[i].ok)
-                serial_print(String("Sensor read failed: ") + c.sensors[i].name);
-        }
+        read_all(c, readings);
         // The config may have been switched off during a slow read.
         if (sensor_mode_enabled()) {
             send_readings_to_ws(readings, c.count);
             broadcast(readings, c.count, c.ack);
         }
 
-        TickType_t period = pdMS_TO_TICKS((uint32_t)c.interval * 1000UL);
-        TickType_t elapsed = xTaskGetTickCount() - started;
-        // A notification means the config changed: start over with the new one.
-        ulTaskNotifyTake(pdTRUE, elapsed < period ? period - elapsed : 1);
+        // Sleep until the next broadcast. "Read now" is served in between without
+        // moving the schedule; a config change starts over at once.
+        const TickType_t period = pdMS_TO_TICKS((uint32_t)c.interval * 1000UL);
+        for (;;) {
+            TickType_t elapsed = xTaskGetTickCount() - started;
+            if (elapsed >= period) break;
+            if (xTaskNotifyWait(0, 0xFFFFFFFF, &bits, period - elapsed) != pdTRUE) break;
+            if (bits & NOTIFY_CONFIG) break;
+            if (bits & NOTIFY_READ) read_for_page();
+        }
     }
+}
+
+void sensor_read_now()
+{
+    if (s_task != NULL) xTaskNotify(s_task, NOTIFY_READ, eSetBits);
 }
 
 // ------------------------------------------------------------------- config
@@ -364,7 +399,8 @@ bool sensor_save_config(const char* json)
         s_cfg = c;
     }
     s_enabled.store(c.enabled);
-    if (s_task != NULL) xTaskNotifyGive(s_task);
+    // Apply now, and read once so the page shows at once whether each sensor answers.
+    if (s_task != NULL) xTaskNotify(s_task, NOTIFY_CONFIG | NOTIFY_READ, eSetBits);
     serial_print(String("Sensor config saved, mode ") + (c.enabled ? "on" : "off"));
     return true;
 }

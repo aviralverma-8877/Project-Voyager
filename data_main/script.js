@@ -43,6 +43,7 @@ const state = {
   sensorCfg: null, // last WS sensor_config
   sensorPins: { io: [], in: [], adc: [] },
   sensorLocal: null, // { readings, time } from WS sensor_data
+  sensorReadTimer: null, // "Read now" answer timeout
   sensorRx: [], // newest first: { key, sender, name, typeLabel, text, ok, time }
   setupMode: false,
   signInRequired: false,

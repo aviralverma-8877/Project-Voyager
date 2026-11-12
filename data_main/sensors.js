@@ -18,6 +18,8 @@ function sensors() {
     render_sensor_local();
     render_sensor_rx();
     ws_send({ "request-type": "get_sensor_config" }, true);
+    // Fresh readings every time the page is opened.
+    if (ws_send({ "request-type": "read_sensors" }, true)) setText("sensor_read_status", "Reading...");
   });
 }
 
@@ -33,6 +35,7 @@ function on_sensor_config(data) {
   state.sensorCfg = cfg;
   state.sensorMode = cfg.enabled === true;
   render_sensor_form();
+  if (!state.sensorLocal) render_sensor_local(); // "No sensors saved" vs "Press Read now"
   refresh_locks();
 }
 
@@ -163,25 +166,54 @@ function save_sensor_config() {
   else send();
 }
 
-function sensor_item(name, typeLabel, text, ok) {
-  const li = el("li");
-  li.append(el("b", "", name), document.createTextNode(" (" + typeLabel + ") : "), el("span", ok ? "" : "text-bad", text));
+var SENSOR_READ_TIMEOUT_MS = 15000; // 4 slow sensors (DS18B20, DHT retry) fit well inside
+
+// "Read now": the device reads every saved sensor once and answers with WS
+// sensor_data (nothing is transmitted). Works with the broadcast switched off.
+function sensor_read_now() {
+  if (!ws_send({ "request-type": "read_sensors" })) return;
+  setText("sensor_read_status", "Reading...");
+  setDisabled("sensor_read_btn", true);
+  clearTimeout(state.sensorReadTimer);
+  state.sensorReadTimer = setTimeout(function () {
+    setText("sensor_read_status", "No answer from the device.");
+    setDisabled("sensor_read_btn", false);
+  }, SENSOR_READ_TIMEOUT_MS);
+}
+
+// One line per sensor: name, type, then either the reading with "detected", or
+// a clear "no response" so a wiring / pin mistake is visible.
+function sensor_status_item(r) {
+  const li = el("li", "spread");
+  const left = el("span");
+  left.append(el("b", "", r.name), document.createTextNode(" (" + r.typeLabel + ") : "));
+  if (r.ok) left.append(el("span", "", r.text));
+  else left.append(el("span", "text-bad", "no response - check the wiring and the selected pin"));
+  li.append(left, el("span", r.ok ? "text-ok" : "text-bad", r.ok ? "Detected" : "Not detected"));
   return li;
 }
 
 function render_sensor_local() {
   const ul = byId("sensor_local");
   if (!ul) return;
+  clearTimeout(state.sensorReadTimer);
+  setDisabled("sensor_read_btn", false);
   ul.replaceChildren();
   const local = state.sensorLocal;
-  if (!local || local.readings.length === 0) {
-    ul.append(el("li", "muted", "No readings yet."));
+  const saved = state.sensorCfg && Array.isArray(state.sensorCfg.sensors) ? state.sensorCfg.sensors.length : 0;
+  if (!local) {
+    ul.append(el("li", "muted", saved ? "Not read yet. Press Read now." : "No sensors saved yet."));
+    return;
+  }
+  if (local.readings.length === 0) {
+    setText("sensor_read_status", "");
+    ul.append(el("li", "muted", "No sensors saved on the device. Add one above and press Save."));
     return;
   }
   local.readings.forEach(function (r) {
-    ul.append(sensor_item(r.name, r.typeLabel, r.text, r.ok));
+    ul.append(sensor_status_item(r));
   });
-  ul.append(el("li", "muted", "Read at " + local.time.toLocaleTimeString()));
+  setText("sensor_read_status", "Read at " + local.time.toLocaleTimeString());
 }
 
 // Keeps the latest reading per device + sensor, newest first.
