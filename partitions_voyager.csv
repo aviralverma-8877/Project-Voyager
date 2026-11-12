@@ -1,0 +1,15 @@
+# Project Voyager partition table (4 MB flash).
+#
+# Bluetooth Classic serial makes the firmware about 1.86 MB, which does not fit the
+# 1.25 MB app slots of the Arduino default table. This table keeps OTA (two app
+# slots) by shrinking the filesystem to 320 KB; the web UI in data/ is about 130 KB.
+#
+# A partition table cannot be changed over OTA: a board that was flashed with the
+# old layout must be flashed once over USB (web flasher) to get this one.
+#
+# Name,   Type, SubType, Offset,   Size,     Flags
+nvs,      data, nvs,     0x9000,   0x5000,
+otadata,  data, ota,     0xe000,   0x2000,
+app0,     app,  ota_0,   0x10000,  0x1D0000,
+app1,     app,  ota_1,   0x1E0000, 0x1D0000,
+spiffs,   data, spiffs,  0x3B0000, 0x50000,

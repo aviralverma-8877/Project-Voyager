@@ -1,6 +1,16 @@
-<h2 class="panel-title">File Transfer <small>Kermit over USB, relayed over LoRa</small></h2>
+<h2 class="panel-title">File Transfer <small>Kermit over USB or Bluetooth, relayed over LoRa</small></h2>
 
-<p class="hint">Sends a file between two Voyager devices. Each computer talks to its own device over a USB cable, and the devices relay the data over LoRa. One sender, one receiver per transfer.</p>
+<p class="hint">Sends a file between two Voyager devices. Each computer or phone talks to its own device over a USB cable or Bluetooth, and the devices relay the data over LoRa. One sender, one receiver per transfer.</p>
+
+<section class="section">
+    <h3 class="section-label">Bluetooth serial</h3>
+    <div class="switch">
+        <input type="checkbox" role="switch" id="bt_enabled" onchange="set_bt_mode(this.checked)" disabled>
+        <label for="bt_enabled">Bluetooth serial on this device</label>
+    </div>
+    <div class="hint" id="bt_status">Checking...</div>
+    <div class="hint">Leave it off if you use the USB cable. When it's on, pair with the device in your computer's or phone's Bluetooth settings, then pick the Bluetooth port in step 1. The device uses Bluetooth while something is connected to it that way, and USB otherwise.</div>
+</section>
 
 <!-- Step 1: Serial connection -->
 <div class="hint text-bad" id="file_sensor_note" hidden>Sensor broadcast is on, so file transfer is off. Turn it off in the Sensors tab first.</div>
@@ -8,12 +18,22 @@
     <h3 class="section-label">1. Serial Connection</h3>
     <p id="serialLinkStatus" class="hint">Checking for Voyager Link...</p>
     <div id="helperMissing" hidden>
-        <p class="hint">This page is served by the device over plain HTTP, so Chrome does not let it open serial ports itself. <b>Voyager Link</b> is a small Windows helper that runs in the system tray and connects this page to the USB port.</p>
-        <ol class="hint">
-            <li>Download Voyager Link while you have internet access, and run it (no install needed).</li>
-            <li>If Windows SmartScreen warns about it, choose <i>More info</i> &rarr; <i>Run anyway</i>.</li>
-            <li>If Chrome asks to let this page access apps on your device, choose <i>Allow</i>.</li>
-        </ol>
+        <div id="helperMissingWindows">
+            <p class="hint">This page is served by the device over plain HTTP, so Chrome does not let it open serial ports itself. <b>Voyager Link</b> is a small Windows helper that runs in the system tray and connects this page to the USB port or to a paired Bluetooth serial port.</p>
+            <ol class="hint">
+                <li>Download Voyager Link while you have internet access, and run it (no install needed).</li>
+                <li>If Windows SmartScreen warns about it, choose <i>More info</i> &rarr; <i>Run anyway</i>.</li>
+                <li>If Chrome asks to let this page access apps on your device, choose <i>Allow</i>.</li>
+            </ol>
+        </div>
+        <div id="helperMissingAndroid" hidden>
+            <p class="hint">On Android, the <b>Voyager Link</b> app connects this page to the device over a USB OTG cable or Bluetooth.</p>
+            <ol class="hint">
+                <li>Install the Voyager Link app while you have internet access, open it and tap <i>Start</i>.</li>
+                <li>For Bluetooth: switch Bluetooth serial on above, then pair with the device in Android's Bluetooth settings.</li>
+                <li>If Chrome asks to let this page access apps on your device, choose <i>Allow</i>.</li>
+            </ol>
+        </div>
         <div class="actions">
             <a class="btn secondary" id="helperDownloadLink" href="#" target="_blank" rel="noopener">Download Voyager Link</a>
             <button type="button" class="btn secondary" id="helperRetryBtn">Check again</button>

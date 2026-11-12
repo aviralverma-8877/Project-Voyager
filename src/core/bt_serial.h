@@ -3,13 +3,16 @@
 // LoRa-serial bridge can use either transport.
 //
 // **Conditional compilation**: BluetoothSerial is only included when VOYAGER_BT_ENABLED
-// is defined. This is because BluetoothSerial adds ~500KB to the firmware, which doesn't
-// fit in the default partition table. Users who need BT should:
-// 1. Add `-D VOYAGER_BT_ENABLED=1` to build_flags
-// 2. Use `board_build.partitions = huge_app.csv` (removes OTA but gives 3MB app space)
+// is defined (platformio.ini defines it for every board). It adds about 760 KB to the
+// firmware, which is why the project uses partitions_voyager.csv (1.9 MB app slots).
 //
 // Without VOYAGER_BT_ENABLED, this module still provides config persistence (so the
 // UI can still show BT settings) but the serial abstraction always routes to USB Serial.
+//
+// Which transport the bridge uses is automatic (active_serial_autoselect): Bluetooth
+// while a Bluetooth client is connected, USB otherwise, and whichever of the two the
+// host last sent data on when both are attached. The LoRa network (Voyager Link SLIP)
+// and Improv WiFi setup stay on USB only.
 //
 // Config file: /config/bt_config.json {"bt_name":"Voyager_XXXX","bt_enabled":false}
 // Default BT name: "Voyager_" + last 4 hex chars of the MAC address.
@@ -35,9 +38,18 @@ struct BtConfig {
 };
 
 // Initialize Bluetooth Serial module. Call once from setup() after LittleFS
-// is mounted. This does NOT start BluetoothSerial - it only loads the config.
-// BT is started on-demand via start_bt_serial() to save RAM at boot.
+// is mounted. Starts BluetoothSerial if bt_enabled was saved as true (so a phone
+// can connect without the web page); otherwise it stays off to save RAM until
+// start_bt_serial() is called.
 void init_bt_serial();
+
+// Picks the bridge transport (see the header comment). Call often from the bridge
+// task; cheap. Only the bridge task may call it.
+void active_serial_autoselect();
+
+// Throws away pending Bluetooth input (used while the bridge is off, so stale bytes
+// are not sent over the radio when it turns on).
+void bt_discard_input();
 
 // Start BluetoothSerial on demand (no reboot required). Returns true on success.
 // Uses the configured bt_name or default if not set. Saves bt_enabled=true to config.

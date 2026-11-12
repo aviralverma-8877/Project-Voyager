@@ -668,7 +668,34 @@ function reset() {
 function file_transfer() {
   load_page("file_transfer.html", "navbar-file-transfer", function () {
     serialTransfer.init();
+    ws_send({ "request-type": "get_bt_config" }, true);
   });
+}
+
+// WS bt_config: {bt_name, bt_enabled, bt_available, bt_running, bt_connected}.
+function render_bt_config(d) {
+  const sw = byId("bt_enabled");
+  if (!sw) return; // another page is showing
+  const available = d.bt_available === true;
+  const running = d.bt_running === true;
+  sw.disabled = !available;
+  sw.checked = running;
+  let text;
+  if (!available) text = "This firmware was built without Bluetooth.";
+  else if (!running) text = "Off.";
+  else
+    text =
+      'On. The device shows up as "' + L.toText(d.bt_name) + '"' +
+      (d.bt_connected === true ? ", and something is connected to it." : ". Nothing is connected yet.");
+  setText("bt_status", text);
+}
+
+function set_bt_mode(val) {
+  setText("bt_status", val ? "Starting Bluetooth..." : "Stopping Bluetooth...");
+  if (!ws_send({ "request-type": "set_bt_mode", value: !!val })) {
+    const sw = byId("bt_enabled");
+    if (sw) sw.checked = !val;
+  }
 }
 
 // Navbar data-page -> handler.
@@ -787,6 +814,9 @@ function handle_ws_message(data) {
       break;
     case "net_status":
       render_net_status(data);
+      break;
+    case "bt_config":
+      render_bt_config(data);
       break;
     case "sensor_config":
       with_sensors(function () {
@@ -1300,6 +1330,12 @@ function set_coding_rate(val) {
 var HELPER_PORTS = [47321, 47322, 47323, 47324, 47325]; // = helperPorts in tools/voyager-link/server.go
 var HELPER_DOWNLOAD_URL =
   "https://aviralverma-8877.github.io/Project-Voyager/webflash/voyager-link.exe";
+// Android: the Voyager Link app (android/voyager-link) plays the same role.
+var HELPER_ANDROID_URL = "https://github.com/aviralverma-8877/Project-Voyager/releases";
+
+function isAndroid() {
+  return /Android/i.test(navigator.userAgent || "");
+}
 var SERIAL_BAUD = 115200;
 // Time for file_tx_start (WS) to reach the device before Kermit bytes do: while the
 // bridge is off the device discards serial input, and debug lines stop only once it is on.
@@ -1582,7 +1618,9 @@ var serialTransfer = (function () {
     resetState();
     invitations = keepInvitations;
 
-    byId("helperDownloadLink").href = HELPER_DOWNLOAD_URL;
+    byId("helperDownloadLink").href = isAndroid() ? HELPER_ANDROID_URL : HELPER_DOWNLOAD_URL;
+    byId("helperMissingWindows").hidden = isAndroid();
+    byId("helperMissingAndroid").hidden = !isAndroid();
     byId("helperRetryBtn").addEventListener("click", detectTransport);
     byId("connectSerialBtn").addEventListener("click", connect);
     byId("refreshPortsBtn").addEventListener("click", refreshPorts);
@@ -1688,6 +1726,8 @@ var serialTransfer = (function () {
         });
         ports.forEach(function (p) {
           var label = L.toText(p.name) + (p.desc ? " - " + L.toText(p.desc) : "");
+          // Windows lists a paired Bluetooth serial port as a plain COM port.
+          if (p.usb === false && !p.desc) label += " - Bluetooth or other serial port";
           if (p.likely) label += " (Voyager?)";
           var opt = el("option", "", label);
           opt.value = L.toText(p.name);

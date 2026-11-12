@@ -273,7 +273,7 @@ inline bool ct_equal(const char* a, const char* b, size_t n) {
 static const char* const OTA_KEEP_FILES[] = {
     "/config/wifi_config.json", "/config/lora_config.json",
     "/config/user_data.json",   "/config/lora_serial.json",
-    "/config/sensor_config.json"};
+    "/config/sensor_config.json", "/config/bt_config.json"};
 static const size_t OTA_KEEP_COUNT = sizeof(OTA_KEEP_FILES) / sizeof(OTA_KEEP_FILES[0]);
 static const size_t OTA_KEEP_MAX_BYTES = 2048;
 

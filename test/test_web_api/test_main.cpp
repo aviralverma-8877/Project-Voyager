@@ -294,11 +294,11 @@ static void test_ack_param() {
 }
 
 static void test_ota_keep_files() {
-  TEST_ASSERT_EQUAL_size_t(5, wv::OTA_KEEP_COUNT);
+  TEST_ASSERT_EQUAL_size_t(6, wv::OTA_KEEP_COUNT);
   const char* expect[] = {"/config/wifi_config.json", "/config/lora_config.json",
                           "/config/user_data.json", "/config/lora_serial.json",
-                          "/config/sensor_config.json"};
-  for (size_t i = 0; i < 5; i++) TEST_ASSERT_EQUAL_STRING(expect[i], wv::OTA_KEEP_FILES[i]);
+                          "/config/sensor_config.json", "/config/bt_config.json"};
+  for (size_t i = 0; i < 6; i++) TEST_ASSERT_EQUAL_STRING(expect[i], wv::OTA_KEEP_FILES[i]);
   TEST_ASSERT_EQUAL_size_t(2048, wv::OTA_KEEP_MAX_BYTES);
 }
 

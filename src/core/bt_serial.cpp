@@ -71,8 +71,18 @@ void init_bt_serial()
 #ifdef VOYAGER_BT_ENABLED
     BtConfig cfg = get_bt_config();
     serial_print("BT config: name=" + cfg.bt_name + " enabled=" + String(cfg.bt_enabled ? "true" : "false"));
-    // BT is NOT auto-started at boot to save RAM. Use start_bt_serial() on demand.
-    serial_print("Bluetooth available but not started (use enable_bt command)");
+    if (cfg.bt_enabled) {
+        // Enabled earlier from the web page: come up at boot so the Android app or a
+        // paired PC can connect without anyone opening the page first.
+        if (SerialBT.begin(cfg.bt_name)) {
+            bt_initialized = true;
+            serial_print("BluetoothSerial started at boot");
+        } else {
+            serial_print("ERROR: BluetoothSerial.begin() failed at boot");
+        }
+    } else {
+        serial_print("Bluetooth is off (enable it on the File Transfer page)");
+    }
 #else
     serial_print("Bluetooth support not compiled (VOYAGER_BT_ENABLED not defined)");
 #endif
@@ -154,6 +164,38 @@ bool bt_is_available()
     return true;   // BT support compiled in
 #else
     return false;  // BT support not compiled
+#endif
+}
+
+void active_serial_autoselect()
+{
+#ifdef VOYAGER_BT_ENABLED
+    static bool was_connected = false;
+    if (!bt_initialized || !SerialBT.connected()) {
+        active_serial_mode = BRIDGE_SERIAL_USB;
+        was_connected = false;
+        return;
+    }
+    if (!was_connected) {                 // a Bluetooth client just connected
+        was_connected = true;
+        active_serial_mode = BRIDGE_SERIAL_BT;
+        return;
+    }
+    // Both attached: follow the side the host is actually talking on.
+    if (active_serial_mode == BRIDGE_SERIAL_BT) {
+        if (SerialBT.available() == 0 && Serial.available() > 0)
+            active_serial_mode = BRIDGE_SERIAL_USB;
+    } else if (SerialBT.available() > 0) {
+        active_serial_mode = BRIDGE_SERIAL_BT;
+    }
+#endif
+}
+
+void bt_discard_input()
+{
+#ifdef VOYAGER_BT_ENABLED
+    if (!bt_initialized) return;
+    while (SerialBT.available() > 0) SerialBT.read();
 #endif
 }
 

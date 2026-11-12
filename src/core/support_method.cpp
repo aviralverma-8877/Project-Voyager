@@ -531,6 +531,7 @@ void serial_to_lora(void* param)
     {
         // Snapshot the flag once per iteration to avoid inconsistent behavior mid-loop.
         bool enabled = lora_serial;
+        active_serial_autoselect();   // USB or Bluetooth, whichever the host is using
         if (enabled)
         {
             if (active_serial_available() > 0)
@@ -571,6 +572,7 @@ void serial_to_lora(void* param)
             } else {
                 while (Serial.available()) improv_feed((uint8_t)Serial.read());
             }
+            bt_discard_input();   // Bluetooth carries the bridge only
         }
         vTaskDelay(pdMS_TO_TICKS(10));
     }
