@@ -19,6 +19,10 @@ constexpr uint8_t  T_RAW_DATA    = 1;
 constexpr uint8_t  T_REC_AKNG    = 2;
 constexpr uint8_t  T_LORA_SERIAL = 3;
 constexpr uint8_t  T_NET         = 4;     // LoRa network: [dst u16][src u16] + IPv4 packet
+// Flag bit in the type byte: "do not acknowledge". Only valid on LORA_MSG.
+// The sender transmits once and the receiver delivers without sending REC_AKNG.
+constexpr uint8_t  T_FLAG_NOACK  = 0x80;
+constexpr uint8_t  T_TYPE_MASK   = 0x7F;
 constexpr size_t   HEADER_LEN    = 4;     // [len][type][seq][crc8]
 constexpr size_t   MAX_PAYLOAD   = 251;   // 255 FIFO bytes - header
 constexpr size_t   MAX_FRAME     = HEADER_LEN + MAX_PAYLOAD;
@@ -48,7 +52,9 @@ inline uint8_t packet_crc(uint8_t seq, const uint8_t* payload, size_t len) {
 // data type, or `out` is too small. Use frame_ack() for REC_AKNG.
 inline size_t frame_packet(uint8_t type, uint8_t seq, const uint8_t* payload, size_t len,
                            uint8_t* out, size_t out_cap) {
-    if (len > MAX_PAYLOAD || type == T_REC_AKNG || type > T_NET) return 0;
+    const uint8_t base = type & T_TYPE_MASK;
+    if (len > MAX_PAYLOAD || base == T_REC_AKNG || base > T_NET) return 0;
+    if ((type & T_FLAG_NOACK) && base != T_LORA_MSG) return 0;
     if (out == nullptr || out_cap < HEADER_LEN + len) return 0;
     if (len > 0 && payload == nullptr) return 0;
     out[0] = (uint8_t)len;
@@ -79,17 +85,19 @@ struct Parsed {
     uint8_t seq;
     uint8_t len;
     const uint8_t* payload;   // points into the input buffer
+    bool noack;               // T_FLAG_NOACK was set: deliver, never ACK / NACK
 };
 
 inline Parsed parse_packet(const uint8_t* buf, size_t n) {
-    Parsed p{false, ParseErr::None, 0, 0, 0, nullptr};
+    Parsed p{false, ParseErr::None, 0, 0, 0, nullptr, false};
     if (buf == nullptr || n < HEADER_LEN) { p.err = ParseErr::TooShort; return p; }
     p.len = buf[0];
-    p.type = buf[1];
+    p.type = buf[1] & T_TYPE_MASK;   // base type; the flag is reported in p.noack
+    p.noack = (buf[1] & T_FLAG_NOACK) != 0;
     p.seq = buf[2];
     p.payload = buf + HEADER_LEN;
     if (n != HEADER_LEN + (size_t)p.len) { p.err = ParseErr::LenMismatch; return p; }
-    if (p.type > T_NET) { p.err = ParseErr::BadType; return p; }
+    if (p.type > T_NET || (p.noack && p.type != T_LORA_MSG)) { p.err = ParseErr::BadType; return p; }
     if (p.type == T_REC_AKNG) {
         if (p.len != 1) { p.err = ParseErr::BadAck; return p; }
         p.ok = true;
@@ -345,7 +353,7 @@ inline size_t config_to_json(const LoraConfig& c, char* out, size_t cap) {
 }
 
 // ---- LORA_MSG payload (Contract 1) --------------------------------------------
-enum class MsgKind : uint8_t { Invalid, Text, Sos, OtherAction };
+enum class MsgKind : uint8_t { Invalid, Text, Sos, OtherAction, Sensor };
 
 struct LoraMsgInfo {
     MsgKind kind = MsgKind::Invalid;
@@ -375,6 +383,8 @@ inline LoraMsgInfo parse_lora_msg(const char* payload) {
         const char* a = inner["data"] | "";
         if (strcmp(a, "sos") == 0) info.kind = MsgKind::Sos;
         else info.kind = MsgKind::OtherAction;
+    } else if (strcmp(pt, "sensor") == 0) {
+        info.kind = MsgKind::Sensor;   // readings are shown by the web UI only
     }
     return info;
 }

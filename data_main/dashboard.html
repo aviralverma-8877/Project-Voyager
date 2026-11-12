@@ -10,6 +10,7 @@
         <label for="lora_to_serial">LoRa to Serial</label>
     </div>
     <div class="hint">Bridges the radio to the USB serial port. Messaging is locked while it's on.</div>
+    <div class="hint text-bad" id="sensor_mode_note" hidden>Sensor broadcast is on (see the Sensors tab), so LoRa to Serial and file transfer are off.</div>
 </section>
 <section class="section">
     <h3 class="section-label">LoRa network</h3>
@@ -45,6 +46,19 @@
     <div class="field">
         <label for="lora_msg" class="label">Transmit message</label>
         <textarea class="input" id="lora_msg" rows="3" placeholder="Type a message for nodes in range"></textarea>
+    </div>
+    <div class="field">
+        <div class="switch">
+            <input
+                type="checkbox"
+                role="switch"
+                id="lora_msg_ack"
+                onchange="set_msg_ack(this.checked)"
+                checked
+            >
+            <label for="lora_msg_ack">Wait for acknowledgement</label>
+        </div>
+        <div class="hint">Off: the message is broadcast once, with no delivery confirmation.</div>
     </div>
     <div class="actions">
         <button type="button" class="btn primary" onclick="send_lora()">

@@ -6,6 +6,7 @@
 #include "support_method.h"
 #include <web/web_server.h>
 #include <web/web_sockets.h>
+#include <sensors/sensor_support.h>
 #include "FS.h"
 #include "LittleFS.h"
 
@@ -89,6 +90,9 @@ void setup() {
   oled_status("Starting LoRa");
   config_lora();          // creates lora_write_mutex
   start_serial_bridge();  // needs the radio mutex and the serial queues
+  sensors_init();         // sensor broadcast mode (off unless configured)
+  if (sensor_mode_enabled())
+    lora_serial = false;  // the two modes are mutually exclusive; sensors win
 
   // server.begin() (inside define_api) must run after the network stack is up.
   uint32_t start = millis();

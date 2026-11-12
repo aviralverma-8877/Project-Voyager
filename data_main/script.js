@@ -38,6 +38,12 @@ const state = {
   hostnameUrl: "",
   username: "",
   serialMode: false,
+  msgAck: true, // dashboard "Wait for acknowledgement" switch
+  sensorMode: false, // sensor broadcast is on: no serial bridge, no file transfer
+  sensorCfg: null, // last WS sensor_config
+  sensorPins: { io: [], in: [], adc: [] },
+  sensorLocal: null, // { readings, time } from WS sensor_data
+  sensorRx: [], // newest first: { key, sender, name, typeLabel, text, ok, time }
   setupMode: false,
   signInRequired: false,
   sessionRequest: null,
@@ -479,8 +485,64 @@ function set_fieldsets_disabled(cls, disabled) {
 
 // Locks: .lora_transmission (dashboard messaging) while the LoRa-serial bridge owns
 // the radio link (serial mode).
+// Sensor broadcast mode (Sensors tab) switches the serial bridge and file transfer off.
 function refresh_locks() {
   set_fieldsets_disabled("lora_transmission", state.serialMode);
+  setDisabled("lora_to_serial", state.sensorMode);
+  ["sensor_mode_note", "file_sensor_note"].forEach(function (id) {
+    const note = byId(id);
+    if (note) note.hidden = !state.sensorMode;
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* sensors.js (Sensors page) is loaded on demand                       */
+/* ------------------------------------------------------------------ */
+
+// The device serves several simultaneous downloads unreliably, so sensors.js is
+// not part of the initial page load: it is fetched once the WebSocket is up.
+// with_sensors(fn) runs fn as soon as the file is there (immediately if it is).
+const SENSORS_JS_TIMEOUT_MS = 8000;
+const sensorsScript = { ready: false, loading: false, waiting: [] };
+
+function with_sensors(fn) {
+  if (sensorsScript.ready) {
+    fn();
+    return;
+  }
+  sensorsScript.waiting.push(fn);
+  if (sensorsScript.loading) return;
+  sensorsScript.loading = true;
+  const tag = document.createElement("script");
+  let settled = false;
+  const finish = function (ok) {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    sensorsScript.loading = false;
+    if (!ok) {
+      tag.remove(); // abandons a download that hung; the next caller retries
+      sensorsScript.waiting = [];
+      return;
+    }
+    sensorsScript.ready = true;
+    const run = sensorsScript.waiting;
+    sensorsScript.waiting = [];
+    run.forEach(function (f) {
+      f();
+    });
+  };
+  const timer = setTimeout(function () {
+    finish(false);
+  }, SENSORS_JS_TIMEOUT_MS);
+  tag.onload = function () {
+    finish(true);
+  };
+  tag.onerror = function () {
+    finish(false);
+  };
+  tag.src = "sensors.js";
+  document.head.appendChild(tag);
 }
 
 /* ------------------------------------------------------------------ */
@@ -512,6 +574,7 @@ function dashboard() {
   load_page("dashboard.html", "navbar-dashboard", function () {
     setValue("username", state.username);
     byId("lora_to_serial").checked = state.serialMode;
+    byId("lora_msg_ack").checked = state.msgAck;
     get_config("lora_serial.json").then(function (cfg) {
       state.serialMode = !!(cfg && cfg.lora_serial);
       const sw = byId("lora_to_serial");
@@ -611,6 +674,11 @@ function file_transfer() {
 const PAGES = {
   dashboard: dashboard,
   file_transfer: file_transfer,
+  sensors: function () {
+    with_sensors(function () {
+      sensors();
+    });
+  },
   wifi: wifi,
   lora: lora,
   update: update,
@@ -645,6 +713,9 @@ function init_socket() {
     hide_loading();
     ws_send({ "request-type": "get_username" }, true);
     ws_send({ "request-type": "get_serial_mode" }, true);
+    with_sensors(function () {
+      ws_send({ "request-type": "get_sensor_config" }, true);
+    });
     // A scan result broadcast while we were reconnecting would be lost: ask for
     // the device's cached one (Contract 3 get_wifi_scan; no reply if none yet).
     if (state.scanning) ws_send({ "request-type": "get_wifi_scan" }, true);
@@ -716,6 +787,17 @@ function handle_ws_message(data) {
     case "net_status":
       render_net_status(data);
       break;
+    case "sensor_config":
+      with_sensors(function () {
+        on_sensor_config(data);
+      });
+      break;
+    case "sensor_data":
+      state.sensorLocal = { readings: L.parseSensorData(data.data), time: new Date() };
+      with_sensors(function () {
+        render_sensor_local();
+      });
+      break;
     case "serial_mode": {
       state.serialMode = data.value === true || data.value === "true" || data.value === 1;
       const sw = byId("lora_to_serial");
@@ -732,6 +814,12 @@ function handle_lora_rx(msg) {
   if (!msg) return;
   if (msg.packType === "msg") {
     add_message(msg.sender, msg.text, false);
+    return;
+  }
+  if (msg.packType === "sensor") {
+    with_sensors(function () {
+      on_sensor_rx(msg);
+    });
     return;
   }
   if (msg.action === "sos") alertText("User " + msg.sender + " has sent a SOS request.");
@@ -856,14 +944,17 @@ function tx_timeout_reason(phase) {
 
 // cb({ok, fatal, reason, akn, username}); called exactly once.
 // onState(state) (optional): "queued" after the 202, "sending" on tx_started (Contract 3).
-function lora_tx(url, payload, cb, onState) {
+// noAck (optional): broadcast once, don't wait for the receiver's acknowledgement.
+function lora_tx(url, payload, cb, onState, noAck) {
   tx_led_begin();
   const done = cb;
   cb = function (r) {
     tx_led_end(r.ok);
     done(r);
   };
-  request(url, { method: "POST", data: { data: payload }, as: "json" }).then(
+  const form = { data: payload };
+  if (noAck) form.ack = "0";
+  request(url, { method: "POST", data: form, as: "json" }).then(
     function (r) {
       const body = r.body;
       if (r.status !== 202 || !body || body.id === undefined || body.id === null) {
@@ -881,6 +972,8 @@ function lora_tx(url, payload, cb, onState) {
             ? tx_timeout_reason(t.phase)
             : t.akn === 1
             ? ""
+            : noAck
+            ? "the radio was busy"
             : "not acknowledged by the receiver",
         });
       }, onState);
@@ -921,21 +1014,26 @@ function send_lora() {
     );
     return;
   }
+  const noAck = !state.msgAck;
   box.readOnly = true;
   setText("lora_send_status", "Sending...");
   lora_tx("/lora_transmit", inner, function (r) {
     box.readOnly = false;
     if (r.ok) {
       box.value = "";
-      setText("lora_send_status", "Delivered.");
+      setText("lora_send_status", noAck ? "Sent (no acknowledgement requested)." : "Delivered.");
       add_message(r.username || state.username || "You", msg, true);
     } else {
       setText("lora_send_status", "");
-      alertText("Message not delivered: " + r.reason + ".");
+      alertText("Message not " + (noAck ? "sent" : "delivered") + ": " + r.reason + ".");
     }
   }, function (txState) {
     setText("lora_send_status", tx_state_text(txState));
-  });
+  }, noAck);
+}
+
+function set_msg_ack(val) {
+  state.msgAck = !!val;
 }
 
 function set_username(val) {

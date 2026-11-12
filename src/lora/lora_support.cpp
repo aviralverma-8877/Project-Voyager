@@ -272,7 +272,7 @@ bool LoRa_send(const String& data, uint8_t type, uint8_t seq)
         return false;
     }
     bool ok = lora_tx_frame(frame, n);
-    if (ok) serial_print("LoRa TX type=" + String(type) + " seq=" + String(seq) + " len=" + String(data.length()));
+    if (ok) serial_print("LoRa TX type=" + String(type & 0x7F) + ((type & LORA_NOACK_FLAG) ? " noack" : "") + " seq=" + String(seq) + " len=" + String(data.length()));
     led_nortifier();                      // outside the mutex
     return ok;
 }
@@ -290,12 +290,14 @@ void LoRa_sendAkn(uint8_t seq, uint8_t result)
         serial_print("SENT AKN seq=" + String(seq) + " val=" + String(result));
 }
 
-static void send_tx_result(uint32_t id, bool ok)
+// akn: 1 = acknowledged by the peer, or (noack) handed to the radio.
+static void send_tx_result(uint32_t id, bool ok, bool no_ack)
 {
     JsonDocument doc;
     doc["response_type"] = "tx_result";
     doc["id"] = id;
     doc["akn"] = ok ? 1 : 0;
+    if (no_ack) doc["noack"] = true;
     doc["username"] = get_username();
     String out;
     serializeJson(doc, out);
@@ -335,6 +337,10 @@ static bool send_with_retry(const QueueParam* p)
         serial_print("ERROR: send_packets item too long: " + String(p->message.length()));
         return false;
     }
+    // Broadcast without acknowledgement: one transmission, success = it went out.
+    if (p->no_ack && p->type == LORA_MSG)
+        return LoRa_send(p->message, LORA_MSG | LORA_NOACK_FLAG, take_seq());
+
     // LORA_ACK_TIMEOUT_MS covers the peer's processing time. The ACK's own airtime is
     // added on top: about 10 ms at the defaults, but about 15 s at SF12/BW7.8k, where a
     // flat 5 s would make every ACK arrive too late.
@@ -398,11 +404,19 @@ void LoRa_sendRaw(void* param)
         oled_set_lora(LORA_RECEIVING);
         oled_lora_packet(true, ok, 0, 0.0f);
 
-        if (!ok && p->type != LORA_NET) {   // NET loss is TCP's to recover: no alert storm
-            show_alert("Transmission failed after " + String(LORA_MAX_RETRIES) + " retries");
-            oled_alert("TX failed", "no ACK from peer", 3000);
+        const bool no_ack = p->no_ack && p->type == LORA_MSG;
+        if (!ok && p->quiet) {
+            serial_print("Quiet TX failed (sensor broadcast)");
+        } else if (!ok && p->type != LORA_NET) {   // NET loss is TCP's to recover: no alert storm
+            if (no_ack) {
+                show_alert("Transmission failed: radio busy");
+                oled_alert("TX failed", "radio busy", 3000);
+            } else {
+                show_alert("Transmission failed after " + String(LORA_MAX_RETRIES) + " retries");
+                oled_alert("TX failed", "no ACK from peer", 3000);
+            }
         }
-        if (p->id != 0) send_tx_result(p->id, ok);
+        if (p->id != 0) send_tx_result(p->id, ok, no_ack);
         delete p;
     }
 }
@@ -428,7 +442,7 @@ static void handle_rx_frame(const uint8_t* buf, size_t n, int rssi, float snr)
         oled_lora_packet(false, false, rssi, snr);
         // A data packet with a bad CRC gets a NACK so the sender retries early.
         // If the seq byte itself is corrupt, the sender ignores the mismatched NACK.
-        if (p.err == ParseErr::BadCrc && p.type == LORA_MSG)
+        if (p.err == ParseErr::BadCrc && !p.noack && p.type == LORA_MSG)
             LoRa_sendAkn(p.seq, ACK_RETRY);
         return;
     }
@@ -484,7 +498,8 @@ static void handle_rx_frame(const uint8_t* buf, size_t n, int rssi, float snr)
     default: {   // LORA_MSG
         // Per-source dedup keyed by the sender's MAC hash.
         uint32_t dedup_key = extract_mac_key(text);
-        if (rx_is_duplicate_multi(rx_dedup, dedup_key, p.seq)) {
+        // A no-ack packet is sent exactly once, so it is never a retransmission.
+        if (!p.noack && rx_is_duplicate_multi(rx_dedup, dedup_key, p.seq)) {
             LoRa_sendAkn(p.seq, ACK_OK);
             serial_print("LoRa RX duplicate seq=" + String(p.seq) + ", re-ACKed");
             return;
@@ -499,9 +514,9 @@ static void handle_rx_frame(const uint8_t* buf, size_t n, int rssi, float snr)
             if (!queued) delete q;
         }
         if (queued) rx_commit_multi(rx_dedup, dedup_key, p.seq);
-        LoRa_sendAkn(p.seq, queued ? ACK_OK : ACK_RETRY);
+        if (!p.noack) LoRa_sendAkn(p.seq, queued ? ACK_OK : ACK_RETRY);
         oled_lora_packet(false, queued, rssi, snr);
-        serial_print("LoRa RX type=" + String(p.type) + " seq=" + String(p.seq) + " len=" + String(p.len) +
+        serial_print("LoRa RX type=" + String(p.type) + (p.noack ? " noack" : "") + " seq=" + String(p.seq) + " len=" + String(p.len) +
                      " rssi=" + String(rssi) + " snr=" + String(snr, 1) + (queued ? "" : " DROPPED (queue full)"));
         return;
     }

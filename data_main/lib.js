@@ -269,10 +269,148 @@ var VoyagerLib = (function () {
       r.fileName = toText(inner.name);
       r.txId = toText(inner.tx_id);
       r.nonce = toText(inner.nonce);
+    } else if (r.packType === "sensor") {
+      r.sensors = parseSensorReadings(inner.data);
     } else {
       return null;
     }
     return r;
+  }
+
+  /* ---------- sensors ---------- */
+
+  var SENSOR_MAX = 4;
+  var SENSOR_NAME_MAX = 12;
+  var SENSOR_INTERVAL_MIN = 2; // seconds
+  var SENSOR_INTERVAL_MAX = 86400;
+  // id goes over the air (firmware sensor_config.h): never renumber.
+  // pins / pin2: which of the board's pin lists the sensor may use
+  //   io = can drive and read, in = can read, adc = analog input.
+  var SENSOR_TYPES = [
+    { id: 1, key: "dht11", label: "DHT11 (temperature, humidity)", pins: "io", pin2: "",
+      values: [["Temperature", "\u00b0C"], ["Humidity", "%"]] },
+    { id: 2, key: "dht22", label: "DHT22 / AM2302 (temperature, humidity)", pins: "io", pin2: "",
+      values: [["Temperature", "\u00b0C"], ["Humidity", "%"]] },
+    { id: 3, key: "ds18b20", label: "DS18B20 (temperature)", pins: "io", pin2: "",
+      values: [["Temperature", "\u00b0C"]] },
+    { id: 4, key: "hcsr04", label: "HC-SR04 ultrasonic (distance)", pins: "io", pin2: "in",
+      values: [["Distance", "cm"]] },
+    { id: 5, key: "analog", label: "Analog level (LDR, soil moisture, MQ gas, ...)", pins: "adc", pin2: "",
+      values: [["Level", "raw"]] },
+    { id: 6, key: "digital", label: "Digital state (PIR, door switch, rain, IR, ...)", pins: "in", pin2: "",
+      values: [["State", ""]] },
+  ];
+
+  // Look up by numeric id or by key. Null when unknown.
+  function sensorType(idOrKey) {
+    for (var i = 0; i < SENSOR_TYPES.length; i++) {
+      var t = SENSOR_TYPES[i];
+      if (t.id === idOrKey || t.key === idOrKey) return t;
+    }
+    return null;
+  }
+
+  function validateSensorName(name) {
+    return typeof name === "string" && /^[A-Za-z0-9_-]{1,12}$/.test(name);
+  }
+
+  function formatSensorReading(type, ok, values) {
+    if (!ok) return "read failed";
+    if (!type) return values.join(", ");
+    if (type.key === "analog") {
+      return values[0] + " / 4095 (" + Math.round((values[0] / 4095) * 100) + " %)";
+    }
+    if (type.key === "digital") return values[0] ? "1 (HIGH)" : "0 (LOW)";
+    return type.values
+      .map(function (v, i) {
+        return values[i] + " " + v[1];
+      })
+      .join(", ");
+  }
+
+  // "data" of a sensor packet: [["name", typeId, v1[, v2]], ...]. Anything
+  // malformed is dropped; every field comes back as plain text / numbers.
+  function parseSensorReadings(data) {
+    if (!Array.isArray(data)) return [];
+    var out = [];
+    data.slice(0, SENSOR_MAX * 2).forEach(function (row) {
+      if (!Array.isArray(row) || row.length < 3 || typeof row[0] !== "string") return;
+      var id = toNumber(row[1]);
+      if (!isInt(id) || id < 0) return;
+      var type = sensorType(id);
+      var raw = row.slice(2, 2 + (type ? type.values.length : 4));
+      var ok = raw.length > 0 && raw.every(function (v) {
+        return typeof v === "number" && isFinite(v);
+      });
+      var values = ok ? raw : [];
+      out.push({
+        name: row[0].slice(0, SENSOR_NAME_MAX * 2),
+        typeId: id,
+        typeLabel: type ? type.key.toUpperCase() : "type " + id,
+        ok: ok,
+        values: values,
+        text: formatSensorReading(type, ok, values),
+      });
+    });
+    return out;
+  }
+
+  // WS sensor_data carries the same inner JSON the radio packet does.
+  function parseSensorData(inner) {
+    var o = typeof inner === "string" ? safeJsonParse(inner) : inner;
+    if (!isObject(o) || o.pack_type !== "sensor") return [];
+    return parseSensorReadings(o.data);
+  }
+
+  // cfg: {enabled, interval, ack, sensors:[{type,name,pin,pin2}]}
+  // pins: {io:[], in:[], adc:[]} from the device (WS sensor_config).
+  // Mirrors the firmware checks so the user gets every problem at once.
+  function validateSensorConfig(cfg, pins) {
+    var errors = [];
+    if (!isObject(cfg)) return { ok: false, errors: ["not an object"], config: null };
+    var p = isObject(pins) ? pins : {};
+    var interval = toNumber(cfg.interval);
+    if (!isInt(interval) || interval < SENSOR_INTERVAL_MIN || interval > SENSOR_INTERVAL_MAX)
+      errors.push(
+        "Interval must be a whole number of seconds from " + SENSOR_INTERVAL_MIN + " to " + SENSOR_INTERVAL_MAX
+      );
+    var list = Array.isArray(cfg.sensors) ? cfg.sensors : [];
+    if (list.length > SENSOR_MAX) errors.push("At most " + SENSOR_MAX + " sensors");
+    var names = {};
+    var taken = {};
+    var sensors = [];
+    list.forEach(function (s, i) {
+      var label = "Sensor " + (i + 1);
+      var type = isObject(s) ? sensorType(s.type) : null;
+      if (!type) {
+        errors.push(label + ": choose a sensor type");
+        return;
+      }
+      if (!validateSensorName(s.name)) errors.push(label + ": name must be 1-12 of A-Z a-z 0-9 _ -");
+      else if (names[s.name]) errors.push(label + ": name is already used");
+      else names[s.name] = true;
+      var claim = function (pin, listName, what) {
+        var n = toNumber(pin);
+        var allowed = Array.isArray(p[listName]) ? p[listName] : [];
+        if (!isInt(n) || allowed.indexOf(n) < 0) {
+          errors.push(label + ": choose a " + what);
+          return -1;
+        }
+        if (taken[n]) errors.push(label + ": GPIO " + n + " is used twice");
+        taken[n] = true;
+        return n;
+      };
+      var pin = claim(s.pin, type.pins, type.pin2 ? "trigger pin" : "pin");
+      var pin2 = type.pin2 ? claim(s.pin2, type.pin2, "echo pin") : -1;
+      sensors.push({ type: type.key, name: toText(s.name), pin: pin, pin2: pin2 });
+    });
+    var enabled = cfg.enabled === true;
+    if (enabled && sensors.length === 0) errors.push("Add at least one sensor before enabling");
+    return {
+      ok: errors.length === 0,
+      errors: errors,
+      config: { enabled: enabled, interval: interval, ack: cfg.ack === true, sensors: sensors },
+    };
   }
 
   function wifiQuality(rssi) {
@@ -438,6 +576,7 @@ var VoyagerLib = (function () {
     return {
       id: msg.id,
       akn: toNumber(msg.akn) === 1 ? 1 : 0,
+      noack: msg.noack === true, // sent without waiting for an acknowledgement
       username: toText(msg.username),
       timeout: false,
     };
@@ -606,6 +745,16 @@ var VoyagerLib = (function () {
     kermitTimeoutMs: kermitTimeoutMs,
     parseLoraRx: parseLoraRx,
     parseNetStatus: parseNetStatus,
+    SENSOR_MAX: SENSOR_MAX,
+    SENSOR_INTERVAL_MIN: SENSOR_INTERVAL_MIN,
+    SENSOR_INTERVAL_MAX: SENSOR_INTERVAL_MAX,
+    SENSOR_TYPES: SENSOR_TYPES,
+    sensorType: sensorType,
+    validateSensorName: validateSensorName,
+    formatSensorReading: formatSensorReading,
+    parseSensorReadings: parseSensorReadings,
+    parseSensorData: parseSensorData,
+    validateSensorConfig: validateSensorConfig,
     parseWifiScan: parseWifiScan,
     wifiQuality: wifiQuality,
     wifiLabel: wifiLabel,

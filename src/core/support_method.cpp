@@ -6,6 +6,7 @@
 #include <web/web_sockets.h>
 #include <web/auth.h>
 #include <web/web_server.h>
+#include <sensors/sensor_support.h>
 #include <mutex>
 
 volatile bool lora_serial = false;
@@ -338,6 +339,13 @@ void handle_operations(JsonDocument& doc)
             show_alert("LoRa config rejected");
         return;
     case CoreAction::SetSerialMode:
+        // The serial bridge and sensor broadcast mode are mutually exclusive.
+        if (cmd.flag && sensor_mode_enabled())
+        {
+            show_alert("Turn off sensor broadcast before enabling LoRa to Serial");
+            send_serial_mode_to_ws();
+            return;
+        }
         if (cmd.flag && net_active()) {
             show_alert("The serial port is in LoRa network mode (Voyager Link).");
             send_serial_mode_to_ws();
@@ -400,12 +408,25 @@ void handle_operations(JsonDocument& doc)
         return;
     // File transfer handshake commands
     case CoreAction::FileTxInvite:
+        if (sensor_mode_enabled()) {
+            show_alert("Sensor broadcast is on. Turn it off to transfer files.");
+            return;
+        }
         send_file_tx_invite(String(cmd.arg1.c_str()), String(cmd.arg2.c_str()));
         return;
     case CoreAction::FileTxJoin:
+        if (sensor_mode_enabled()) {
+            show_alert("Sensor broadcast is on. Turn it off to transfer files.");
+            return;
+        }
         send_file_tx_join(String(cmd.arg1.c_str()), String(cmd.arg2.c_str()));
         return;
     case CoreAction::FileTxStart:
+        if (sensor_mode_enabled()) {
+            show_alert("Sensor broadcast is on. Turn it off to transfer files.");
+            send_serial_mode_to_ws();
+            return;
+        }
         if (net_active()) {
             show_alert("The serial port is in LoRa network mode (Voyager Link). Leave the network first.");
             send_serial_mode_to_ws();
@@ -419,6 +440,25 @@ void handle_operations(JsonDocument& doc)
         lora_serial = false;
         serial_print("File TX ended (serial bridge disabled)");
         send_serial_mode_to_ws();
+        return;
+    case CoreAction::SetSensorConfig:
+        serial_print("set_sensor_config");
+        if (sensor_save_config(cmd.arg1.c_str()))   // alerts on failure itself
+        {
+            // Enabling sensor mode switches the serial bridge off.
+            if (sensor_mode_enabled() && lora_serial)
+            {
+                lora_serial = false;
+                if (xTaskCreatePinnedToCore(save_lora_serial_config, "save_lora_serial", 4096, NULL, 1, NULL, 1) != pdPASS)
+                    serial_print("save_lora_serial task create failed");
+                send_serial_mode_to_ws();
+            }
+            show_alert("Sensor settings saved");
+        }
+        sensor_send_config_to_ws();
+        return;
+    case CoreAction::GetSensorConfig:
+        sensor_send_config_to_ws();
         return;
     }
 }
@@ -650,6 +690,8 @@ void reset_device(void *param)
     }
     ok &= write_file_atomic("/config/user_data.json", "{\"username\":\"\"}");
     ok &= write_file_atomic("/config/lora_serial.json", "{\"lora_serial\":false}");
+    ok &= write_file_atomic(SENSOR_CONFIG_PATH,
+        "{\"enabled\":false,\"interval\":30,\"ack\":false,\"sensors\":[]}");
     lora_serial = false;
     auth_clear();
     if (!ok)

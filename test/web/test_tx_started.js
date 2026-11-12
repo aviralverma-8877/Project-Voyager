@@ -70,7 +70,7 @@ test("202 -> tx_started -> tx_result resolves once and clears timers", function 
   s.tr.register(3, s.rec.cb, s.rec.onState);
   s.tr.started({ id: 3, expected_ms: 1000, attempts: 4 });
   assertEq(s.tr.resolve({ id: 3, akn: 1, username: "B" }), true);
-  assertEq(s.rec.result, { id: 3, akn: 1, username: "B", timeout: false });
+  assertEq(s.rec.result, { id: 3, akn: 1, noack: false, username: "B", timeout: false });
   assertEq(s.t.pending(), 0);
   s.t.tick(700000);
   assertEq(s.rec.calls, 1);
