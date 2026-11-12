@@ -65,6 +65,12 @@ inline TxCheck check_send_raw(const char* data, size_t max_payload) {
   return TX_OK;
 }
 
+// /lora_transmit optional form field `ack`: only an explicit "0" turns the
+// acknowledgement off (missing / anything else = wait for the ACK, as before).
+inline bool ack_param_wants_ack(const char* v) {
+  return !(v != nullptr && strcmp(v, "0") == 0);
+}
+
 // GET /api/config?name= whitelist (Contract 2).
 inline bool is_allowed_config_name(const char* name) {
   if (name == nullptr) return false;
@@ -200,7 +206,8 @@ inline bool ct_equal(const char* a, const char* b, size_t n) {
 // before the first write and restored after the remount.
 static const char* const OTA_KEEP_FILES[] = {
     "/config/wifi_config.json", "/config/lora_config.json",
-    "/config/user_data.json",   "/config/lora_serial.json"};
+    "/config/user_data.json",   "/config/lora_serial.json",
+    "/config/sensor_config.json"};
 static const size_t OTA_KEEP_COUNT = sizeof(OTA_KEEP_FILES) / sizeof(OTA_KEEP_FILES[0]);
 static const size_t OTA_KEEP_MAX_BYTES = 2048;
 

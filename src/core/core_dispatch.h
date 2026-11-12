@@ -32,6 +32,8 @@ enum class CoreAction : uint8_t {
     SetLoraConfig,  // arg1 = JSON string, already range-checked
     SetSerialMode,  // flag
     GetSerialMode,
+    SetSensorConfig, // arg1 = JSON string (validated by sensor_save_config)
+    GetSensorConfig,
 };
 
 struct CoreCommand {
@@ -47,6 +49,7 @@ static const size_t CORE_USERNAME_MAX = 32;
 static const size_t CORE_SSID_MAX = 32;
 static const size_t CORE_PASS_MIN = 8;
 static const size_t CORE_PASS_MAX = 63;
+static const size_t CORE_SENSOR_CONFIG_MAX = 1024;
 
 inline const char* core_action_name(CoreAction a) {
     switch (a) {
@@ -64,6 +67,8 @@ inline const char* core_action_name(CoreAction a) {
         case CoreAction::SetLoraConfig: return "set_lora_config";
         case CoreAction::SetSerialMode: return "set_serial_mode";
         case CoreAction::GetSerialMode: return "get_serial_mode";
+        case CoreAction::SetSensorConfig: return "set_sensor_config";
+        case CoreAction::GetSensorConfig: return "get_sensor_config";
     }
     return "?";
 }
@@ -132,6 +137,7 @@ inline CoreCommand core_parse_request(JsonVariantConst doc) {
     if (strcmp(t, "restart_device") == 0) { c.action = CoreAction::RestartDevice; return c; }
     if (strcmp(t, "get_username") == 0)   { c.action = CoreAction::GetUsername; return c; }
     if (strcmp(t, "get_serial_mode") == 0){ c.action = CoreAction::GetSerialMode; return c; }
+    if (strcmp(t, "get_sensor_config") == 0){ c.action = CoreAction::GetSensorConfig; return c; }
 
     if (strcmp(t, "connect_wifi") == 0) {
         JsonVariantConst s = doc["wifi_ssid"];
@@ -189,6 +195,17 @@ inline CoreCommand core_parse_request(JsonVariantConst doc) {
         if (!v.is<bool>()) return core_invalid("value must be bool");
         c.action = CoreAction::SetSerialMode;
         c.flag = v.as<bool>();
+        return c;
+    }
+    if (strcmp(t, "set_sensor_config") == 0) {
+        // Only the envelope is checked here; ranges and board pins are checked
+        // by sensor_save_config (sensors/sensor_config.h).
+        JsonVariantConst v = doc["val"];
+        if (!v.is<const char*>()) return core_invalid("val missing");
+        std::string cfg = v.as<const char*>();
+        if (cfg.empty() || cfg.size() > CORE_SENSOR_CONFIG_MAX) return core_invalid("sensor config length");
+        c.action = CoreAction::SetSensorConfig;
+        c.arg1 = cfg;
         return c;
     }
     c.action = CoreAction::Unknown;   // includes the removed "send_akn"

@@ -26,16 +26,22 @@
     #define RAW_DATA 1               // file chunk (slice of a data-URL)
     #define REC_AKNG 2               // acknowledgement
     #define LORA_SERIAL 3            // serial bridge, not ACKed or deduplicated
+    #define LORA_NOACK_FLAG 0x80     // OR-ed into LORA_MSG on the air: no ACK wanted
 
     static_assert(LORA_MAX_PAYLOAD == lora_proto::MAX_PAYLOAD, "payload limit mismatch");
     static_assert(LORA_MAX_RETRIES == lora_proto::MAX_RETRIES, "retry limit mismatch");
+    static_assert(LORA_NOACK_FLAG == lora_proto::T_FLAG_NOACK, "no-ack flag mismatch");
 
     // send_packets / recv_packets item (Contract 6). Receiver deletes it.
     // id: 0 = device-originated (SOS), no tx_result; otherwise echoed in WS tx_result.
+    // no_ack (LORA_MSG only): transmit once, do not wait for an ACK.
+    // quiet: a failed transmission is only logged (no alert); used by sensor broadcasts.
     struct QueueParam {
         uint8_t type;
         String message;
         uint32_t id;
+        bool no_ack = false;
+        bool quiet = false;
     };
     struct DebugQueueParam {
         String message;

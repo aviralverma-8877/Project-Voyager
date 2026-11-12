@@ -1,0 +1,78 @@
+<h1>
+    Sensor Broadcast.
+</h1>
+<hr>
+<p class="text-muted">
+    Reads the sensors wired to the spare GPIOs and broadcasts the readings over LoRa.
+    While this is on, <b>LoRa to Serial</b> and <b>File Transfer</b> are switched off.
+    Messages keep working: they are sent in between the sensor readings.
+</p>
+<fieldset class="sensor_controls">
+    <div class="mb-3">
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="sensor_enabled">
+            <label class="form-check-label" for="sensor_enabled">Broadcast sensor data</label>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label for="sensor_interval" class="form-label">Broadcast interval (seconds, 2 - 86400):</label>
+        <input
+            class="form-control form-control-sm"
+            id="sensor_interval"
+            value="30"
+            min="2"
+            max="86400"
+            step="1"
+            type="number"
+        >
+    </div>
+    <div class="mb-3">
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="sensor_ack">
+            <label class="form-check-label" for="sensor_ack">Wait for acknowledgement from the receiving device</label>
+        </div>
+        <div class="form-text">
+            Off: each reading is broadcast once and any number of devices can listen.
+            On: the reading is retried up to 3 times until one device acknowledges it; use it with a single receiver.
+        </div>
+    </div>
+    <hr>
+    <h5>Sensors (up to 4).</h5>
+    <div id="sensor_rows"></div>
+    <p class="text-muted" id="sensor_rows_empty">No sensors added yet.</p>
+    <div class="mb-3">
+        <button type="button" class="btn btn-outline-primary" id="sensor_add_btn" onclick="sensor_add_row()">Add sensor</button>
+        <button type="button" class="btn btn-primary" onclick="save_sensor_config()">Save</button>
+    </div>
+</fieldset>
+<hr>
+<h5>This device.</h5>
+<ul class="list-group mb-3" id="sensor_local">
+    <li class="list-group-item text-muted">No readings yet.</li>
+</ul>
+<h5>Received from other devices.</h5>
+<div class="table-responsive">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Device</th>
+                <th>Sensor</th>
+                <th>Type</th>
+                <th>Reading</th>
+                <th>Received</th>
+            </tr>
+        </thead>
+        <tbody id="sensor_rx_body"></tbody>
+    </table>
+</div>
+<hr>
+<h5>Wiring notes.</h5>
+<ul class="small text-muted">
+    <li>Power every sensor from 3.3 V where it allows it. The GPIOs are not 5 V tolerant.</li>
+    <li>DHT11 / DHT22: data pin to the GPIO. Bare sensors (not on a module board) need a 10 k resistor from data to 3.3 V.</li>
+    <li>DS18B20: one sensor per GPIO, with a 4.7 k resistor from data to 3.3 V.</li>
+    <li>HC-SR04: needs 5 V, so its echo pin must go through a voltage divider (for example 1 k / 2 k) to the GPIO. The 3.3 V HC-SR04P can be wired directly.</li>
+    <li>Analog (LDR, soil moisture, MQ gas): the signal must stay between 0 and 3.3 V. An LDR needs a divider resistor (for example 10 k) to ground.</li>
+    <li>GPIO 15 is read by the chip at power-up: a sensor that holds it low at that moment only silences the boot log on the serial port, nothing else.</li>
+    <li>Digital on GPIO 34-39: these pins have no internal pull-up, so a switch needs an external resistor.</li>
+</ul>

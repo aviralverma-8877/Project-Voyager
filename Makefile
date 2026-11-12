@@ -145,9 +145,9 @@ check: build
 	@echo ""
 	@echo "=== Running validation suite ==="
 	@echo "Checking JavaScript syntax..."
-	@node --check data_main/script.js && node --check data_main/lib.js && echo "JavaScript: OK"
+	@for f in data_main/script*.js data_main/lib.js; do node --check $$f || exit 1; done; echo "JavaScript: OK"
 	@echo ""
-	@echo "Checking data/ sync (expect script.js, lib.js, config/ to differ)..."
+	@echo "Checking data/ sync (expect script*.js, lib.js, the .gz assets and config/ to differ)..."
 	@diff -rq data data_main 2>/dev/null || true
 	@echo ""
 	@echo "=== Validation complete ==="
@@ -160,13 +160,18 @@ lint:
 # Sync data_main/ to data/ (minify JS, compact JSON)
 sync-data:
 	@echo "Syncing data_main/ -> data/..."
-	rsync -a --delete --exclude config/ --exclude script.js --exclude lib.js data_main/ data/
+	rsync -a --delete --exclude config/ --exclude 'script*.js' --exclude lib.js data_main/ data/
 	@echo "Minifying JavaScript..."
-	@for f in script.js lib.js; do \
-		if [ -f data_main/$$f ]; then \
-			npx --yes terser@5.31.0 data_main/$$f -c -m -o data/$$f; \
-			echo "  $$f minified"; \
-		fi; \
+	@for src in data_main/script*.js data_main/lib.js; do \
+		f=$$(basename $$src); \
+		npx --yes terser@5.31.0 $$src -c -m -o data/$$f || exit 1; \
+		echo "  $$f minified"; \
+	done
+	@echo "Compressing large assets (the web server serves <file>.gz automatically)..."
+	@for src in data/bootstrap.min.css data/bootstrap.min.js data/jquery-3.7.1.min.js data/script*.js data/lib.js; do \
+		f=$$(basename $$src); \
+		gzip -9 -n -f data/$$f; \
+		echo "  $$f.gz"; \
 	done
 	@echo "Compacting JSON configs..."
 	@mkdir -p data/config

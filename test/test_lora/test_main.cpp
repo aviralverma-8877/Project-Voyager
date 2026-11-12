@@ -72,6 +72,61 @@ static void test_serial_frame_roundtrip() {
     TEST_ASSERT_EQUAL_UINT8(200, p.seq);
 }
 
+// ---- no-ack flag (broadcast without acknowledgement) -----------------------------
+
+static void test_noack_roundtrip() {
+    const char* s = "{\"x\":1}";
+    uint8_t f[32];
+    size_t n = frame_packet(T_LORA_MSG | T_FLAG_NOACK, 9, (const uint8_t*)s, strlen(s), f, sizeof f);
+    TEST_ASSERT_EQUAL_UINT(HEADER_LEN + strlen(s), n);
+    TEST_ASSERT_EQUAL_UINT8(0x80, f[1]);
+    Parsed p = parse_packet(f, n);
+    TEST_ASSERT_TRUE(p.ok);
+    TEST_ASSERT_TRUE(p.noack);
+    TEST_ASSERT_EQUAL_UINT8(T_LORA_MSG, p.type);   // flag stripped from the type
+    TEST_ASSERT_EQUAL_UINT8(9, p.seq);
+
+    // Without the flag nothing changes on the wire.
+    n = frame_packet(T_LORA_MSG, 9, (const uint8_t*)s, strlen(s), f, sizeof f);
+    TEST_ASSERT_EQUAL_UINT8(0x00, f[1]);
+    p = parse_packet(f, n);
+    TEST_ASSERT_TRUE(p.ok);
+    TEST_ASSERT_FALSE(p.noack);
+}
+
+static void test_noack_only_on_lora_msg() {
+    const uint8_t payload[2] = {1, 2};
+    uint8_t f[16];
+    TEST_ASSERT_EQUAL_UINT(0, frame_packet(T_RAW_DATA | T_FLAG_NOACK, 1, payload, 2, f, sizeof f));
+    TEST_ASSERT_EQUAL_UINT(0, frame_packet(T_LORA_SERIAL | T_FLAG_NOACK, 1, payload, 2, f, sizeof f));
+    TEST_ASSERT_EQUAL_UINT(0, frame_packet(T_REC_AKNG | T_FLAG_NOACK, 1, payload, 1, f, sizeof f));
+    // A received frame with the flag on another type is rejected, not delivered.
+    size_t n = frame_packet(T_RAW_DATA, 1, payload, 2, f, sizeof f);
+    f[1] |= T_FLAG_NOACK;
+    Parsed p = parse_packet(f, n);
+    TEST_ASSERT_FALSE(p.ok);
+    TEST_ASSERT_EQUAL_INT((int)ParseErr::BadType, (int)p.err);
+}
+
+static void test_noack_bad_crc_keeps_flag() {
+    // The receiver must know not to NACK a corrupt no-ack packet.
+    const char* s = "abc";
+    uint8_t f[16];
+    size_t n = frame_packet(T_LORA_MSG | T_FLAG_NOACK, 3, (const uint8_t*)s, 3, f, sizeof f);
+    f[HEADER_LEN] ^= 0xFF;
+    Parsed p = parse_packet(f, n);
+    TEST_ASSERT_FALSE(p.ok);
+    TEST_ASSERT_EQUAL_INT((int)ParseErr::BadCrc, (int)p.err);
+    TEST_ASSERT_TRUE(p.noack);
+}
+
+static void test_parse_lora_msg_sensor() {
+    LoraMsgInfo m = parse_lora_msg(
+        "{\"name\":\"node\",\"mac\":\"AA\",\"data\":\"{\\\"pack_type\\\":\\\"sensor\\\",\\\"data\\\":[]}\"}");
+    TEST_ASSERT_EQUAL_INT((int)MsgKind::Sensor, (int)m.kind);
+    TEST_ASSERT_EQUAL_STRING("node", m.from.c_str());
+}
+
 // ---- parse errors -------------------------------------------------------------
 static void test_bad_crc() {
     const char* s = "hello";
@@ -382,6 +437,10 @@ int main(int, char**) {
     RUN_TEST(test_reject_len252);
     RUN_TEST(test_frame_rejects_small_buffer_and_ack_type);
     RUN_TEST(test_serial_frame_roundtrip);
+    RUN_TEST(test_noack_roundtrip);
+    RUN_TEST(test_noack_only_on_lora_msg);
+    RUN_TEST(test_noack_bad_crc_keeps_flag);
+    RUN_TEST(test_parse_lora_msg_sensor);
     RUN_TEST(test_bad_crc);
     RUN_TEST(test_len_mismatch_and_short);
     RUN_TEST(test_ack_shape_and_seq_echo);

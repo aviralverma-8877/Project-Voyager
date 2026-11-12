@@ -94,8 +94,13 @@ static void ws_rx_worker(void* param) {
 // RX queue for the worker task. Rejects fragmented, binary, or oversized messages.
 static void ws_handle_data(AsyncWebSocketClient* client, void* arg, uint8_t* data, size_t len) {
   AwsFrameInfo* info = (AwsFrameInfo*)arg;
+  // info->num is only written by the library for partial frames; for a complete
+  // frame it is whatever the allocation held, so it must not be trusted here.
+  // A continuation frame (the only case where num matters) has opcode 0 and is
+  // rejected by the opcode check anyway.
+  const uint32_t frame_num = (info != NULL && info->opcode == 0) ? info->num : 0;
   if (info == NULL ||
-      !wv::ws_frame_acceptable(info->final, info->index, info->num, info->len, len, info->opcode)) {
+      !wv::ws_frame_acceptable(info->final, info->index, frame_num, info->len, len, info->opcode)) {
     // Fragmented, binary, partial or > 2 KB: drop. Log once per message, not per chunk.
     if (info == NULL || info->index == 0)
       serial_print("WS: rejected frame from #" + String(client->id()));

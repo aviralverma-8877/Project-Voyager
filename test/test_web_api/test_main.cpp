@@ -203,11 +203,20 @@ static void test_log_sanitize() {
 
 /* ---- LittleFS OTA settings snapshot (Contract 6) ---- */
 
+static void test_ack_param() {
+  TEST_ASSERT_TRUE(wv::ack_param_wants_ack(nullptr));   // missing: unchanged behaviour
+  TEST_ASSERT_TRUE(wv::ack_param_wants_ack("1"));
+  TEST_ASSERT_TRUE(wv::ack_param_wants_ack(""));
+  TEST_ASSERT_TRUE(wv::ack_param_wants_ack("false"));
+  TEST_ASSERT_FALSE(wv::ack_param_wants_ack("0"));
+}
+
 static void test_ota_keep_files() {
-  TEST_ASSERT_EQUAL_size_t(4, wv::OTA_KEEP_COUNT);
+  TEST_ASSERT_EQUAL_size_t(5, wv::OTA_KEEP_COUNT);
   const char* expect[] = {"/config/wifi_config.json", "/config/lora_config.json",
-                          "/config/user_data.json", "/config/lora_serial.json"};
-  for (size_t i = 0; i < 4; i++) TEST_ASSERT_EQUAL_STRING(expect[i], wv::OTA_KEEP_FILES[i]);
+                          "/config/user_data.json", "/config/lora_serial.json",
+                          "/config/sensor_config.json"};
+  for (size_t i = 0; i < 5; i++) TEST_ASSERT_EQUAL_STRING(expect[i], wv::OTA_KEEP_FILES[i]);
   TEST_ASSERT_EQUAL_size_t(2048, wv::OTA_KEEP_MAX_BYTES);
 }
 
@@ -237,6 +246,7 @@ int main(int, char**) {
   RUN_TEST(test_cookie_parsing);
   RUN_TEST(test_ct_equal_and_ids);
   RUN_TEST(test_log_sanitize);
+  RUN_TEST(test_ack_param);
   RUN_TEST(test_ota_keep_files);
   RUN_TEST(test_ota_keep_size_cap);
   return UNITY_END();

@@ -4,18 +4,91 @@
     <title>Project Voyager</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="bootstrap.min.css">
     <style>
         .pre-line { white-space: pre-line; }
         .pre-wrap { white-space: pre-wrap; word-break: break-word; }
         #debug_textarea { font-size: 10px; }
+        /* Hidden until the stylesheet has loaded (see the loader below). */
+        body.assets_loading > * { visibility: hidden; }
+        body.assets_loading::before { content: "Loading..."; display: block; padding: 1rem; font-family: sans-serif; }
     </style>
-    <script type="text/javascript" src="jquery-3.7.1.min.js"></script>
-    <script type="text/javascript" src="bootstrap.min.js"></script>
-    <script type="text/javascript" src="lib.js"></script>
-    <script type="text/javascript" src="script.js"></script>
+    <script type="text/javascript">
+        // Loads the stylesheet and the scripts ONE AT A TIME, in order. The device
+        // serves several simultaneous downloads unreliably, so the page never asks
+        // for more than one file at once. A file that does not arrive within
+        // ASSET_TIMEOUT_MS is requested again (up to ASSET_RETRIES more times).
+        // script.js must stay last: it boots the UI.
+        (function () {
+            var ASSETS = [
+                "bootstrap.min.css",
+                "jquery-3.7.1.min.js",
+                "bootstrap.min.js",
+                "lib.js",
+                "script_net.js",
+                "script_file.js",
+                "script_sensors.js",
+                "script_wifi.js",
+                "script_lora.js",
+                "script.js"
+            ];
+            var ASSET_TIMEOUT_MS = 8000;
+            var ASSET_RETRIES = 3;
+            var index = 0;
+
+            function showPage() {
+                if (document.body) document.body.className = "";
+            }
+
+            function fail(name) {
+                showPage();
+                var p = document.createElement("p");
+                p.style.cssText = "color:#b00;padding:1rem;font-family:sans-serif";
+                p.textContent = "Could not load " + name + " from the device. Reload the page to retry.";
+                document.body.insertBefore(p, document.body.firstChild);
+            }
+
+            function load(attempt) {
+                if (index >= ASSETS.length) return;
+                var name = ASSETS[index];
+                var css = /\.css$/.test(name);
+                var el = document.createElement(css ? "link" : "script");
+                var url = name + (attempt ? "?retry=" + attempt : "");
+                var settled = false;
+                var timer = setTimeout(function () { finish(false); }, ASSET_TIMEOUT_MS);
+
+                function finish(ok) {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timer);
+                    el.onload = el.onerror = null;
+                    if (ok) {
+                        if (css) showPage();
+                        index++;
+                        load(0);
+                        return;
+                    }
+                    // Detaching the element abandons a download that hung.
+                    if (el.parentNode) el.parentNode.removeChild(el);
+                    if (attempt < ASSET_RETRIES) load(attempt + 1);
+                    else fail(name);
+                }
+
+                el.onload = function () { finish(true); };
+                el.onerror = function () { finish(false); };
+                if (css) { el.rel = "stylesheet"; el.href = url; }
+                else { el.async = false; el.src = url; }
+                document.head.appendChild(el);
+            }
+
+            load(0);
+            // The stylesheet may finish before <body> exists.
+            document.addEventListener("DOMContentLoaded", function () {
+                if (index > 0) showPage();
+            });
+        })();
+    </script>
 </head>
-    <body>
+    <body class="assets_loading">
         <div class="container border shadow-sm p-3 my-5 bg-white rounded" id="setup_screen" style="max-width: 32rem" hidden>
             <h3>Set the admin password</h3>
             <p>This device has no admin password yet. Choose one (8-63 characters). You'll use it with the user name <b>admin</b> whenever the browser asks you to sign in.</p>
@@ -64,6 +137,14 @@
                                 href="#"
                                 onclick="file_transfer()"
                             >File Transfer</a>
+                        </li>
+                        <li class="nav-item">
+                            <a
+                                id="navbar-sensors"
+                                class="nav-link"
+                                href="#"
+                                onclick="sensors()"
+                            >Sensors</a>
                         </li>
                         <li class="nav-item">
                             <a

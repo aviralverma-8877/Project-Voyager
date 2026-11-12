@@ -12,6 +12,9 @@
         >
         <label class="form-check-label" for="lora_to_serial">LoRa to Serial</label>
     </div>
+    <div class="form-text" id="sensor_mode_note" hidden>
+        Sensor broadcast is on (see the Sensors tab), so LoRa to Serial and file transfer are off.
+    </div>
 </div>
 <fieldset class="lora_transmission">
     <hr>
@@ -46,6 +49,20 @@
     <div class="mb-3">
         <h5 for="lora_msg">Transmit message:</h5>
         <textarea class="form-control" id="lora_msg" rows="3"></textarea>
+    </div>
+    <div class="mb-3">
+        <div class="form-check form-switch">
+            <input
+                class="form-check-input"
+                type="checkbox"
+                role="switch"
+                id="lora_msg_ack"
+                onchange="set_msg_ack(this.checked)"
+                checked
+            >
+            <label class="form-check-label" for="lora_msg_ack">Wait for acknowledgement</label>
+        </div>
+        <div class="form-text">Off: the message is broadcast once, with no delivery confirmation.</div>
     </div>
     <div class="mb-3">
         <button type="button" class="btn btn-primary" onclick="send_lora()">

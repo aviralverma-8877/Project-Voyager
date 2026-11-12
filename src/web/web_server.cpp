@@ -4,6 +4,7 @@
 #include "web_validate.h"
 #include <lora/lora_support.h>
 #include <wifi/wifi_support.h>
+#include <sensors/sensor_support.h>
 #include <atomic>
 #include <new>
 
@@ -73,7 +74,7 @@ static uint32_t next_tx_id() {
   return nxt;
 }
 
-static void enqueue_tx(AsyncWebServerRequest* r, int type, String& message) {
+static void enqueue_tx(AsyncWebServerRequest* r, int type, String& message, bool no_ack = false) {
   QueueParam* q = new (std::nothrow) QueueParam();
   if (q == nullptr) {
     send_error(r, 503, "no_memory");
@@ -83,6 +84,7 @@ static void enqueue_tx(AsyncWebServerRequest* r, int type, String& message) {
   q->type = type;
   q->message = message;
   q->id = id;
+  q->no_ack = no_ack;
   // The TX task owns q as soon as it is queued: never touch it afterwards.
   if (send_packets == NULL || xQueueSend(send_packets, &q, 0) != pdTRUE) {
     delete q;
@@ -118,11 +120,14 @@ static void handle_lora_transmit(AsyncWebServerRequest* r) {
     wv::fill_lora_msg(doc, name.c_str(), mac.c_str(), p->value().c_str());
     serializeJson(doc, payload);
   }
-  enqueue_tx(r, LORA_MSG, payload);
+  const AsyncWebParameter* ack = r->getParam("ack", true);
+  enqueue_tx(r, LORA_MSG, payload, !wv::ack_param_wants_ack(ack ? ack->value().c_str() : nullptr));
 }
 
 static void handle_send_raw(AsyncWebServerRequest* r) {
   if (!guard(r, true)) return;
+  // File transfer is off while the device broadcasts sensor data.
+  if (sensor_mode_enabled()) return send_error(r, 409, "sensor_mode");
   const AsyncWebParameter* p = r->getParam("data", true);
   wv::TxCheck c = wv::check_send_raw(p ? p->value().c_str() : nullptr, LORA_MAX_PAYLOAD);
   if (c != wv::TX_OK) {
@@ -254,6 +259,19 @@ void define_api(void* param) {
   server.on("/send_raw", HTTP_POST, handle_send_raw);
   server.on("/lora_transmit", HTTP_POST, handle_lora_transmit);
   server.on("/api/config", HTTP_GET, handle_api_config);
+  // Diagnostics: why the device last reset (esp_reset_reason_t), uptime, heap low-water mark.
+  server.on("/api/diag", HTTP_GET, [](AsyncWebServerRequest* r) {
+    if (!guard(r, false)) return;
+    JsonDocument doc;
+    doc["reset_reason"] = (int)esp_reset_reason();
+    doc["uptime_ms"] = millis();
+    doc["free_heap"] = ESP.getFreeHeap();
+    doc["min_free_heap"] = ESP.getMinFreeHeap();
+    doc["max_alloc"] = ESP.getMaxAllocHeap();
+    String out;
+    serializeJson(doc, out);
+    r->send(200, "application/json", out);
+  });
 
   server.on("/restart", HTTP_POST, [](AsyncWebServerRequest* r) {
     if (!guard(r, true)) return;

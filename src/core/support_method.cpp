@@ -2,6 +2,7 @@
 #include "core_dispatch.h"
 #include <web/web_sockets.h>
 #include <web/auth.h>
+#include <sensors/sensor_support.h>
 #include <mutex>
 
 volatile bool lora_serial = false;
@@ -137,6 +138,13 @@ void handle_operations(JsonDocument& doc)
             show_alert("LoRa config rejected");
         return;
     case CoreAction::SetSerialMode:
+        // The serial bridge and sensor broadcast mode are mutually exclusive.
+        if (cmd.flag && sensor_mode_enabled())
+        {
+            show_alert("Turn off sensor broadcast before enabling LoRa to Serial");
+            send_serial_mode_to_ws();
+            return;
+        }
         lora_serial = cmd.flag;
         if (xTaskCreatePinnedToCore(save_lora_serial_config, "save_lora_serial", 4096, NULL, 1, NULL, 1) != pdPASS)
             serial_print("save_lora_serial task create failed");
@@ -144,6 +152,25 @@ void handle_operations(JsonDocument& doc)
         return;
     case CoreAction::GetSerialMode:
         send_serial_mode_to_ws();
+        return;
+    case CoreAction::SetSensorConfig:
+        serial_print("set_sensor_config");
+        if (sensor_save_config(cmd.arg1.c_str()))   // alerts on failure itself
+        {
+            // Enabling sensor mode switches the serial bridge off.
+            if (sensor_mode_enabled() && lora_serial)
+            {
+                lora_serial = false;
+                if (xTaskCreatePinnedToCore(save_lora_serial_config, "save_lora_serial", 4096, NULL, 1, NULL, 1) != pdPASS)
+                    serial_print("save_lora_serial task create failed");
+                send_serial_mode_to_ws();
+            }
+            show_alert("Sensor settings saved");
+        }
+        sensor_send_config_to_ws();
+        return;
+    case CoreAction::GetSensorConfig:
+        sensor_send_config_to_ws();
         return;
     }
 }
@@ -344,6 +371,8 @@ void reset_device(void *param)
     }
     ok &= write_file_atomic("/config/user_data.json", "{\"username\":\"\"}");
     ok &= write_file_atomic("/config/lora_serial.json", "{\"lora_serial\":false}");
+    ok &= write_file_atomic(SENSOR_CONFIG_PATH,
+        "{\"enabled\":false,\"interval\":30,\"ack\":false,\"sensors\":[]}");
     lora_serial = false;
     auth_clear();
     if (!ok)

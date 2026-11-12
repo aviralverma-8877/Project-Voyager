@@ -30,7 +30,7 @@ test("tracker resolves the matching id only", function () {
   tr.register(7, function (r) { got[7] = r; });
   tr.register(8, function (r) { got[8] = r; });
   tr.resolve({ response_type: "tx_result", id: 8, akn: 1, username: "<b>bob</b>" });
-  assertEq(got[8], { id: 8, akn: 1, username: "<b>bob</b>", timeout: false });
+  assertEq(got[8], { id: 8, akn: 1, noack: false, username: "<b>bob</b>", timeout: false });
   assertTrue(got[7] === undefined, "7 still pending");
   tr.resolve({ id: "7", akn: 0 });
   assertEq(got[7].akn, 0);

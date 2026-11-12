@@ -193,6 +193,20 @@ static void test_set_serial_mode() {
     ASSERT_ACTION(CoreAction::Invalid, "{\"request-type\":\"set_serial_mode\",\"value\":\"true\"}");
 }
 
+static void test_sensor_config_commands() {
+    ASSERT_ACTION(CoreAction::GetSensorConfig, "{\"request-type\":\"get_sensor_config\"}");
+    CoreCommand c = parse("{\"request-type\":\"set_sensor_config\",\"val\":\"{\\\"enabled\\\":false}\"}");
+    TEST_ASSERT_EQUAL(CoreAction::SetSensorConfig, c.action);
+    TEST_ASSERT_EQUAL_STRING("{\"enabled\":false}", c.arg1.c_str());
+    ASSERT_ACTION(CoreAction::Invalid, "{\"request-type\":\"set_sensor_config\"}");
+    ASSERT_ACTION(CoreAction::Invalid, "{\"request-type\":\"set_sensor_config\",\"val\":\"\"}");
+    ASSERT_ACTION(CoreAction::Invalid, "{\"request-type\":\"set_sensor_config\",\"val\":{\"enabled\":true}}");
+    JsonDocument doc;
+    doc["request-type"] = "set_sensor_config";
+    doc["val"] = std::string(CORE_SENSOR_CONFIG_MAX + 1, 'x');
+    TEST_ASSERT_EQUAL(CoreAction::Invalid, parse_doc(doc).action);
+}
+
 static void test_invalid_error_has_no_secret() {
     CoreCommand c = parse("{\"request-type\":\"connect_wifi\",\"wifi_ssid\":\"x\",\"wifi_pass\":\"sekret\"}");
     TEST_ASSERT_EQUAL(CoreAction::Invalid, c.action);
@@ -338,6 +352,7 @@ int main(int, char**) {
     RUN_TEST(test_set_username_lengths);
     RUN_TEST(test_set_lora_config);
     RUN_TEST(test_set_serial_mode);
+    RUN_TEST(test_sensor_config_commands);
     RUN_TEST(test_invalid_error_has_no_secret);
     RUN_TEST(test_parse_username);
     RUN_TEST(test_parse_lora_serial);
